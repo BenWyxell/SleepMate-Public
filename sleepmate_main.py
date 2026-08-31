@@ -114,8 +114,6 @@ def _recover_stuck_tray() -> bool:
     except Exception:
         return False
 
-    # Give a stale tray one final chance to recover its backend before killing
-    # it. This path is intentionally unavailable to a freshly-starting tray.
     end = time.time() + 3.5
     while time.time() < end:
         if _sleepmate_port() is not None:
@@ -174,6 +172,7 @@ def main() -> int:
         from cpap.sleep_analysis_v522 import install_sleep_analysis_v522
         from cpap.sleepsync_integration import install_sleepsync_integration
         from cpap.google_drive_integration import install_google_drive_integration
+        from cpap.setup_v5217 import install_setup_v5217
         install_v511_features()
         install_v512_features()
         install_v513_diagnostics()
@@ -182,6 +181,7 @@ def main() -> int:
         install_sleep_analysis_v522(app)
         install_sleepsync_integration(app)
         install_google_drive_integration(app)
+        install_setup_v5217(app)
         app.main()
         return 0
 
