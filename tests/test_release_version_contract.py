@@ -41,8 +41,12 @@ def test_windows_release_has_single_version_source():
 
     workflow = (ROOT / ".github" / "workflows" / "windows-release.yml").read_text(encoding="utf-8")
     assert "from cpap.version import APP_VERSION; print(APP_VERSION)" in workflow
-    assert 'SleepMate_Setup_v${VERSION}.msi' in workflow
-    assert "wixl -v -a x64" in workflow
+    assert "SleepMate_Setup_v${version}.msi" in workflow
+    assert "wix3141rtm" in workflow
+    assert "candle.exe" in workflow
+    assert "light.exe" in workflow
+    assert "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31" in workflow
+    assert "wixl -v -a x64" not in workflow
     assert "msiexec.exe" in workflow
 
 
