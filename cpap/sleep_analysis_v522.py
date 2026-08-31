@@ -17,7 +17,6 @@ def _range_from_period(rows: list[dict[str, Any]], period_raw: str):
 
     latest = datetime.fromisoformat(rows[-1]["date"]).date()
     period_raw = str(period_raw or "all").lower().strip()
-
     if period_raw == "all":
         return None, None, "Teljes időszak"
     if period_raw == "prev7":
@@ -39,7 +38,6 @@ def _range_from_period(rows: list[dict[str, Any]], period_raw: str):
         return latest - timedelta(days=13), latest - timedelta(days=7), "Előző 7 nap"
     if period_raw == "prev_month":
         return latest - timedelta(days=59), latest - timedelta(days=30), "Előző 30 nap"
-
     try:
         days = max(1, int(period_raw))
     except ValueError:
@@ -109,14 +107,13 @@ def _install_shell_loader(app_module) -> None:
                 if "sleepmate-sleep-v523.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep-v523.js?v=5.2.6"></script>')
                 if "sleepmate-chart-v523.js" not in text:
-                    # Chart behaviour is independently cache-busted because a
-                    # stale PWA chart overlay can silently restore the old
-                    # finger-obscuring tooltip even when the app shell is newer.
                     scripts.append('<script src="/sleepmate-chart-v523.js?v=5.2.14"></script>')
                 if "sleepmate-sleep-v524.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep-v524.js?v=5.2.6"></script>')
                 if "sleepmate-sleep-refresh-v5212.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>')
+                if "setup-wizard-v5217.js" not in text:
+                    scripts.append('<script src="/setup-wizard-v5217.js?v=5.2.17"></script>')
                 if scripts:
                     marker = "</body>"
                     inject = "\n" + "\n".join(scripts) + "\n"
