@@ -6,11 +6,12 @@
   const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   async function api(path,method='GET',data){const o={method,headers:{Accept:'application/json'}};if(data!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(data)}const r=await fetch(path,o);const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
   async function boot(){
-    let cfg={}; try{cfg=await api('/api/config')}catch(e){return}
+    let cfg={},setup={};
+    try{[cfg,setup]=await Promise.all([api('/api/config'),api('/api/setup/status')])}catch(e){return}
     const q=new URLSearchParams(location.search); const force=q.get('setup')==='1';
-    if(!force&&cfg.setup_complete===true)return;
-    lang=(q.get('lang')||cfg.setup_language||'hu').toLowerCase()==='en'?'en':'hu';
-    state.startup=cfg.setup_complete===true?(cfg.start_with_windows!==false):(cfg.setup_start_with_windows!==false);
+    if(!force&&setup.complete===true)return;
+    lang=(q.get('lang')||setup.language||'hu').toLowerCase()==='en'?'en':'hu';
+    state.startup=setup.complete===true?(cfg.start_with_windows!==false):(setup.start_with_windows_default!==false);
     state.notifications=cfg.tray_notifications!==false;
     show();
   }
