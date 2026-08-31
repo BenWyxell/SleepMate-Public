@@ -10,15 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_windows_release_has_single_version_source():
     assert re.fullmatch(r"\d+\.\d+\.\d+", APP_VERSION)
 
-    iss = (ROOT / "build" / "windows" / "installer" / "SleepMate.iss").read_text(encoding="utf-8")
-    assert '#define MyAppVersion "' not in iss
-    assert "#ifndef MyAppVersion" in iss
-    assert "#ifndef MyAppVersionQuad" in iss
-    assert "AppVersion={#MyAppVersion}" in iss
-    assert "OutputBaseFilename=SleepMate_Setup_v{#MyAppVersion}" in iss
-    assert "VersionInfoVersion={#MyAppVersionQuad}" in iss
-    assert "VersionInfoProductVersion={#MyAppVersion}" in iss
-
     app_spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
     updater_spec = (ROOT / "build" / "windows" / "SleepMateUpdater.spec").read_text(encoding="utf-8")
     assert "version_info.generated.txt" in app_spec
@@ -33,15 +24,26 @@ def test_windows_release_has_single_version_source():
     assert "from cpap.version import APP_VERSION" in build
     assert "version_info.generated.txt" in build
     assert "sleepmate-$AppVersion-windows" in build
-    assert '"/DMyAppVersion=$AppVersion"' in build
-    assert '"/DMyAppVersionQuad=$AppVersionQuad"' in build
     assert "SleepMateUpdater.exe ProductVersion mismatch" in build
     assert "Update manifest version mismatch" in build
     assert "Update manifest asset mismatch" in build
     assert "Expected update ZIP missing" in build
-    assert "Expected installer missing" in build
-    assert "Installer ProductVersion mismatch" in build
-    assert "Release version contract OK" in build
+    assert "Program-tree release contract OK" in build
+    assert "ISCC.exe" not in build
+    assert "SLEEPMATE_SIGN_PFX" not in build
+
+    generator = (ROOT / "scripts" / "generate_msi_wxs.py").read_text(encoding="utf-8")
+    assert 'ap.add_argument("--version", required=True)' in generator
+    assert '"Version": version' in generator
+    assert 'f"SleepMate:{version}"' in generator
+    assert "PRODUCT_NAMESPACE" in generator
+    assert "PACKAGE_NAMESPACE" in generator
+
+    workflow = (ROOT / ".github" / "workflows" / "windows-release.yml").read_text(encoding="utf-8")
+    assert "from cpap.version import APP_VERSION; print(APP_VERSION)" in workflow
+    assert 'SleepMate_Setup_v${VERSION}.msi' in workflow
+    assert "wixl -v -a x64" in workflow
+    assert "msiexec.exe" in workflow
 
 
 def test_release_pwa_shell_cannot_lose_sleep_feature_after_update():
