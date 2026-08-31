@@ -1,4 +1,4 @@
-groq>=0.31.0
+groq>=1.7.0
 pystray>=0.19.5
 Pillow>=10.0.0
 
