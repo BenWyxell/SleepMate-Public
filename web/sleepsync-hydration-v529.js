@@ -243,6 +243,49 @@
     if(attempts<120)setTimeout(boot,100);
   }
 
+  function injectPackagedOnboardingReopen(){
+    if(document.getElementById('frPackagedReopen'))return true;
+    const settings=document.getElementById('page-settings');
+    if(!settings||typeof window.openSleepMateFirstRun!=='function')return false;
+    const box=document.createElement('section');
+    box.id='frPackagedReopen';
+    box.className='fr-settings-reopen';
+    box.innerHTML='<b>Első beállítás varázsló</b><p>Újra végigvezet az adatforrás, SleepSync, távoli elérés, PWA, backup és AI alapbeállításain.</p><button type="button" class="fr-btn">Varázsló megnyitása</button>';
+    box.querySelector('button').onclick=()=>window.openSleepMateFirstRun();
+    settings.appendChild(box);
+    return true;
+  }
+
+  async function lateBootPackagedOnboarding(){
+    try{
+      const response=await nativeFetch('/api/onboarding/status',{cache:'no-store'});
+      if(!response.ok)return;
+      const status=await response.json();
+      if(!status.completed&&typeof window.openSleepMateFirstRun==='function'){
+        window.openSleepMateFirstRun();
+        return;
+      }
+      let checks=0;
+      const timer=setInterval(()=>{
+        checks+=1;
+        if(injectPackagedOnboardingReopen()||checks>30)clearInterval(timer);
+      },500);
+    }catch{}
+  }
+
+  function loadPackagedOnboarding(){
+    // Development builds load first-run.js from web/app.js. Packaged builds
+    // deliberately restore the frozen app-core.js, so attach the wizard here,
+    // on the integration path that is actually present in the MSI/PWA bundle.
+    if(document.querySelector('script[data-sleepmate-first-run="1"]'))return;
+    const script=document.createElement('script');
+    script.src='/first-run.js?v=1';
+    script.async=false;
+    script.dataset.sleepmateFirstRun='1';
+    script.onload=lateBootPackagedOnboarding;
+    document.head.appendChild(script);
+  }
+
   window.__sleepSyncHydrateSettings=hydrate;
 
   document.addEventListener('click',event=>{
@@ -261,5 +304,6 @@
     }
   });
 
+  loadPackagedOnboarding();
   boot();
 })();
