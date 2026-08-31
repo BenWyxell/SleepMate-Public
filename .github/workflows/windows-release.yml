@@ -93,14 +93,15 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install GNOME msitools
+      - name: Install GNOME msitools and wixl
         shell: bash
         run: |
           set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y msitools
+          sudo apt-get install -y msitools wixl
           wixl --version
           msiextract --help >/dev/null
+          dpkg-query -W -f='${Package}=${Version}\n' msitools wixl wixl-data | sort | tee build-msi-toolchain.txt
 
       - name: Download Windows program tree
         uses: actions/download-artifact@v4
@@ -155,6 +156,7 @@ jobs:
             release/SleepMate_Setup_v*.msi.sha256
             release/msi-inventory.txt
             build/windows/msi/SleepMate.generated.wxs
+            build-msi-toolchain.txt
           if-no-files-found: error
           retention-days: 1
 
@@ -314,5 +316,6 @@ jobs:
             ci-msi/release/SleepMate_Setup_v*.msi
             ci-msi/release/SleepMate_Setup_v*.msi.sha256
             ci-msi/release/msi-inventory.txt
+            ci-msi/build-msi-toolchain.txt
           if-no-files-found: error
           retention-days: 1
