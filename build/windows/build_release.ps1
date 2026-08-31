@@ -16,7 +16,12 @@ function Normalize-VersionString($Value) {
   return ([string]$Value).Trim()
 }
 
-Write-Host '== SleepMate Windows release build =='
+Write-Host '== SleepMate Windows program-tree build =='
+Write-Host 'MSI packaging is performed in GitHub Actions on a GitHub-hosted Ubuntu runner using GNOME msitools/wixl.'
+if ($SkipInstaller) {
+  Write-Host 'NOTE: -SkipInstaller is retained as a compatibility no-op; this script no longer builds an installer.'
+}
+
 python --version
 Assert-LastExitCode 'python --version'
 
@@ -26,7 +31,6 @@ if ($AppVersion -notmatch '^\d+\.\d+\.\d+$') {
   throw "APP_VERSION must be semantic x.y.z, got: $AppVersion"
 }
 $VersionParts = $AppVersion.Split('.')
-$AppVersionQuad = "$AppVersion.0"
 Write-Host "Release version source: cpap/version.py -> $AppVersion"
 
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -69,12 +73,13 @@ try {
 } catch {
   $GitCommit = $null
 }
+
 $BuildInfoObject = [ordered]@{
   version = $AppVersion
   build_id = "sleepmate-$AppVersion-windows"
   git_commit = $GitCommit
   channel = 'stable'
-  packaging = 'windows-onedir-ready'
+  packaging = 'windows-onedir-msi-ready'
 }
 $BuildInfoJson = $BuildInfoObject | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $Root 'build_info.json'), $BuildInfoJson + [Environment]::NewLine, $Utf8NoBom)
@@ -111,6 +116,7 @@ New-Item -ItemType Directory -Force build\windows\pyi-build, release | Out-Null
 
 pyinstaller --noconfirm --clean --distpath dist --workpath build\windows\pyi-build build\windows\SleepMate.spec
 Assert-LastExitCode 'SleepMate PyInstaller build'
+
 pyinstaller --noconfirm --clean --distpath build\windows\updater-dist --workpath build\windows\pyi-build-updater build\windows\SleepMateUpdater.spec
 Assert-LastExitCode 'SleepMateUpdater PyInstaller build'
 
@@ -139,16 +145,10 @@ Copy-Item SleepMate.ico dist\SleepMate\SleepMate.ico -Force
 Copy-Item build_info.json dist\SleepMate\build_info.json -Force
 Copy-Item build\windows\installed.marker dist\SleepMate\installed.marker -Force
 
-# Optional Authenticode signing. The certificate is intentionally supplied only
-# at build time (local env/GitHub Actions secret) and never stored in source.
-if ($env:SLEEPMATE_SIGN_PFX -and (Test-Path $env:SLEEPMATE_SIGN_PFX) -and $env:SLEEPMATE_SIGN_PASSWORD) {
-  $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
-  if (-not $signtool) { throw 'signtool.exe not found' }
-  & $signtool.FullName sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $env:SLEEPMATE_SIGN_PFX /p $env:SLEEPMATE_SIGN_PASSWORD dist\SleepMate\SleepMate.exe
-  Assert-LastExitCode 'SleepMate.exe signing'
-  & $signtool.FullName sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $env:SLEEPMATE_SIGN_PFX /p $env:SLEEPMATE_SIGN_PASSWORD dist\SleepMate\SleepMateUpdater.exe
-  Assert-LastExitCode 'SleepMateUpdater.exe signing'
-}
+# Production signing is intentionally NOT performed here.
+# Official signing will be requested from SignPath by the trusted GitHub Actions
+# workflow after the Foundation application and project configuration are ready.
+# Developer-workstation/PFX signing is prohibited by CODE_SIGNING_POLICY.md.
 
 python tools\build_binary_release.py --program-dir dist\SleepMate --out-dir release --min-version 4.2.2
 Assert-LastExitCode 'binary release packaging'
@@ -160,58 +160,29 @@ $ManifestVersion = Normalize-VersionString $Manifest.version
 if ($ManifestVersion -ne $AppVersion) {
   throw "Update manifest version mismatch: expected $AppVersion, got $ManifestVersion"
 }
+
 $ExpectedZipName = "SleepMate_v${AppVersion}_windows_x64.zip"
 $ExpectedZip = Join-Path 'release' $ExpectedZipName
 if (-not (Test-Path $ExpectedZip)) {
   throw "Expected update ZIP missing: $ExpectedZip"
 }
+
 $ManifestAsset = Normalize-VersionString $Manifest.asset
 if ($ManifestAsset -ne $ExpectedZipName) {
   throw "Update manifest asset mismatch: expected $ExpectedZipName, got $ManifestAsset"
 }
+
 $UnexpectedZips = @(Get-ChildItem 'release\SleepMate_v*_windows_x64.zip' | Where-Object { $_.Name -ne $ExpectedZipName })
 if ($UnexpectedZips.Count -gt 0) {
   throw "Unexpected differently-versioned update ZIP present: $($UnexpectedZips.Name -join ', ')"
 }
 
-if (-not $SkipInstaller) {
-  $iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-  if (-not $iscc) {
-    $candidate = 'C:\Program Files\Inno Setup 7\ISCC.exe'
-    if (Test-Path $candidate) { $iscc = Get-Item $candidate }
-  }
-  if (-not $iscc) { throw 'Inno Setup 7 (ISCC.exe) not found.' }
-
-  & $iscc.Source "/DMyAppVersion=$AppVersion" "/DMyAppVersionQuad=$AppVersionQuad" build\windows\installer\SleepMate.iss
-  Assert-LastExitCode 'Inno Setup compilation'
-
-  $ExpectedSetupName = "SleepMate_Setup_v${AppVersion}.exe"
-  $ExpectedSetupPath = Join-Path 'release' $ExpectedSetupName
-  if (-not (Test-Path $ExpectedSetupPath)) {
-    throw "Expected installer missing: $ExpectedSetupPath"
-  }
-  $UnexpectedSetups = @(Get-ChildItem 'release\SleepMate_Setup_v*.exe' | Where-Object { $_.Name -ne $ExpectedSetupName })
-  if ($UnexpectedSetups.Count -gt 0) {
-    throw "Unexpected differently-versioned installer present: $($UnexpectedSetups.Name -join ', ')"
-  }
-
-  $setup = Get-Item $ExpectedSetupPath
-  $SetupProductVersion = Normalize-VersionString $setup.VersionInfo.ProductVersion
-  $SetupFileVersion = Normalize-VersionString $setup.VersionInfo.FileVersion
-  if ($SetupProductVersion -ne $AppVersion) {
-    throw "Installer ProductVersion mismatch: expected $AppVersion, got $SetupProductVersion"
-  }
-  if ($SetupFileVersion -notlike "$AppVersion*") {
-    throw "Installer FileVersion mismatch: expected $AppVersion.x, got $SetupFileVersion"
-  }
-
-  if ($env:SLEEPMATE_SIGN_PFX -and (Test-Path $env:SLEEPMATE_SIGN_PFX) -and $env:SLEEPMATE_SIGN_PASSWORD) {
-    $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' | Sort-Object FullName -Descending | Select-Object -First 1
-    & $signtool.FullName sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $env:SLEEPMATE_SIGN_PFX /p $env:SLEEPMATE_SIGN_PASSWORD $setup.FullName
-    Assert-LastExitCode 'installer signing'
-  }
+$LegacyInstallerOutputs = @(Get-ChildItem 'release\SleepMate_Setup_v*.exe' -ErrorAction SilentlyContinue)
+if ($LegacyInstallerOutputs.Count -gt 0) {
+  throw "Legacy Inno Setup output must not be produced by the active build: $($LegacyInstallerOutputs.Name -join ', ')"
 }
 
-Write-Host "Release version contract OK: app/EXE/updater/manifest/ZIP/installer = $AppVersion"
-Write-Host 'Release artifacts:'
+Write-Host "Program-tree release contract OK: app/EXE/updater/manifest/ZIP = $AppVersion"
+Write-Host 'MSI will be built from dist\SleepMate by the dedicated GitHub Actions MSI job.'
+Write-Host 'Program-tree release artifacts:'
 Get-ChildItem release | Format-Table Name,Length,LastWriteTime
