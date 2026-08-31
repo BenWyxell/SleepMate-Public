@@ -1,0 +1,10 @@
+# Security-sensitive build/signing files
+/.github/workflows/ @BenWyxell
+/build/ @BenWyxell
+/.signpath/ @BenWyxell
+/CODE_SIGNING_POLICY.md @BenWyxell
+/SECURITY.md @BenWyxell
+/PRIVACY.md @BenWyxell
+
+# Default owner
+* @BenWyxell

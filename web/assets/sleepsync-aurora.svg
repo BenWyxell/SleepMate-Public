@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="360" viewBox="0 0 1600 360" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="80" y1="310" x2="1510" y2="30" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#28E7D2" stop-opacity="0"/>
+      <stop offset="0.22" stop-color="#31D9FF" stop-opacity="0.92"/>
+      <stop offset="0.55" stop-color="#5E76FF" stop-opacity="0.95"/>
+      <stop offset="0.78" stop-color="#9C5CFF" stop-opacity="0.74"/>
+      <stop offset="1" stop-color="#35F1C6" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="0" y1="40" x2="1600" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6B59FF" stop-opacity="0"/>
+      <stop offset="0.28" stop-color="#7B69FF" stop-opacity="0.48"/>
+      <stop offset="0.56" stop-color="#33DAFF" stop-opacity="0.74"/>
+      <stop offset="0.82" stop-color="#54E9BD" stop-opacity="0.56"/>
+      <stop offset="1" stop-color="#54E9BD" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-80%" width="140%" height="260%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="soft" x="-20%" y="-80%" width="140%" height="260%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+  </defs>
+  <path d="M-30 292 C 180 238, 240 74, 474 125 S 772 322, 1026 188 S 1337 48, 1640 116" stroke="url(#g1)" stroke-width="8" stroke-linecap="round" filter="url(#glow)" opacity="0.9"/>
+  <path d="M-55 215 C 145 105, 350 300, 581 180 S 920 29, 1141 144 S 1380 291, 1640 173" stroke="url(#g2)" stroke-width="4" stroke-linecap="round" filter="url(#glow)" opacity="0.82"/>
+  <path d="M-20 326 C 249 256, 352 32, 624 98 S 979 329, 1242 209 S 1450 74, 1642 92" stroke="url(#g1)" stroke-width="32" stroke-linecap="round" filter="url(#soft)" opacity="0.16"/>
+</svg>

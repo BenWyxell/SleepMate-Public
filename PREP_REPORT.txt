@@ -1,0 +1,47 @@
+SleepMate PUBLIC / GITHUB / SIGNPATH PREPARATION v5
+Generated: 2026-08-31
+Canonical public repository: BenWyxell/SleepMate-Public
+Source application version: SleepMate 5.2.16 / API 19 / stable
+
+V5 FINAL PUBLIC-SOURCE CHANGES
+- Based on the audited v4 public candidate.
+- Removed all Python runtime caches: __pycache__, *.pyc, *.pyo.
+- Confirmed there is no .git directory or imported private Git history.
+- Preserved all required original binary application assets (PNG, WebP and SleepMate.ico).
+- Preserved the comprehensive 2509-line bilingual Hungarian + English README feature reference.
+- Preserved the finalized Privacy contact: hello@mysleepmate.hu.
+- Preserved publisher/developer identification: SleepMate projekt – BenWyxell – Kovács Lóránd E.V.
+- Fixed scripts/verify_sleepsync_integration.py so the live CI verifier targets SleepMate 5.2.16 rather than stale 5.2.15 and explicitly checks the v5.2.16 AP-presence gate.
+- Publication helper creates a brand-new Git repository from the clean source directory and force-pushes only that new history to BenWyxell/SleepMate-Public.
+
+PUBLIC SOURCE HYGIENE
+- python scripts/verify_public_source.py: PASS
+- .git metadata: 0
+- __pycache__ / *.pyc / *.pyo: 0 in final package
+- Raw EDF therapy data: 0
+- Local DB/log files: 0
+- .env / private signing keys / PFX / PEM / local config.json: 0 risky tracked files
+- Known credential-pattern / personal path gate: PASS
+- Privacy publisher/contact placeholders: 0
+
+CURRENT CI / CONTRACT VALIDATION
+- SleepSync integration safety contract: PASS
+- Python syntax checks used by public Windows CI: PASS
+- JavaScript node --check set used by public Windows CI: PASS
+- Exact pytest set used by public Windows CI: 30 passed / 0 failed
+- Current targeted release/SleepSync/backup/remote/update contract set: 40 passed / 0 failed
+- GitHub workflow YAML parsing: PASS
+
+LEGACY / STALE TEST NOTES
+A deliberately broader historical regression run also exposed 7 old assertions that are no longer the current contract. They are retained as historical regression references, but are not evidence of a current product failure:
+- test_sleepsync_schedule_editor_v527.py expects the removed card_available UI to remain user-selectable, while 5.2.16 is intentionally schedule-only.
+- test_v521_sleep_analysis.py pins APP_VERSION 5.2.1 while the current version is 5.2.16.
+- test_v522_sleep_journal.py, test_v523_sleep_ui_charts.py and test_v524_sleep_chart_layout.py assert historical shell-patch placement/cache strings that moved during later frontend modularization.
+- test_windows_packaging_v500.py expects the old WINDOWS_CERT_PFX_BASE64 secret-based signing workflow; the public preparation intentionally removed that model in favor of the SignPath Foundation trusted-build direction.
+
+RELEASE / SIGNPATH STATUS
+- Source license: AGPL-3.0-only.
+- Canonical public repository: BenWyxell/SleepMate-Public.
+- Current public CI remains unsigned and must not claim production SignPath signing.
+- Production signing target remains Authenticode + SignPath Foundation after Foundation acceptance and trusted-build configuration.
+- SignPath project/policy/artifact IDs and production signing credentials are not present in this public package and must not be invented.

@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SleepMate</title>
+  <link rel="icon" type="image/png" href="/assets/pwa-192.png">
+  <link rel="preload" as="image" href="/assets/sleepmate-splash-v410.webp" type="image/webp" fetchpriority="high">
+  <link rel="preload" as="image" href="/assets/sleepmate-icon-v410.webp" type="image/webp">
+  <link rel="apple-touch-icon" href="/assets/pwa-192.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0b1730">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/style.css?v=5.0.0">
+</head>
+<body>
+<div id="startupSplash" class="startup-splash">
+  <div class="startup-splash-card">
+    <img src="/assets/sleepmate-splash-v410.webp" alt="SleepMate betöltés" class="startup-splash-image" width="1200" height="675" fetchpriority="high" decoding="async">
+    <div class="startup-progress"><i></i></div>
+    <p>SleepMate indul…</p>
+  </div>
+</div>
+<div class="app-shell hidden-until-ready">
+  <aside class="sidebar" id="sidebar">
+    <button id="mobileMenuClose" class="mobile-menu-close" type="button" aria-label="Menü bezárása">×</button>
+    <div class="brand brand-center">
+      <img class="brand-avatar" src="/assets/sleepmate-icon-v410.webp" alt="SleepMate" width="384" height="384" decoding="async">
+      <div class="brand-tagline">Értsd jobban a <span>terápiád</span></div>
+    </div>
+    <nav class="nav" aria-label="Főmenü">
+      <button class="nav-item active" data-page="dashboard" title="Dashboard">
+        <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z"/></svg><span>Dashboard</span>
+      </button>
+      <button class="nav-item" data-page="patient" title="Kezelt személy">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.7-5 3.4-7 8-7s7.3 2 8 7"/><path d="M18.5 4.5v5M16 7h5"/></svg><span>Kezelt személy</span>
+      </button>
+      <button class="nav-item" data-page="sessions" title="Szekciók">
+        <svg viewBox="0 0 24 24"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z"/></svg><span>Szekciók</span>
+      </button>
+      <button class="nav-item" data-page="events" title="Események">
+        <svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 4 10 2-5h6"/><path d="M4 4v16M20 4v16"/></svg><span>Események</span>
+      </button>
+      <button class="nav-item" data-page="reports" title="Jelentések">
+        <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6M9 16h6"/></svg><span>Jelentések</span>
+      </button>
+      <button class="nav-item" data-page="ai" title="AI összegzés">
+        <svg viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-4.9 12l-.8 3.2 3.3-.9A7 7 0 1 0 12 3Z"/><path d="M8.8 10.5h.01M12 8.8h.01M15.2 10.5h.01"/><path d="M9.2 13.5c1.8 1.3 3.8 1.3 5.6 0"/></svg><span>AI összegzés</span>
+      </button>
+      <button class="nav-item" data-page="equipment" title="Felszerelés">
+        <svg viewBox="0 0 24 24"><path d="M5 8c2-2 4-3 7-3s5 1 7 3v7c-2 2-4 3-7 3s-5-1-7-3V8Z"/><path d="M8 9v4M16 9v4M9 18v3M15 18v3"/></svg><span>Felszerelés</span>
+      </button>
+      <button class="nav-item" data-page="upload" title="Feltöltés">
+        <svg viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 8.5 4.5 4.5 0 0 0 7 18Z"/><path d="m12 15 0-7m-3 3 3-3 3 3"/></svg><span>Feltöltés</span>
+      </button>
+      <button class="nav-item" data-page="logs" title="Naplók">
+        <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Naplók</span>
+      </button>
+      <button class="nav-item" data-page="faq" title="GYIK">
+        <svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5"/><circle cx="17" cy="16" r="1"/></svg><span>GYIK</span>
+      </button>
+      <button class="nav-item nav-settings" data-page="settings" title="Beállítások">
+        <svg viewBox="0 0 24 24"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/><path d="M19 13.5v-3l-2-.7-.6-1.4.9-1.9-2.1-2.1-1.9.9-1.4-.6L11 3H8l-.7 2-1.4.6-1.9-.9L1.9 6.8l.9 1.9-.6 1.4-2 .7v3l2 .7.6 1.4-.9 1.9 2.1 2.1 1.9-.9 1.4.6.7 2h3l.7-2 1.4-.6 1.9.9 2.1-2.1-.9-1.9.6-1.4 2-.7Z"/></svg><span>Beállítások</span>
+      </button>
+    </nav>
+    <div class="sidebar-version">
+      <span>verzió</span>
+      <strong id="sidebarVersion">v2.7</strong>
+    </div>
+  </aside>
+  <button id="sidebarScrim" class="sidebar-scrim" type="button" aria-label="Menü bezárása" tabindex="-1"></button>
+
+  <div class="content-shell">
+    <header class="topbar">
+      <button id="mobileMenuToggle" class="mobile-menu-toggle" type="button" aria-label="Menü megnyitása" aria-controls="sidebar" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="topbar-title">
+        <h1 id="pageTitle">Dashboard</h1>
+        <p id="pageSubtitle">ResMed EDF • helyi működés • OSCAR-referencia</p>
+      </div>
+      <div class="top-actions">
+        <button id="refresh" type="button">Adatok frissítése</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="error" class="error hidden" role="alert">
+        <div class="error-copy"><strong id="errorTitle">Hiba történt</strong><span id="errorMessage"></span><details id="errorDetails"><summary>Technikai részletek</summary><code id="errorTechnical"></code></details></div>
+        <div class="error-actions"><button id="errorRetry" type="button">Újrapróbálom</button><button id="errorDiagnostics" type="button">Diagnosztika</button></div>
+      </section>
+      <div id="connectionBadge" class="connection-badge hidden" role="status"></div>
+      <div id="pullRefreshIndicator" class="pull-refresh-indicator" aria-hidden="true"><span>↻</span><b>Húzd le a frissítéshez</b></div>
+
+      <section class="page active" id="page-dashboard">
+        <div id="dashboardOverviewView">
+          <section class="section-heading dashboard-heading">
+            <div><h2>Legutóbbi alvás</h2><p id="latestSleepDate" class="muted">Betöltés…</p></div>
+            <button id="openLatestSleep" type="button">Részletes napi nézet</button>
+          </section>
+          <section class="cards latest-sleep-cards">
+            <article class="metric ahi"><label>AHI</label><strong id="latestAhi">–</strong><small id="latestAhiLabel">esemény/óra</small></article>
+            <article class="metric usage"><label>Használati idő</label><strong id="latestUsage">–</strong><small id="latestCompliance">–</small></article>
+            <article class="metric leak"><label>Szivárgás 95%</label><strong id="latestLeakP95">–</strong><small>L/perc</small></article>
+            <article class="metric events"><label>Összes esemény</label><strong id="latestEvents">–</strong><small id="latestEventIndex">–</small></article>
+            <article class="metric pressure"><label>Nyomás 95%</label><strong id="latestPressureP95">–</strong><small>cmH₂O</small></article>
+            <article class="metric session-status"><label>Szekció</label><strong id="latestStatus">–</strong><small id="latestSessions">–</small></article>
+          </section>
+          <div id="latestEventBadges" class="event-badges dashboard-badges"></div>
+          <section id="previousNightDelta" class="panel previous-night-delta hidden">
+            <div class="panel-head"><div><h3>Mi változott az előző éjszakához képest?</h3><span id="previousNightDeltaPeriod">A két legutóbbi terápiás éjszaka összevetése</span></div></div>
+            <div id="previousNightDeltaGrid" class="delta-grid"></div>
+          </section>
+
+          <section class="section-heading trends-heading">
+            <div><h2>Terápiás összesítő</h2><p class="muted">Trendek a tényleges DATALOG/EDF adatokból.</p></div>
+            <div class="dashboard-trend-actions">
+              <div class="period-switch" id="dashboardPeriodSwitch">
+                <button data-period="7" type="button">7 nap</button><button data-period="30" class="active" type="button">30 nap</button><button data-period="90" type="button">90 nap</button><button data-period="all" type="button">Teljes időszak</button>
+              </div>
+              <button id="openComparison" class="compact-action" type="button">⇄ Időszakok összehasonlítása</button>
+            </div>
+          </section>
+          <section class="cards aggregate-cards four">
+            <article class="metric"><label>Terápiás AHI</label><strong id="aggAhi">–</strong><small>súlyozott átlag</small></article>
+            <article class="metric"><label>Átlagos használat</label><strong id="aggUsage">–</strong><small>naponta</small></article>
+            <article class="metric"><label>4+ órás napok</label><strong id="aggCompliance">–</strong><small id="aggComplianceCount">–</small></article>
+            <article class="metric"><label>Elemzett napok</label><strong id="aggDays">–</strong><small id="aggRange">–</small></article>
+          </section>
+          <section id="comparisonSummaryPanel" class="panel comparison-summary-panel hidden">
+            <div class="panel-head"><div><h3>Időszakok összehasonlítása</h3><span id="comparisonSummaryLabel">Két kiválasztott időszak eredménye</span></div><div class="comparison-panel-actions"><button id="editComparison" type="button">Módosítás</button><button id="clearComparison" class="comparison-delete" type="button" aria-label="Összehasonlítás törlése" title="Összehasonlítás törlése"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg></button></div></div>
+            <div id="comparisonResult" class="comparison-result"></div>
+          </section>
+          <section class="trend-grid">
+            <article class="panel trend-card"><div class="panel-head"><h3>AHI trend</h3><span>esemény/óra</span></div><canvas id="trendAhi"></canvas></article>
+            <article class="panel trend-card"><div class="panel-head"><h3>Légzési mutatók</h3><span>medián trend</span></div><canvas id="trendResp"></canvas></article>
+            <article class="panel trend-card"><div class="panel-head"><h3>Nyomás trend</h3><span>Medián + 95%</span></div><canvas id="trendPressure"></canvas></article>
+            <article class="panel trend-card"><div class="panel-head"><h3>Szivárgás trend</h3><span>Medián + 95%</span></div><canvas id="trendLeak"></canvas></article>
+            <article class="panel trend-card trend-bar-card"><div class="panel-head"><h3>Használati idő</h3><span>óra</span></div><canvas id="trendUsage"></canvas></article>
+            <article class="panel trend-card trend-bar-card"><div class="panel-head"><h3>Események bontása</h3><span>OA / CA / H / RERA index</span></div><canvas id="trendEvents"></canvas></article>
+          </section>
+          <div id="trendTooltip" class="trend-tooltip hidden" role="status"></div>
+        </div>
+
+        <div id="dashboardDailyView" class="hidden">
+          <div id="daySwipeCue" class="day-swipe-cue" aria-hidden="true">
+            <span id="daySwipeCueIcon">‹</span>
+            <div><small id="daySwipeCueLabel">Előző éjszaka</small><strong id="daySwipeCueDate">–</strong></div>
+          </div>
+          <div class="daily-backbar"><button id="backToDashboardOverview" type="button">← Összesítő dashboard</button><button id="shareDaily" class="daily-share-button" type="button">↗ Megosztás</button></div>
+        <div class="page-row day-toolbar">
+          <div>
+            <h2>Éjszaka: <span id="dashboardDate">–</span></h2>
+            <span id="integrity" class="muted"></span>
+          </div>
+          <div class="date-nav">
+            <button id="prevDay" type="button" title="Előző nap">‹</button>
+            <select id="day" aria-label="Nap kiválasztása"></select>
+            <button id="nextDay" type="button" title="Következő nap">›</button>
+          </div>
+        </div>
+
+        <section class="panel daily-overview-panel">
+          <div class="panel-head daily-overview-head">
+            <div><h3>Fő eredmények</h3><span>Az éjszaka legfontosabb terápiás adatai egy helyen</span></div>
+            <div class="day-session-strip"><span>Terápiás szakaszok <b id="sessionTotal">–</b></span><div id="sessions" class="sessions"></div></div>
+          </div>
+          <div class="daily-core-grid">
+            <article class="daily-primary-stat ahi"><label>AHI</label><strong id="ahi">–</strong><small>esemény/óra</small></article>
+            <article class="daily-primary-stat usage"><label>Használati idő</label><strong id="usage">–</strong><small>tényleges terápiás idő</small></article>
+            <article class="daily-primary-stat events"><label>Események</label><strong id="eventCount">–</strong><small>jelölt események</small></article>
+            <article id="spo2Metric" class="daily-primary-stat spo2 ox-panel hidden"><label>SpO₂</label><strong id="spo2">–</strong><small>medián</small></article>
+            <article id="hrMetric" class="daily-primary-stat hr ox-panel hidden"><label>Pulzus</label><strong id="hr">–</strong><small>medián</small></article>
+          </div>
+          <div id="eventBadges" class="event-badges daily-event-badges"></div>
+
+          <div class="therapy-vitals" aria-label="Terápiás mutatók">
+            <article class="therapy-vital leak-vital"><span class="therapy-vital-icon">≈</span><div><label>Szivárgás 95%</label><strong id="dailyLeakP95">–</strong><small>L/perc</small></div></article>
+            <article class="therapy-vital pressure-vital"><span class="therapy-vital-icon">↕</span><div><label>Nyomás medián</label><strong id="dailyPressureMedian">–</strong><small>cmH₂O</small></div></article>
+            <article class="therapy-vital pressure-vital"><span class="therapy-vital-icon">95</span><div><label>Nyomás 95%</label><strong id="dailyPressureP95">–</strong><small>cmH₂O</small></div></article>
+            <article class="therapy-vital pressure-vital"><span class="therapy-vital-icon">↑</span><div><label>Maximum nyomás</label><strong id="dailyPressureMax">–</strong><small>cmH₂O</small></div></article>
+            <article class="therapy-vital apnea-vital"><span class="therapy-vital-icon">⏱</span><div><label>Apnoe-idő</label><strong id="dailyApneaTime">–</strong><small>összesen</small></div></article>
+            <article class="therapy-vital session-vital"><span class="therapy-vital-icon">☾</span><div><label>Szakaszok</label><strong id="dailySessionCount">–</strong><small>darab</small></div></article>
+          </div>
+        </section>
+
+        <section class="panel night-evaluation-panel night-evaluation-full">
+          <div class="panel-head"><h3>Éjszaka értékelése</h3><span>Automatikus, adatalapú összefoglaló</span></div>
+          <div class="night-evaluation-grid">
+            <div class="night-score"><strong id="nightEvalTitle">—</strong><small id="nightEvalSubtitle">—</small></div>
+            <ul id="nightEvalList" class="night-eval-list"><li>Betöltés…</li></ul>
+          </div>
+        </section>
+
+        <section class="panel daily-note-panel compact-assessment">
+          <div class="panel-head assessment-head">
+            <div><h3>Saját értékelés</h3><span id="dailyAssessmentStatus">Nincs még rögzített értékelés.</span></div>
+            <div class="inline-actions assessment-actions"><button id="deleteDailyAssessment" class="danger-link hidden" type="button">Törlés</button><button id="openDailyAssessment" type="button">Értékelés rögzítése</button></div>
+          </div>
+          <div id="dailyAssessmentDisplay" class="assessment-display hidden"></div>
+        </section>
+
+        <section class="panel daily-therapy-compare full-width-therapy">
+          <div class="panel-head"><h3>Előírt terápia és tényleges nyomás</h3><span>napi + 30 napos összevetés</span></div>
+          <div class="daily-therapy-grid">
+            <div><label>Aktuális előírás</label><strong id="dailyPrescription">—</strong><small id="dailyPrescriptionSince">—</small></div>
+            <div><label>Napi medián</label><strong id="dailyCompareMedian">—</strong><small>cmH₂O</small></div>
+            <div><label>Napi 95%</label><strong id="dailyCompareP95">—</strong><small>cmH₂O</small></div>
+            <div><label>Napi maximum</label><strong id="dailyCompareMax">—</strong><small>cmH₂O</small></div>
+            <div><label>30 napos 95%</label><strong id="dailyCompare30P95">—</strong><small id="dailyCompare30Ahi">Terápiás AHI: —</small></div>
+          </div>
+        </section>
+
+        <section class="panel hero-panel">
+          <div class="panel-head hero-head">
+            <div class="chart-title"><span id="heroSwatch" class="swatch"></span><h3 id="heroTitle">Légáramlás</h3><small id="heroUnit"></small></div>
+            <div class="toolbar">
+              <span id="cursorInfo">Kurzor: –</span>
+              <div class="view-switch" aria-label="Grafikonnézet">
+                <button id="focusViewBtn" class="active" type="button">Fókusz nézet</button>
+                <button id="stackViewBtn" type="button">Összes grafikon</button>
+              </div>
+              <button id="resetZoom" type="button">Teljes időtartomány</button>
+            </div>
+          </div>
+          <div class="canvas-stack hero-stack">
+            <canvas id="heroBase"></canvas>
+            <canvas id="heroOverlay" class="canvas-overlay"></canvas>
+          </div>
+          <div class="navigator-wrap">
+            <canvas id="navigator" class="navigator" height="72"></canvas>
+            <div id="viewInfo" class="hint">Teljes időtartomány</div>
+          </div>
+        </section>
+
+        <section class="overview-block" id="overviewBlock">
+          <div class="section-title"><h3>Áttekintés</h3><span>A mini grafikonok mindig az aktuális nagyítást követik • kattints egyre a fő grafikonhoz</span></div>
+          <div id="overviewGrid" class="overview-grid"></div>
+        </section>
+
+        <section class="stacked-block hidden" id="stackedBlock">
+          <div class="section-title"><h3>Összes grafikon</h3><span>Közös időtengely, közös kurzor és közös nagyítás</span></div>
+          <div id="stackedCharts" class="stacked-charts"></div>
+        </section>
+
+        <section class="panel events-panel">
+          <div class="panel-head"><h3>Események</h3><span>kattintás: esemény környékének megnyitása</span></div>
+          <div id="eventLegend" class="legend"></div>
+          <div class="canvas-stack events-stack"><canvas id="eventsBase"></canvas><canvas id="eventsOverlay" class="canvas-overlay"></canvas></div>
+          <div id="eventList" class="event-list"></div>
+        </section>
+        </div>
+      </section>
+
+      <section class="page" id="page-sessions">
+        <div class="page-intro"><p class="muted">Egy sor = egy ResMed nap. A sorra kattintva megnyílik a napi Dashboard.</p></div>
+        <section class="cards summary-cards four">
+          <article class="metric"><label>Napok száma</label><strong id="daysCount">–</strong></article>
+          <article class="metric"><label>Átlagos használat</label><strong id="avgUsage">–</strong></article>
+          <article class="metric"><label>Átlagos AHI</label><strong id="avgAhi">–</strong></article>
+          <article class="metric"><label>Ép napok</label><strong id="healthyDays">–</strong></article>
+        </section>
+        <section class="panel table-panel">
+          <div class="table-wrap"><table class="data-table sessions-table">
+            <thead><tr><th>Dátum</th><th>Használati idő</th><th>AHI</th><th>Események</th><th>OA</th><th>CA</th><th>H</th><th>RERA</th><th class="col-spo2">SpO₂</th><th class="col-hr">HR</th><th>Megnyitás</th></tr></thead>
+            <tbody id="sessionsTableBody"><tr><td colspan="11">Betöltés…</td></tr></tbody>
+          </table></div>
+        </section>
+        <section class="panel sessions-calendar-panel">
+          <div class="panel-head">
+            <div><h3>Napi eredmények – naptár</h3><span>AHI • használati idő • szivárgás • saját értékelés</span></div>
+            <div class="calendar-toolbar">
+              <label>Hónap<select id="dashboardCalendarMonth"></select></label>
+              <button id="refreshDashboardCalendar" type="button">Frissítés</button>
+            </div>
+          </div>
+          <div id="dashboardCalendar" class="dashboard-calendar sessions-calendar"></div>
+        </section>
+      </section>
+
+      <section class="page" id="page-events">
+        <div class="page-row"><p class="muted">A kiválasztott nap összes felismert légzési eseménye.</p><select id="eventsDay"></select></div>
+        <section class="panel table-panel"><div class="table-wrap"><table class="data-table events-table"><colgroup><col class="event-col-time"><col class="event-col-type"><col class="event-col-duration"><col class="event-col-desc"><col class="event-col-action"></colgroup><thead><tr><th>Időpont</th><th>Típus</th><th>Időtartam</th><th>Leírás</th><th>Akció</th></tr></thead><tbody id="eventsTableBody"></tbody></table></div></section>
+      </section>
+
+      <section class="page" id="page-reports">
+        <div class="page-row"><p class="muted">Napi statisztika, időszaki táblázat és nyomtatásra tervezett SleepMate PAP-jelentés.</p><button id="openReportPdf" class="primary report-pdf-button" type="button">PDF jelentés készítése</button></div>
+        <section class="panel filter-panel">
+          <div class="filter-row"><label>Tól<input id="reportFrom" type="date"></label><label>Ig<input id="reportTo" type="date"></label><button id="applyReportRange" type="button">Szűrés</button><select id="reportDay"></select></div>
+          <div id="reportRangeInfo" class="muted"></div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h3>Napi statisztika</h3><span id="apneaTime">–</span></div>
+          <div class="table-wrap"><table class="stats-table"><thead><tr><th>Csatorna</th><th>Minimum</th><th>Medián</th><th>95%</th><th>99,5%</th><th>Maximum</th></tr></thead><tbody id="statsBody"><tr><td colspan="6">Válassz napot.</td></tr></tbody></table></div>
+        </section>
+        <section class="panel table-panel">
+          <div class="panel-head"><h3>A kiválasztott időszak napjai</h3><span id="reportCount"></span></div>
+          <div class="table-wrap"><table class="data-table report-days-table clean-fixed-table"><colgroup><col style="width:18%"><col style="width:14%"><col style="width:12%"><col style="width:16%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"></colgroup><thead><tr><th>Dátum</th><th>Használat</th><th>AHI</th><th>Események</th><th>OA</th><th>CA</th><th>H</th><th>RERA</th></tr></thead><tbody id="reportDaysBody"></tbody></table></div>
+        </section>
+      </section>
+
+      <section class="page ai-page" id="page-ai">
+        <section class="ai-hero panel">
+          <div class="ai-hero-copy">
+            <div class="ai-kicker"><span class="ai-spark">✦</span> PAP-terápiás AI összegzés <span class="prototype-badge">Élő AI</span></div>
+            <h2>Érthető összefüggések a saját terápiás adataidból</h2>
+            <p>Luna és Milo az anonimizált terápiás adataidból készít érthető összefoglalót; közvetlen azonosító nem kerül ki a programból.</p>
+          </div>
+          <div class="ai-credit-summary">
+            <span>Napi kérdéskeret</span><strong><b id="aiGeminiRemaining">10</b> + <b id="aiGroqRemaining">10</b></strong><small>10 kérdés / nap / AI</small>
+          </div>
+        </section>
+
+        <section class="ai-provider-grid">
+          <button class="ai-provider-card selected gemini" data-ai-provider="gemini" type="button">
+            <span class="ai-avatar gemini-avatar"><i></i></span>
+            <span class="ai-provider-copy"><b id="aiGeminiName">Luna</b><small>Google Gemini</small><em id="aiGeminiStatus">Nincs API-kulcs • Beállítások → AI</em></span>
+            <span class="ai-provider-check">✓</span>
+          </button>
+          <button class="ai-provider-card groq" data-ai-provider="groq" type="button">
+            <span class="ai-avatar groq-avatar"><img src="/assets/milo-avatar.svg" alt="Milo"></span>
+            <span class="ai-provider-copy"><b id="aiGroqName">Milo</b><small>Groq</small><em id="aiGroqStatus">Nincs API-kulcs • Beállítások → AI</em></span>
+            <span class="ai-provider-check">✓</span>
+          </button>
+        </section>
+
+        <section class="panel ai-launch-panel">
+          <div class="panel-head"><div><h3>Mit értékeljünk?</h3><span>Egy adatkészlet-verzióra ugyanaz a kiértékelés egyszer kérhető. Új vagy módosult terápiás adat után újra elérhető.</span></div><div id="aiDatasetBadge" class="ai-data-badge">Adatverzió ellenőrzése…</div></div>
+          <div class="ai-mobile-analysis-picker">
+            <button id="aiAnalysisPickerButton" class="ai-analysis-picker-button" type="button">
+              <span><small>Kiértékelés típusa</small><b id="aiAnalysisPickerLabel">Válassz kiértékelést</b></span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg>
+            </button>
+          </div>
+          <div class="ai-analysis-actions">
+            <article class="ai-analysis-card"><div class="ai-analysis-icon">☾</div><div><h4>Előző alvás</h4><p>A legutolsó elérhető terápiás éjszaka részletes értékelése.</p></div><button data-ai-analysis="night" type="button">Kiértékelés</button></article>
+            <article class="ai-analysis-card"><div class="ai-analysis-icon">7</div><div><h4>Előző hét</h4><p>Az utolsó 7 terápiás nap trendjei és ismétlődő mintái.</p></div><button data-ai-analysis="week" type="button">Kiértékelés</button></article>
+            <article class="ai-analysis-card month-card"><div class="ai-analysis-icon">▦</div><div><h4>Hónap</h4><p>Válassz hónapot a hosszabb távú mintázatokhoz.</p><select id="aiMonthSelect" aria-label="Hónap kiválasztása"></select></div><button data-ai-analysis="month" type="button">Kiértékelés</button></article>
+            <article class="ai-analysis-card"><div class="ai-analysis-icon">∞</div><div><h4>Teljes terápiás időszak</h4><p>A kezelés megkezdésétől a legfrissebb adatig.</p></div><button data-ai-analysis="full_period" type="button">Kiértékelés</button></article>
+            <article class="ai-analysis-card ai-comparison-card compact-row"><div class="ai-analysis-icon">⇄</div><div class="ai-comparison-copy"><h4>Időszakok összehasonlítása</h4><p>Két időszak AI-értékelése.</p></div><div class="ai-compare-inputs"><input id="aiCompareAStart" type="date" aria-label="A időszak kezdete"><input id="aiCompareAEnd" type="date" aria-label="A időszak vége"><span>↔</span><input id="aiCompareBStart" type="date" aria-label="B időszak kezdete"><input id="aiCompareBEnd" type="date" aria-label="B időszak vége"></div><button data-ai-analysis="comparison" type="button">Kiértékelés</button></article>
+          </div>
+        </section>
+
+        <div id="aiAnalysisSheet" class="ai-analysis-sheet hidden" aria-hidden="true">
+          <button class="ai-analysis-sheet-scrim" id="aiAnalysisSheetScrim" type="button" aria-label="Bezárás"></button>
+          <section class="ai-analysis-sheet-card" role="dialog" aria-modal="true" aria-labelledby="aiAnalysisSheetTitle">
+            <div class="ai-analysis-sheet-head"><div><small>SleepMate AI</small><h3 id="aiAnalysisSheetTitle">Mit értékeljünk?</h3></div><button id="aiAnalysisSheetClose" type="button" aria-label="Bezárás">×</button></div>
+            <div class="ai-analysis-sheet-options">
+              <button type="button" data-ai-mobile-choice="night"><span>☾</span><div><b>Előző alvás</b><small>A legutóbbi terápiás éjszaka</small></div><i>›</i></button>
+              <button type="button" data-ai-mobile-choice="week"><span>7</span><div><b>Előző hét</b><small>Az utolsó 7 terápiás nap</small></div><i>›</i></button>
+              <button type="button" data-ai-mobile-choice="month"><span>▦</span><div><b>Hónap</b><small>Válassz terápiás hónapot</small></div><i>›</i></button>
+              <button type="button" data-ai-mobile-choice="full_period"><span>∞</span><div><b>Teljes terápiás időszak</b><small>A kezelés kezdetétől</small></div><i>›</i></button>
+              <button type="button" data-ai-mobile-choice="comparison"><span>⇄</span><div><b>Időszakok összehasonlítása</b><small>Két időszak egymás mellett</small></div><i>›</i></button>
+            </div>
+            <div id="aiMobileMonthControls" class="ai-analysis-sheet-detail hidden">
+              <label><span>Hónap</span><select id="aiMobileMonthSelect"></select></label>
+              <button id="aiMobileMonthRun" class="primary" type="button">Hónap kiértékelése</button>
+            </div>
+            <div id="aiMobileComparisonControls" class="ai-analysis-sheet-detail hidden">
+              <div class="ai-mobile-compare-grid">
+                <label><span>A kezdete</span><input id="aiMobileCompareAStart" type="date"></label>
+                <label><span>A vége</span><input id="aiMobileCompareAEnd" type="date"></label>
+                <label><span>B kezdete</span><input id="aiMobileCompareBStart" type="date"></label>
+                <label><span>B vége</span><input id="aiMobileCompareBEnd" type="date"></label>
+              </div>
+              <button id="aiMobileComparisonRun" class="primary" type="button">Összehasonlítás indítása</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel ai-history-panel">
+          <div class="panel-head"><div><h3>Korábbi AI-kiértékelések</h3><span>A válaszok és a hozzájuk tartozó chat helyben, titkosítva megmaradnak. Bármikor ugyanonnan folytathatod.</span></div><button id="refreshAIHistory" type="button">Frissítés</button></div>
+          <div id="aiHistoryList" class="ai-history-list"><div class="empty-state">Még nincs mentett AI-kiértékelés.</div></div>
+        </section>
+
+        <section id="aiWorkArea" class="ai-work-area hidden">
+          <section class="panel ai-stream-panel">
+            <div class="ai-stream-head"><div class="ai-avatar mini gemini-avatar" id="aiStreamAvatar"><i></i></div><div><b id="aiStreamName">Luna elemzi az adatokat…</b><span id="aiStreamMeta">Előkészítés</span></div><div class="typing-dots"><i></i><i></i><i></i></div></div>
+            <div id="aiStreamingText" class="ai-streaming-text"></div>
+            <div class="ai-stream-progress"><i id="aiStreamProgress"></i></div>
+          </section>
+        </section>
+
+        <section id="aiResultArea" class="ai-result-area hidden">
+          <section class="panel ai-result-header">
+            <div class="ai-result-title-wrap"><span id="aiResultAvatar" class="ai-avatar mini gemini-avatar"><i></i></span><div><span class="ai-kicker" id="aiResultProvider">Luna • Gemini</span><h2 id="aiResultTitle">Kiértékelés</h2><p id="aiResultPeriod" class="muted"></p></div></div>
+            <div class="ai-result-actions"><div class="segmented ai-detail-switch"><button data-ai-detail="short" class="active" type="button">Rövid</button><button data-ai-detail="detailed" type="button">Részletes</button></div><button id="aiPrintPdf" type="button">PDF mentése</button></div>
+          </section>
+
+          <section id="aiShortView" class="ai-result-view active">
+            <article class="panel ai-overall-card"><div class="ai-overall-mark" id="aiOverallMark">✓</div><div><span>Összegzés</span><h3 id="aiOverallTitle">—</h3><p id="aiOverallSummary">—</p></div></article>
+            <section class="ai-insight-grid"><article class="panel"><span>Hatékonyság</span><strong id="aiShortEffect">—</strong></article><article class="panel"><span>Legfontosabb pozitívum</span><strong id="aiShortPositive">—</strong></article><article class="panel"><span>Figyelmet érdemel</span><strong id="aiShortAttention">—</strong></article></section>
+          </section>
+
+          <section id="aiDetailedView" class="ai-result-view">
+            <div id="aiDetailedSections" class="ai-detailed-grid"></div>
+          </section>
+
+          <section class="panel ai-chat-panel">
+            <div class="panel-head"><div><h3>Kérdezz a kiértékelésről</h3><span>Az AI ugyanennek a kiértékelésnek a kontextusában válaszol majd.</span></div><span id="aiChatCounter" class="ai-chat-counter">0 / 10 kérdés ma</span></div>
+            <div id="aiChatMessages" class="ai-chat-messages">
+              <div class="chat-row ai-side"><div class="ai-avatar chat-avatar gemini-avatar" id="aiChatAvatar"><i></i></div><div class="chat-bubble"><b id="aiChatWelcomeName">Luna</b><p>Megvan a kiértékelés. Kérdezz rá bármelyik részére – például az AHI-ra, a szivárgásra, a nyomásra vagy arra, hogy mi változott a korábbi napokhoz képest.</p></div></div>
+            </div>
+            <form id="aiChatForm" class="ai-chat-compose"><textarea id="aiChatInput" rows="1" maxlength="1200" placeholder="Kérdezz a kiértékelésről…" aria-label="Kérdezz a kiértékelésről"></textarea><button type="submit">Küldés</button></form>
+          </section>
+        </section>
+      </section>
+
+      <section class="page" id="page-patient">
+        <div class="patient-topbar">
+          <div class="patient-tabs" role="tablist">
+            <button class="patient-tab active" data-patient-tab="overview">Áttekintés</button>
+            <button class="patient-tab" data-patient-tab="personal">Személyes adatok</button>
+            <button class="patient-tab" data-patient-tab="diagnosis">Diagnózis</button>
+            <button class="patient-tab" data-patient-tab="titrations">Titrálások</button>
+            <button class="patient-tab" data-patient-tab="prescription">Terápiás előírás</button>
+            <button class="patient-tab" data-patient-tab="medications">Gyógyszerek</button>
+            <button class="patient-tab" data-patient-tab="timeline">Terápia története</button>
+            <button class="patient-tab" data-patient-tab="backup">Mentés / visszatöltés</button>
+          </div>
+          <button id="patientEditButton" type="button">Szerkesztés</button>
+        </div>
+
+        <section id="patientEmpty" class="panel patient-empty hidden">
+          <div class="patient-avatar placeholder">👤</div>
+          <div><h2>Még nincs kezelt személy rögzítve</h2><p class="muted">A személyes és terápiás előzmények elkülönítve, titkosítva kerülnek tárolásra.</p><div class="inline-actions"><button id="createPatientButton" type="button">Kezelt személy létrehozása</button><button id="restorePatientButton" type="button">Visszatöltés mentésből</button></div></div>
+        </section>
+
+        <div id="patientContent">
+          <section class="patient-view active" data-patient-view="overview">
+            <section class="panel patient-hero">
+              <div class="patient-photo-shell"><img id="patientPhoto" alt="Profilkép"><div id="patientPhotoFallback" class="patient-avatar placeholder">👤</div></div>
+              <div class="patient-identity">
+                <div class="equipment-kicker">Kezelt személy</div>
+                <h2 id="patientName">—</h2>
+                <div class="patient-meta"><span id="patientAge">—</span><span id="patientTherapyStart">PAP-terápia kezdete: —</span><span id="patientTherapyDays">Terápiában eltöltött idő: —</span></div>
+              </div>
+              <div class="privacy-chip" id="patientSecurityChip">🔒 Titkosított helyi tárolás</div>
+            </section>
+            <section class="patient-overview-grid">
+              <article class="panel patient-summary-card" data-jump="diagnosis"><label>Diagnózis</label><strong id="patientDiagnosisTitle">—</strong><span id="patientDiagnosisAhi">Diagnosztikai AHI: —</span></article>
+              <article class="panel patient-summary-card emphasis" data-jump="prescription"><label>Előírt terápia</label><strong id="patientPrescription">—</strong><span id="patientPrescriptionSince">—</span></article>
+              <article class="panel patient-summary-card"><label>Tényleges terápia</label><div class="patient-period"><select id="patientTherapyPeriod"><option value="7">7 nap</option><option value="30" selected>30 nap</option><option value="90">90 nap</option><option value="all">Teljes időszak</option></select></div><strong id="patientActualP95">—</strong><span id="patientActualAhi">Terápiás AHI: —</span></article>
+              <article class="panel patient-summary-card" data-jump="titrations"><label>Legutóbbi titrálás</label><strong id="patientLastTitrationDate">—</strong><span id="patientLastTitration">—</span></article>
+              <article class="panel patient-summary-card" data-jump="medications"><label>Gyógyszerek</label><strong id="patientActiveMeds">—</strong><span>aktív készítmény</span></article>
+            </section>
+            <section class="panel prescribed-vs-actual">
+              <div class="panel-head"><h3>Előírt terápia és aktuális gépadatok</h3><span id="patientActualPeriodLabel">elmúlt 30 nap</span></div>
+              <div class="therapy-compare">
+                <div><label>Előírt terápia</label><strong id="comparePrescription">—</strong></div>
+                <div class="therapy-stats"><span>Átlag <b id="compareAvg">—</b></span><span>Medián <b id="compareMedian">—</b></span><span>95% <b id="compareP95">—</b></span><span>Maximum <b id="compareMax">—</b></span></div>
+              </div>
+            </section>
+          </section>
+
+          <section class="patient-view" data-patient-view="personal">
+            <section class="panel detail-card"><div class="panel-head"><h3>Személyes adatok</h3><span>csak megjelenítés</span></div><div id="patientPersonalDetails" class="detail-grid"></div></section>
+            <section class="panel detail-card"><div class="panel-head"><h3>További gondozási adatok</h3><span>előkészített adatmodell</span></div><div id="patientCareDetails" class="detail-grid"></div></section>
+            <section class="panel danger-zone"><h3>Adatkezelés</h3><p>A kezelt személy adatainak törlése és a CPAP mérési adatok törlése két külön művelet. Ez a gomb <b>nem törli az EDF/CPAP mérési adatokat</b>.</p><button id="deletePatientButton" class="danger" type="button">Kezelt személy adatainak törlése</button><button class="disabled-look" disabled>CPAP mérési adatok törlése – külön funkció</button></section>
+          </section>
+
+          <section class="patient-view" data-patient-view="diagnosis"><div class="section-actions"><h2>Diagnózis és diagnosztikai vizsgálatok</h2><button data-add-record="diagnosis" type="button">+ Új diagnózis / vizsgálat</button></div><div id="diagnosisRecords" class="record-list"></div></section>
+          <section class="patient-view" data-patient-view="titrations"><div class="section-actions"><h2>Titrálási előzmények</h2><button data-add-record="titration" type="button">+ Új titrálás hozzáadása</button></div><div id="titrationRecords" class="record-list"></div></section>
+          <section class="patient-view" data-patient-view="prescription"><div class="section-actions"><h2>Terápiás előírás előzményei</h2><button data-add-record="prescription" type="button">+ Új terápiás előírás</button></div><div class="info-banner">Az új előírás nem írja felül a régit: minden változás külön rekordként marad meg, így később a grafikonokon is jelölhető lesz.</div><div id="prescriptionRecords" class="record-list"></div></section>
+          <section class="patient-view" data-patient-view="medications"><div class="section-actions"><h2>Szedett gyógyszerek</h2><button data-add-record="medication" type="button">+ Gyógyszer hozzáadása</button></div><div id="medicationRecords" class="record-list"></div></section>
+          <section class="patient-view" data-patient-view="timeline">
+            <section class="section-heading"><div><h2>Terápia története</h2><p class="muted">A terápiát érintő fontos változások automatikus és saját idővonala.</p></div><button id="addTimelineEvent" type="button">+ Saját esemény</button></section>
+            <div id="therapyTimeline" class="therapy-timeline"></div>
+          </section>
+          <section class="patient-view" data-patient-view="backup">
+            <section id="backupExportCard" class="panel backup-card"><h3>Kezelt személy biztonsági mentése</h3><p>A mentés tartalmazza a személyes adatokat, diagnózisokat, titrálásokat, előírásokat, gyógyszereket, napi saját értékeléseket, valamint a kezelt személyhez rendelt készülékeket, maszkokat, kiegészítőket és konfigurációkat. Az EDF/CPAP mérési fájlokat nem.</p><label class="backup-field">Mentési jelszó<input id="backupPassword" type="password" autocomplete="new-password" placeholder="Legalább 8 karakter"></label><button id="exportPatientBackup" type="button">Titkosított mentés letöltése</button><div id="backupExportInfo" class="muted"></div></section>
+            <section class="panel backup-card"><h3>Biztonsági mentés visszatöltése</h3><p>A fájl AES-GCM titkosítását a böngésző oldja fel. <b>Teljes visszaállítás</b> esetén a jelenlegi személyes metaadatok cserélődnek, de az EDF mérési adatok akkor sem törlődnek.</p><label class="backup-field">Mentési fájl<input id="importBackupFile" type="file" accept=".cpapbackup,application/json"></label><label class="backup-field">Mentési jelszó<input id="importBackupPassword" type="password" autocomplete="current-password"></label><label class="backup-field">Visszatöltési mód<select id="importBackupMode"><option value="merge">Egyesítés a jelenlegi adatokkal</option><option value="replace">Teljes profil-visszaállítás</option></select></label><button id="importPatientBackup" type="button">Visszatöltés</button><div id="backupImportInfo" class="muted"></div></section>
+          </section>
+        </div>
+      </section>
+
+      <section class="page" id="page-faq">
+        <section class="panel faq-search-panel">
+          <div class="faq-search-head">
+            <div><h2>CPAP / PAP fogalomtár</h2><p class="muted">ResMed-specifikus rövidítések, események, terápiás fogalmak és mért értékek.</p></div>
+            <span id="faqResultCount" class="faq-result-count">Betöltés…</span>
+          </div>
+          <div class="faq-search-row">
+            <label class="faq-search-box"><span>Keresés</span><input id="faqSearch" type="search" autocomplete="off" placeholder="pl. AHI, szivárgás, obstruktív…"></label>
+            <label class="faq-category-box"><span>Kategória</span><select id="faqCategory"><option value="">Minden kategória</option></select></label>
+          </div>
+          <div class="faq-scope-row">
+            <label><input type="radio" name="faqScope" value="name" checked> Csak a névben</label>
+            <label><input type="radio" name="faqScope" value="full"> A teljes sorban</label>
+            <span class="muted">Pontos találathoz tedd idézőjelbe, például <code>"AHI"</code>.</span>
+          </div>
+        </section>
+        <div id="faqResults" class="faq-results"><div class="empty-state">Fogalomtár betöltése…</div></div>
+      </section>
+
+      <section class="page" id="page-equipment">
+        <div id="equipmentEmptyState" class="hidden"></div>
+        <div id="equipmentNeedsPatient" class="panel info-banner hidden">A felszerelések mindig kezelt személyhez tartoznak. Előbb hozz létre egy kezelt személyt.</div>
+        <div id="equipmentContent">
+          <p class="muted page-intro">Az SD-kártyáról felismert készülék csak észlelt eszköz. A kezelt személy nyilvántartásába külön hozzárendeléssel kerül; a maszkok és kiegészítők külön rekordok. Rögzítéskor a beépített kompatibilitási adatbázisból választhatsz, de minden mező kézzel is kitölthető.</p>
+          <section class="equipment-overview-grid">
+            <section id="detectedEquipmentPanel" class="panel equipment-panel">
+              <div class="equipment-image-wrap"><img id="equipmentImage" src="/equipment-image" alt="ResMed AirSense 11 AutoSet"></div>
+              <div class="equipment-content">
+                <div class="equipment-kicker">SD-kártyáról felismert készülék <span id="detectedDeviceState" class="status-pill past">Észlelt</span></div>
+                <h3 id="equipmentName">Készülék beolvasása…</h3>
+                <div class="equipment-grid"><div><label>Gyártó</label><strong id="equipmentManufacturer">–</strong></div><div><label>Termékkód</label><strong id="equipmentProductCode">–</strong></div><div><label>Régió</label><strong id="equipmentRegion">–</strong></div><div><label>Adatmodell</label><strong id="equipmentDataModel">–</strong></div><div><label>Adatverzió</label><strong id="equipmentDataVersion">–</strong></div><div><label>Firmware</label><strong id="equipmentSoftware">–</strong></div><div><label>Forrás</label><strong id="equipmentSource">–</strong></div></div>
+                <div class="equipment-actions"><button id="assignDetectedDevice" type="button">Hozzárendelés</button></div>
+                <p id="equipmentNote" class="muted equipment-note"></p>
+              </div>
+            </section>
+            <section class="panel replacement-summary-panel">
+              <div class="panel-head"><div><h3>Cserefigyelő</h3><span>Aktív felszerelések</span></div></div>
+              <div id="replacementSummary" class="replacement-summary"><div class="empty-state">Nincs ütemezett csere.</div></div>
+            </section>
+          </section>
+          <section class="equipment-managed-grid">
+            <section class="panel managed-card"><div class="panel-head"><h3>Készülékek</h3><button data-add-record="device" type="button">+ Másik / korábbi</button></div><div id="deviceRecords" class="record-list compact-records"></div></section>
+            <section class="panel managed-card"><div class="panel-head"><h3>Maszkok</h3><button data-add-record="mask" type="button">+ Maszk</button></div><div id="maskRecords" class="record-list compact-records"></div></section>
+            <section class="panel managed-card"><div class="panel-head"><h3>Kiegészítők</h3><button data-add-record="accessory" type="button">+ Kiegészítő</button></div><div id="accessoryRecords" class="record-list compact-records"></div></section>
+          </section>
+          <section class="panel managed-card setup-card"><div class="panel-head"><div><h3>Használati konfigurációk</h3><span>Készülék + maszk + kiválasztott kiegészítők időszakosan összepárosítva</span></div><button data-add-record="setup" type="button">+ Új konfiguráció</button></div><div id="setupRecords" class="record-list"></div></section>
+        </div>
+      </section>
+      <section class="page" id="page-upload">
+        <div class="page-row"><div><p class="muted">Kézi importok és azonnali frissítés. A műveletek nem módosítják az automatikus beolvasás alapértelmezett mappáját.</p></div></div>
+        <section class="upload-hero"><div class="upload-hero-icon">↻</div><div><h2>Adatok beolvasása és szinkronizálása</h2><p>Válassz forrást. A SleepMate minden külső mappát és SD-kártyát <b>csak olvas</b>; az eredeti fájlokhoz nem ír és nem töröl belőlük.</p></div></section><section class="import-grid">
+          <article class="panel import-card" id="importFolderCard"><div class="import-card-top"><span class="import-step">01</span><div class="import-icon">📁</div></div><div><h3>SD-kártya / mappa beolvasása</h3><p>Egyszeri beolvasás egy általad megadott ResMed mappából. Az automatikus forrásbeállítást nem módosítja.</p></div><div class="path-row"><input id="manualImportFolder" type="text" placeholder="Pl. D:\ vagy C:\CPAP\SD_mentes"><button id="browseManualImportFolder" type="button">Tallózás</button></div><button id="startFolderImport" class="primary-action" type="button">Mappa beolvasása</button><div class="job-progress hidden" data-progress-card="folder"><div class="progress-track"><i></i></div><strong>Előkészítés…</strong><span></span></div></article>
+          <article class="panel import-card" id="importSdCard"><div class="import-card-top"><span class="import-step">02</span><div class="import-icon">💾</div></div><div><h3>SD-kártya automatikus keresése</h3><p>Megkeresi a Windowsban látható meghajtókon a ResMed DATALOG struktúrát, majd csak olvasási módban beolvassa.</p></div><button id="startSdSearch" class="primary-action" type="button">SD-kártya keresése</button><div class="job-progress hidden" data-progress-card="sd"><div class="progress-track"><i></i></div><strong>Keresés…</strong><span></span></div></article>
+          <article class="panel import-card" id="importZipCard"><div class="import-card-top"><span class="import-step">03</span><div class="import-icon">🗜️</div></div><div><h3>ZIP feltöltése</h3><p>Korábban lementett teljes ResMed/SD ZIP. A feltöltés, kibontás és napok feldolgozása külön látszik.</p></div><input id="zipImportFile" type="file" accept=".zip,application/zip"><button id="startZipImport" class="primary-action" type="button">ZIP beolvasása</button><div class="job-progress hidden" data-progress-card="zip"><div class="progress-track"><i></i></div><strong>Várakozás…</strong><span></span></div></article>
+          <article class="panel import-card accent-card" id="instantRefreshCard"><div class="import-card-top"><span class="import-step">04</span><div class="import-icon">↻</div></div><div><h3>Azonnali adatfrissítés</h3><p>A Beállításokban megadott alapértelmezett mappát ellenőrzi, és az új adatokat a program saját tárába szinkronizálja.</p><small id="instantRefreshPath">–</small></div><button id="startInstantRefresh" class="primary-action" type="button">Frissítés most</button><div class="job-progress hidden" data-progress-card="refresh"><div class="progress-track"><i></i></div><strong>Frissítés…</strong><span></span></div></article>
+        </section>
+        <section class="panel import-history-panel"><div class="panel-head"><h3>Legutóbbi import / frissítési állapot</h3><span>tartós rendszernapló</span></div><div id="uploadHistory" class="system-history"><div class="empty-state">Még nincs betöltve előzmény.</div></div></section>
+      </section>
+      <section class="page" id="page-logs">
+        <div class="page-row"><div><p class="muted">Munkamenetnapló + ResMed adatintegritási diagnosztika.</p></div><div class="inline-actions"><button id="refreshLogs" type="button">Diagnosztika frissítése</button><button id="clearLogs" type="button">Naplók ürítése</button></div></div>
+        <section id="systemStatusCenter" class="panel system-status-card status-loading">
+          <div class="system-status-main"><span id="systemStatusDot" class="system-status-dot"></span><div><h3 id="systemStatusTitle">SleepMate állapot ellenőrzése…</h3><p id="systemStatusSummary" class="muted">Adatforrás, EDF, diagnosztika, szinkron és biztonsági mentés ellenőrzése.</p></div><button id="systemStatusToggle" type="button">Részletek</button></div>
+          <div id="systemStatusDetails" class="system-status-details hidden"></div>
+        </section>
+        <section class="cards aggregate-cards four log-summary-cards">
+          <article class="metric"><label>Import napló</label><strong id="logImportCount">–</strong><small id="logGeneratedAt">–</small></article>
+          <article class="metric"><label>Hibák / figyelmeztetések</label><strong id="logErrorCount">–</strong><small>összesített</small></article>
+          <article class="metric"><label>Sérült / csonka EDF</label><strong id="logDamagedCount">–</strong><small>fájlszintű</small></article>
+          <article class="metric"><label>Hiányzó BRP / PLD / EVE</label><strong id="logMissingCount">–</strong><small>szakaszszintű</small></article>
+        </section>
+        <section class="panel diagnostic-panel"><div class="panel-head"><h3>Diagnosztikai összefoglaló</h3><span id="logStrWarningText">—</span></div><div id="diagnosticSummary" class="diagnostic-summary"></div></section>
+        <section id="damagedFilesPanel" class="panel table-panel diagnostics-table-panel"><div class="panel-head"><h3>Sérült / csonka EDF</h3><span>integritási problémák</span></div><div class="table-wrap"><table class="data-table diagnostics-table damaged-table clean-fixed-table"><colgroup><col style="width:15%"><col style="width:35%"><col style="width:16.66%"><col style="width:16.67%"><col style="width:16.67%"></colgroup><thead><tr><th>Nap</th><th>Fájl</th><th>Header rekordok</th><th>Tényleges rekordok</th><th>Maradék bájt</th></tr></thead><tbody id="damagedFilesBody"><tr><td colspan="5">Betöltés…</td></tr></tbody></table></div></section>
+        <section id="missingFilesPanel" class="panel table-panel diagnostics-table-panel"><div class="panel-head"><h3>Hiányzó BRP / PLD / EVE</h3><span>szakaszszintű ellenőrzés</span></div><div class="table-wrap"><table class="data-table diagnostics-table missing-table clean-fixed-table"><colgroup><col style="width:16%"><col style="width:12%"><col style="width:18%"><col style="width:27%"><col style="width:27%"></colgroup><thead><tr><th>Nap</th><th>Szakasz</th><th>Start</th><th>Hiányzó</th><th>Meglévő</th></tr></thead><tbody id="missingFilesBody"><tr><td colspan="5">Betöltés…</td></tr></tbody></table></div></section>
+        <section class="panel ai-diagnostic-log-panel"><div class="panel-head"><div><h3>AI diagnosztikai napló</h3><span>Gemini / Groq hívások teljes technikai nyomvonala – API-kulcs nélkül</span></div><div class="log-export-actions"><button id="refreshAiLogs" type="button">Frissítés</button><button id="copyAiFullLog" type="button">Vágólapra</button><button id="exportAiFullLog" type="button">Export TXT</button></div></div><div id="aiProviderDiagnostic" class="ai-provider-diagnostic"></div><div id="aiDiagnosticLog" class="ai-diagnostic-log"><div class="empty-state">Még nincs AI naplóbejegyzés.</div></div></section><section class="panel"><div class="panel-head"><div><h3>Teljes programnapló</h3><span>Tartós háttérnapló + aktuális böngésző-munkamenet</span></div><div class="log-export-actions"><button id="copyFullLog" type="button">Vágólapra</button><button id="exportFullLog" type="button">Export TXT</button></div></div><div id="logList" class="log-list"></div></section>
+      </section>
+      <section class="page" id="page-settings">
+        <label class="settings-category-picker" for="settingsCategorySelect">
+          <span>Beállítási kategória</span>
+          <select id="settingsCategorySelect" aria-label="Beállítási kategória">
+            <option value="source">Adatforrás</option>
+            <option value="auto">Automatika</option>
+            <option value="remote">Távoli elérés</option>
+            <option value="push">PWA értesítések</option>
+            <option value="display">Megjelenítés</option>
+            <option value="ai">AI</option>
+            <option value="backup">Backup</option>
+            <option value="system">Rendszer és frissítés</option>
+            <option value="delete">Adattörlés</option>
+          </select>
+        </label>
+        <div class="settings-inner-tabs" role="tablist" aria-label="Beállítási csoportok">
+          <button class="active" data-settings-tab="source" type="button">Adatforrás</button>
+          <button data-settings-tab="auto" type="button">Automatika</button>
+          <button data-settings-tab="remote" type="button">Távoli elérés</button>
+          <button data-settings-tab="push" type="button">PWA értesítések</button>
+          <button data-settings-tab="display" type="button">Megjelenítés</button>
+          <button data-settings-tab="ai" type="button">AI</button>
+          <button data-settings-tab="backup" type="button">Backup</button>
+          <button data-settings-tab="system" type="button">Rendszer és frissítés</button>
+          <button data-settings-tab="delete" type="button">Adattörlés</button>
+        </div>
+        <section class="panel settings-source-panel settings-tab-panel active" data-settings-panel="source">
+          <div class="panel-head"><div><h3>Adatforrás</h3><span>Az automatikus és az „Azonnali adatfrissítés” ezt a mappát használja.</span></div></div>
+          <label class="settings-wide-field"><span>Alapértelmezett beolvasási mappa</span><div class="path-row"><input id="settingDataDirInput" type="text"><button id="browseSettingDataDir" type="button">Tallózás</button></div></label>
+          <div class="settings-actions"><button id="saveDataSourceSettings" type="button">Adatmappa mentése</button><span id="dataSourceSettingsStatus" class="muted"></span></div>
+          <div class="local-port-settings">
+            <div class="panel-head compact"><div><h4>Helyi szolgáltatási port</h4><span>Automatikus módban a SleepMate 8895-től indulva megkeresi az első szabad portot. A módosítás újraindítás után lép életbe.</span></div></div>
+            <div class="port-settings-row">
+              <label class="form-field"><span>Portválasztás</span><select id="settingPortMode"><option value="auto">Automatikus szabad port keresése</option><option value="fixed">Fix port használata</option></select></label>
+              <label class="form-field"><span>Elsődleges / fix port</span><input id="settingPreferredPort" type="number" min="1024" max="65435" step="1" value="8895"></label>
+              <div class="port-runtime-card"><span>Most használt port</span><strong id="settingPort">–</strong><small id="settingPortHint">–</small></div>
+            </div>
+            <div class="settings-actions"><button id="savePortSettings" type="button">Portbeállítás mentése</button><span id="portSettingsStatus" class="muted"></span></div>
+          </div>
+          <div class="settings-tech-row"><span>Hálózati bind <b id="settingHost">–</b></span><span>Külső elérés <b>localhost + biztonságos proxy</b></span></div>
+        </section>
+
+        <section class="panel auto-scan-settings settings-tab-panel" data-settings-panel="auto">
+          <div class="panel-head"><div><h3>Automatikus könyvtárfelülvizsgálat</h3><span>Alapértelmezés: bekapcsolva, 30 percenként.</span></div><label class="switch-inline"><input id="settingAutoScanEnabled" type="checkbox"><b>Bekapcsolva</b></label></div>
+          <div class="schedule-grid">
+            <label class="form-field"><span>Ütemezés módja</span><select id="settingAutoScanMode"><option value="interval">Rendszeres időközönként</option><option value="daily">Naponta egy időpontban</option><option value="weekly">Kiválasztott napokon</option></select></label>
+            <label class="form-field schedule-interval"><span>Gyakoriság</span><select id="settingAutoScanInterval"><option value="30" selected>30 percenként</option><option value="60">óránként</option><option value="120">2 óránként</option><option value="180">3 óránként</option><option value="360">6 óránként</option><option value="720">12 óránként</option><option value="1440">naponta</option></select></label>
+            <label class="form-field schedule-time"><span>Időpont</span><input id="settingAutoScanTime" type="time" value="06:00"></label>
+          </div>
+          <div class="weekday-picker schedule-weekly"><span>Napok</span><label><input type="checkbox" value="0">Hétfő</label><label><input type="checkbox" value="1">Kedd</label><label><input type="checkbox" value="2">Szerda</label><label><input type="checkbox" value="3">Csütörtök</label><label><input type="checkbox" value="4">Péntek</label><label><input type="checkbox" value="5">Szombat</label><label><input type="checkbox" value="6">Vasárnap</label></div>
+          <div class="schedule-status"><span>Utolsó automatikus vizsgálat <b id="autoScanLast">–</b></span><span>Következő <b id="autoScanNext">–</b></span></div>
+          <div class="windows-runtime-settings">
+            <h4>Windows háttérműködés</h4>
+            <label class="setting-toggle"><input id="settingStartWithWindows" type="checkbox"><span><b>Induljon el a Windows indításakor</b><small>A SleepMate konzolablak nélkül elindul, és a jobb alsó értesítési területen fut tovább.</small></span></label>
+            <label class="setting-toggle"><input id="settingTrayNotifications" type="checkbox"><span><b>Tálcaértesítések</b><small>Értesítés sikeres automatikus frissítésről és fontos hibákról.</small></span></label>
+          </div>
+          <div class="settings-actions"><button id="saveAutoScanSettings" type="button">Automatika mentése</button><span id="autoScanSettingsStatus" class="muted"></span></div>
+        </section>
+
+        <section class="settings-tab-panel remote-access-panel" data-settings-panel="remote">
+          <section class="panel remote-intro-panel">
+            <div class="panel-head"><div><h3>Távoli elérés</h3><span>A SleepMate háttérszervere továbbra is csak a saját gépen, 127.0.0.1-en figyel. Kívülről Tailscale Serve vagy Cloudflare Tunnel közvetíti biztonságosan.</span></div><span class="security-pill">🔒 nincs nyitott LAN port</span></div>
+            <div class="remote-backend-line"><span>Helyi szolgáltatás</span><strong id="remoteBackendUrl">http://127.0.0.1:8895</strong><small>Az API-k és az AI stream ugyanazon a relatív URL-en működnek helyben, Tailscale-en és Cloudflare mögött is.</small></div>
+          </section>
+          <div class="remote-grid">
+            <article class="panel remote-card tailscale-card">
+              <div class="remote-card-head"><div class="remote-logo tailscale-logo">T</div><div><h3>Tailscale</h3><span>Privát telefonos / saját eszközös elérés</span></div><span id="tailscaleState" class="remote-status neutral">Ellenőrzés…</span></div>
+              <div class="remote-facts"><span>Telepítve <b id="tailscaleInstalled">–</b></span><span>Kapcsolódva <b id="tailscaleOnline">–</b></span><span>Serve <b id="tailscaleServe">–</b></span></div>
+              <label class="remote-url-field"><span>Elérési cím</span><input id="tailscaleUrl" type="text" readonly value="" placeholder="A Serve bekapcsolása után jelenik meg"></label><small id="tailscaleDetail" class="remote-detail"></small>
+              <p>A SleepMate a Tailscale Serve segítségével HTTPS-en érhető el kizárólag a saját tailnetedből. A backend nem kerül ki a helyi hálózatra.</p>
+              <div class="remote-actions"><button id="tailscaleInstall" type="button">Tailscale telepítése</button><button id="tailscaleEnable" class="primary" type="button">Tailscale elérés bekapcsolása</button><button id="tailscaleDisable" type="button">Kikapcsolás</button><button id="tailscaleOpen" type="button">Megnyitás</button><button id="tailscaleQr" class="compact-qr-button" type="button" title="Az elérési cím QR-kódja">▦ QR-kód</button></div>
+              <p class="remote-auto-note">Ha egyszer bekapcsolod, a SleepMate induláskor automatikusan az aktuális portra igazítja a Tailscale Serve-ot.</p>
+            </article>
+            <article class="panel remote-card cloudflare-card">
+              <div class="remote-card-head"><div class="remote-logo cloudflare-logo">☁</div><div><h3>Cloudflare Tunnel</h3><span>Saját domain + Zero Trust / Access</span></div><span id="cloudflareState" class="remote-status neutral">Ellenőrzés…</span></div>
+              <div class="remote-facts"><span>cloudflared <b id="cloudflareInstalled">–</b></span><span>Tunnel <b id="cloudflareRunning">–</b></span><span>Mód <b id="cloudflareMode">–</b></span><span>Access <b id="cloudflareAccessState">–</b></span></div>
+              <label class="form-field"><span>Publikus hostname</span><input id="cloudflareHostname" type="text" placeholder="sleepmate.sajatdomain.hu"></label>
+              <small id="cloudflareServiceHint" class="remote-detail"></small>
+              <details id="cloudflareTokenAdvanced" class="remote-advanced">
+                <summary>Haladó: a SleepMate indítsa a tunnelt tokennel</summary>
+                <p>Erre csak akkor van szükség, ha nincs már működő cloudflared Windows-szolgáltatásod. Meglévő szolgáltatás esetén a token nem kell a SleepMate-nek.</p>
+                <label class="form-field"><span>Cloudflare Tunnel token</span><div class="secret-input-row"><input id="cloudflareToken" type="password" autocomplete="new-password" placeholder="Csak SleepMate által indított tunnelhez"><button class="secret-toggle" data-secret-target="cloudflareToken" type="button">Mutat</button></div><small id="cloudflareTokenHint">Nincs mentett token</small></label>
+                <label class="checkbox-field compact"><input id="cloudflareClearToken" type="checkbox"><span>Mentett token törlése</span></label>
+              </details>
+              <label class="setting-toggle compact"><input id="cloudflareAccessConfirmed" type="checkbox"><span><b>Cloudflare Access / Zero Trust védelem beállítva</b><small>Ezt a Cloudflare felületén kell létrehozni. A SleepMate nem teszi publikussá védelem nélkül.</small></span></label>
+              <div class="remote-actions"><button id="cloudflareInstall" type="button">cloudflared telepítése</button><button id="saveRemoteSettings" type="button">Beállítások mentése</button><button id="cloudflareStart" class="primary" type="button">Tunnel ellenőrzése / indítása</button><button id="cloudflareStop" type="button">SleepMate tunnel leállítása</button><button id="cloudflareOpen" type="button">Megnyitás</button></div>
+            </article>
+          </div>
+          <section class="panel pwa-card">
+            <div class="pwa-icon-wrap"><img src="/assets/pwa-192.png" alt="SleepMate"></div>
+            <div class="pwa-copy"><h3>SleepMate telefonos alkalmazásként</h3><p>A web és a telepített PWA ugyanazt a SleepMate felületet és ugyanazokat az adatokat használja. A telepített PWA plusza a telefon aljára simuló navigáció, az offline utolsó adatok, a natív megosztás, az érintéses diagramkezelés és a valódi Web Push.</p><small id="pwaInstallHint">A PWA alsó menüje csak a Főképernyőről indított, telepített alkalmazásban jelenik meg.</small></div>
+            <div class="pwa-actions"><button id="pwaInstallButton" class="primary" type="button">Telepítés ezen az eszközön</button><button id="pwaNotificationButton" type="button">Értesítések bekapcsolása</button></div>
+            <div class="pwa-status-grid" id="pwaStatusGrid">
+              <div><span>Alkalmazás</span><b id="pwaStatusInstall">Ellenőrzés…</b></div><div><span>Szerver</span><b id="pwaStatusServer">Ellenőrzés…</b></div><div><span>Offline cache</span><b id="pwaStatusOffline">Ellenőrzés…</b></div><div><span>Értesítések</span><b id="pwaStatusNotifications">Ellenőrzés…</b></div>
+            </div>
+          </section>
+          <div class="remote-note"><b>Cloudflare oldali egyszeri teendő:</b> a tunnel publikus hostname-jének origin szolgáltatását a SleepMate aktuális helyi címére kell irányítani: <code id="cloudflareOriginHint">http://127.0.0.1:8895</code>. Ha automatikus portválasztás miatt a port megváltozik, ezt az origin beállítást is igazítani kell. Tailscale Serve-et a SleepMate automatikusan az aktuális portra állítja.</div>
+        </section>
+
+        <section class="panel push-settings-panel settings-tab-panel" data-settings-panel="push">
+          <div class="panel-head"><div><h3>PWA értesítések</h3><span>Valódi Web Push – a telefon akkor is értesítést kaphat, amikor a SleepMate PWA be van zárva.</span></div><span id="pushCapabilityBadge" class="security-pill">Ellenőrzés…</span></div>
+          <div class="push-state-card">
+            <div><span>Ez az eszköz</span><strong id="pushDeviceState">Nincs feliratkozva</strong><small id="pushDeviceDetail">A jogosultságot ezen a telefonon kell engedélyezni.</small></div>
+            <div><span>Regisztrált eszközök</span><strong id="pushSubscriptionCount">0</strong><small>A SleepMate szerverén tárolt aktív Web Push feliratkozások.</small></div>
+          </div>
+          <div class="push-preference-grid">
+            <label class="setting-toggle"><input id="pushPrefNewNight" type="checkbox" checked><span><b>Új CPAP éjszaka</b><small>Ha új terápiás nap kerül feldolgozásra.</small></span></label>
+            <label class="setting-toggle"><input id="pushPrefDataUpdate" type="checkbox"><span><b>Adatváltozás</b><small>Ha egy már ismert EDF később megváltozik vagy kiegészül.</small></span></label>
+            <label class="setting-toggle"><input id="pushPrefWarning" type="checkbox" checked><span><b>Diagnosztikai figyelmeztetés</b><small>Hiányzó/csonka EDF vagy más adatminőségi probléma.</small></span></label>
+            <label class="setting-toggle"><input id="pushPrefBackupError" type="checkbox" checked><span><b>Backup-hiba</b><small>Ha az automatikus mentés nem tud lefutni.</small></span></label>
+          </div>
+          <div class="push-actions">
+            <button id="pushEnableButton" class="primary" type="button">Értesítések bekapcsolása ezen az eszközön</button>
+            <button id="pushSaveButton" type="button">Beállítások mentése</button>
+            <button id="pushTestButton" type="button">Próbaértesítés</button>
+            <button id="pushDisableButton" class="danger-soft" type="button">Eszköz leiratkoztatása</button>
+          </div>
+          <p id="pushStatusText" class="muted">A SleepMate a VAPID kulcspárt automatikusan, helyben generálja. A privát kulcs nem kerül a böngészőbe.</p>
+        </section>
+
+        <section class="panel display-settings settings-tab-panel" data-settings-panel="display"><div class="panel-head"><div><h3>Oximetria megjelenítése</h3><span>Bekapcsolva a kártyák akkor is láthatók, ha még nincs O2Ring-adat; ilyenkor „Nincs adat” jelenik meg.</span></div></div><label class="setting-toggle"><input id="settingShowSpO2" type="checkbox"><span><b>SpO₂ megjelenítése</b><small>Bekapcsolva a Dashboardon látható a SpO₂-kártya.</small></span></label><label class="setting-toggle"><input id="settingShowHR" type="checkbox"><span><b>Pulzus / HR megjelenítése</b><small>Bekapcsolva a Dashboardon látható a pulzuskártya.</small></span></label><div class="settings-actions"><button id="saveDisplaySettings" type="button">Megjelenítési beállítások mentése</button><span id="displaySettingsStatus" class="muted"></span></div></section>
+
+        <section class="panel ai-settings-panel settings-tab-panel" data-settings-panel="ai">
+          <div class="panel-head"><div><h3>AI szolgáltatók</h3><span>Az API-kulcsok titkosítva kerülnek a helyi privát adattárba. A SleepMate kizárólag az itt elmentett kulcsokat használja; Windows környezeti változókat nem olvas. Luna a Google Gemini API-t, Milo a Groq API-t használja; az alapfunkciók AI nélkül is működnek.</span></div><span class="security-pill">🔒 titkosított tárolás</span></div>
+          <div class="ai-settings-grid">
+            <article class="ai-setting-provider gemini"><div class="ai-setting-head"><span class="ai-avatar gemini-avatar"><i></i></span><div><b>Luna</b><small>Google Gemini</small></div><span id="geminiConfiguredBadge" class="provider-config-badge">Nincs API-kulcs</span></div><label class="form-field"><span>Megjelenített név</span><input id="settingGeminiName" type="text" value="Luna"></label><label class="form-field"><span>Modell</span><select id="settingGeminiModel">
+<option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+<option value="gemini-3.7-flash">Gemini 3.7 Flash</option>
+<option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+<option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite</option>
+</select></label><label class="form-field"><span>Gemini API-kulcs</span><div class="secret-input-row"><input id="settingGeminiKey" type="password" autocomplete="new-password" placeholder="Új kulcs megadása"><button class="secret-toggle" data-secret-target="settingGeminiKey" type="button">Mutat</button></div><small id="settingGeminiKeyHint">Nincs mentett kulcs</small></label><label class="checkbox-field compact"><input id="settingGeminiClear" type="checkbox"><span>Mentett kulcs törlése</span></label><button class="ai-test-button" type="button" data-ai-test="gemini">Kapcsolat tesztelése</button><span class="ai-test-status" id="aiGeminiTestStatus"></span></article>
+            <article class="ai-setting-provider groq"><div class="ai-setting-head"><span class="ai-avatar groq-avatar"><img src="/assets/milo-avatar.svg" alt="Milo"></span><div><b>Milo</b><small>Groq</small></div><span id="groqConfiguredBadge" class="provider-config-badge">Nincs API-kulcs</span></div><label class="form-field"><span>Megjelenített név</span><input id="settingGroqName" type="text" value="Milo"></label><label class="form-field"><span>Modell</span><select id="settingGroqModel">
+<option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+<option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b</option>
+</select></label><label class="form-field"><span>Groq API-kulcs</span><div class="secret-input-row"><input id="settingGroqKey" type="password" autocomplete="new-password" placeholder="Új kulcs megadása"><button class="secret-toggle" data-secret-target="settingGroqKey" type="button">Mutat</button></div><small id="settingGroqKeyHint">Nincs mentett kulcs</small></label><label class="checkbox-field compact"><input id="settingGroqClear" type="checkbox"><span>Mentett kulcs törlése</span></label><button class="ai-test-button" type="button" data-ai-test="groq">Kapcsolat tesztelése</button><span class="ai-test-status" id="aiGroqTestStatus"></span></article>
+          </div>
+          <div class="ai-settings-footer"><div><b>Adatvédelmi alapelv</b><span>Az AI-réteg csak külön whitelistből épített anonim terápiás payloadot kaphat. Név, TAJ, pontos születési dátum, sorozatszám, fájlútvonal és más közvetlen azonosító tiltott.</span></div><button id="saveAISettings" type="button">AI beállítások mentése</button><span id="aiSettingsStatus" class="muted"></span></div>
+        </section>
+
+        <section class="settings-data-grid settings-tab-panel" data-settings-panel="backup">
+          <article class="panel backup-card auto-backup-card">
+            <div class="panel-head"><div><h3>Automatikus biztonsági mentés</h3><span>A SleepMate saját adatainak ütemezett mentése egy általad választott mappába.</span></div><label class="switch-inline"><input id="settingAutoBackupEnabled" type="checkbox"><b>Bekapcsolva</b></label></div>
+            <div class="auto-backup-grid">
+              <label class="form-field"><span>Gyakoriság</span><select id="settingAutoBackupMode"><option value="daily">Naponta</option><option value="weekly">Hetente</option><option value="monthly">Havonta</option></select></label>
+              <label class="form-field"><span>Időpont</span><input id="settingAutoBackupTime" type="time" value="03:00"></label>
+              <label class="form-field auto-backup-weekly"><span>Nap</span><select id="settingAutoBackupWeekday"><option value="0">Hétfő</option><option value="1">Kedd</option><option value="2">Szerda</option><option value="3">Csütörtök</option><option value="4">Péntek</option><option value="5">Szombat</option><option value="6">Vasárnap</option></select></label>
+              <label class="form-field auto-backup-monthly"><span>Hónap napja</span><input id="settingAutoBackupMonthday" type="number" min="1" max="28" value="1"></label>
+              <label class="form-field"><span>Megőrzött mentések száma</span><input id="settingAutoBackupKeep" type="number" min="1" max="50" value="5"></label>
+              <label class="form-field wide"><span>Mentési mappa</span><div class="path-picker"><input id="settingAutoBackupDir" type="text"><button id="browseAutoBackupDir" type="button">Tallózás</button></div></label>
+            </div>
+            <div class="schedule-status"><span>Utolsó automatikus backup <b id="autoBackupLast">–</b></span><span>Következő <b id="autoBackupNext">–</b></span></div>
+            <div class="auto-backup-last-file"><span>Utolsó mentési fájl</span><code id="autoBackupLastFile">Még nincs mentés</code></div>
+            <div class="settings-actions"><button id="saveAutoBackupSettings" type="button">Automatikus backup beállítások mentése</button><span id="autoBackupSettingsStatus" class="muted"></span></div>
+          </article>
+          <article class="panel backup-card system-backup-card"><div class="panel-head"><div><h3>Teljes backup</h3><span>Minden fontos programadat egy csomagban.</span></div></div><p>Tartalmazza a program saját CPAP-adattárát, a helyi titkosított kezelt-személy adatbázist, felszerelést, napi értékeléseket, naplókat és beállításokat. A futásidejű böngészőprofil és ideiglenes fájlok nem kerülnek bele. Mentéskor kiválaszthatod, hová kerüljön a ZIP. A külső beolvasási mappából semmit nem módosít.</p><button id="createFullBackup" type="button">Teljes backup mentése…</button><div class="job-progress hidden" data-progress-card="backup"><div class="progress-track"><i></i></div><strong>Backup készítése…</strong><span></span></div></article>
+          <article class="panel backup-card system-backup-card"><div class="panel-head"><div><h3>Teljes backup visszatöltése</h3><span>Korábbi SleepMate backup.</span></div></div><p>A program saját mérési adattárát és helyi programadatait tölti vissza. A külső ResMed/SD forrásmappához nem nyúl. A kezelt személy hordozható átviteléhez továbbra is a külön profil-backup a legjobb.</p><input id="restoreFullBackupFile" type="file" accept=".zip,application/zip"><button id="restoreFullBackup" type="button">Backup visszatöltése</button><div class="job-progress hidden" data-progress-card="restore"><div class="progress-track"><i></i></div><strong>Visszatöltés…</strong><span></span></div></article>
+        </section>
+
+        <section class="settings-tab-panel system-maintenance-panel" data-settings-panel="system">
+          <section class="panel maintenance-hero">
+            <div class="panel-head"><div><h3>SleepMate rendszerkarbantartás</h3><span>Verziózott frissítés • automatikus rollback • önellenőrzés • szervizcsomag</span></div><span id="maintenanceVersionBadge" class="security-pill">v5.0.0</span></div>
+            <p>A frissítő a programfájlokat és a személyes/terápiás adatokat külön kezeli. Telepítés előtt teljes backup és az aktuális programverzióból rollback-pont készül. Ha az új build nem indul el rendesen, a külső frissítő automatikusan visszaáll az előző verzióra.</p>
+          </section>
+          <div class="maintenance-grid">
+            <article class="panel maintenance-card update-card">
+              <div class="panel-head"><div><h3>Frissítések</h3><span>Privát GitHub Releases forrás, SHA-256 ellenőrzéssel.</span></div><span id="updateStateBadge" class="remote-status neutral">Nincs beállítva</span></div>
+              <label class="form-field"><span>GitHub repository</span><input id="updateGithubRepo" type="text" autocomplete="off" placeholder="owner/SleepMate"></label>
+              <label class="form-field"><span>GitHub token privát repositoryhoz</span><div class="secret-input-row"><input id="updateGithubToken" type="password" autocomplete="new-password" placeholder="Csak új token megadásakor töltsd ki"><button class="secret-toggle" data-secret-target="updateGithubToken" type="button">Mutat</button></div><small id="updateGithubTokenHint">Nincs mentett token</small></label>
+              <label class="checkbox-field compact"><input id="updateGithubClearToken" type="checkbox"><span>Mentett GitHub token törlése</span></label>
+              <label class="setting-toggle"><input id="updateAutoCheck" type="checkbox" checked><span><b>Automatikus frissítésellenőrzés</b><small>Induláskor ellenőrzi a privát GitHub release-t. Telepítést nem indít el engedély nélkül.</small></span></label>
+              <div class="update-version-grid"><div><span>Telepített</span><strong id="updateCurrentVersion">5.0.0</strong></div><div><span>Legfrissebb</span><strong id="updateLatestVersion">—</strong></div><div><span>Utolsó ellenőrzés</span><strong id="updateLastCheck">—</strong></div></div>
+              <div class="settings-actions wrap"><button id="saveUpdateSettings" type="button">GitHub kapcsolat mentése</button><button id="checkForUpdates" type="button">Frissítés keresése</button><button id="installUpdate" class="primary" type="button" disabled>Frissítés telepítése</button></div>
+              <p id="updateStatusText" class="muted"></p>
+              <div class="job-progress hidden" data-progress-card="update"><div class="progress-track"><i></i></div><strong>Frissítés előkészítése…</strong><span></span></div>
+              <div class="rollback-line"><span>Előző programverzió</span><button id="rollbackUpdate" type="button" disabled>Rollback</button></div>
+            </article>
+            <article class="panel maintenance-card self-check-card">
+              <div class="panel-head"><div><h3>SleepMate önellenőrzés</h3><span>Adatforrás, EDF, adatbázis, backup, automatika, push, lemez és updater.</span></div><span id="selfCheckBadge" class="remote-status neutral">Még nem futott</span></div>
+              <div id="selfCheckSummary" class="self-check-summary"><div class="empty-state">Nyomd meg az ellenőrzést a teljes rendszer állapotának felméréséhez.</div></div>
+              <div class="settings-actions"><button id="runSelfCheck" type="button">Önellenőrzés futtatása</button></div>
+            </article>
+            <article class="panel maintenance-card support-card">
+              <div class="panel-head"><div><h3>Szervizcsomag</h3><span>Egyetlen ZIP hibaelhárításhoz, terápiás EDF és titkos kulcsok nélkül.</span></div></div>
+              <p>Tartalmazza a pontos SleepMate/build verziót, GitHub frissítési állapotot, programfájl-hasheket, adatbázissémákat és integritást, rendszer- és diagnosztikai állapotot, valamint a legutóbbi naplókat. Nem tartalmaz API-kulcsot, GitHub/Cloudflare tokent, push endpointot vagy nyers CPAP EDF-et.</p>
+              <button id="createSupportBundle" type="button">Szervizcsomag készítése</button>
+              <div class="job-progress hidden" data-progress-card="support"><div class="progress-track"><i></i></div><strong>Szervizcsomag készítése…</strong><span></span></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel danger-zone system-delete-zone settings-tab-panel" data-settings-panel="delete"><h3>Adattörlés</h3><p>A programkód nem törlődik. A művelet kizárólag a SleepMate saját belső programadatait törli; az alapértelmezett adatforrás mappa és az SD-kártya fájljai érintetlenek maradnak.</p><p class="source-safety-note">🛡️ A törlés kizárólag a SleepMate saját belső adatait érinti. A Beállításokban megadott forrásmappa és az SD-kártya fájljai mindig érintetlenek maradnak.</p><div class="delete-options"><label><input id="deleteMeasurementData" type="checkbox"> CPAP mérési adatok</label><label><input id="deletePatientData" type="checkbox"> Kezelt személy + felszerelés + napi értékelések</label><label><input id="deleteSystemLogs" type="checkbox"> Rendszernapló</label></div><button id="deleteSelectedData" class="danger" type="button">Kiválasztott adatok törlése</button></section>
+      </section>
+    </main>
+  </div>
+</div>
+<nav id="mobileBottomNav" class="mobile-bottom-nav" aria-label="PWA navigáció">
+  <button type="button" data-mobile-page="dashboard" aria-label="Dashboard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10.8 12 3.8l8.5 7v9.1a1.6 1.6 0 0 1-1.6 1.6H5.1a1.6 1.6 0 0 1-1.6-1.6v-9.1Z"/><path d="M9 21.5v-6.8h6v6.8"/></svg><b>Dashboard</b></button>
+  <button type="button" data-mobile-page="sessions" aria-label="Napok"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15" rx="2.5"/><path d="M7.5 3v5M16.5 3v5M3.5 10h17"/><path d="M7.5 14h3M13.5 14h3M7.5 17.5h3"/></svg><b>Napok</b></button>
+  <button type="button" data-mobile-action="charts" aria-label="Diagrammok"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V5M4 19.5h16"/><path d="m6.5 15 3.1-3.5 3 2.2 4.7-6.2"/><circle cx="6.5" cy="15" r=".8"/><circle cx="9.6" cy="11.5" r=".8"/><circle cx="12.6" cy="13.7" r=".8"/><circle cx="17.3" cy="7.5" r=".8"/></svg><b>Diagrammok</b></button>
+  <button type="button" data-mobile-page="ai" aria-label="Luna és Milo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.8A3.3 3.3 0 0 1 7.3 2.5h9.4A3.3 3.3 0 0 1 20 5.8v7.4a3.3 3.3 0 0 1-3.3 3.3H11l-4.5 4v-4H7.3A3.3 3.3 0 0 1 4 13.2V5.8Z"/><path d="M8.2 9.3h.01M15.8 9.3h.01M9.2 12.3c1.8 1.4 3.8 1.4 5.6 0"/><path d="m18.2 3.3.5-1.5.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5Z"/></svg><b>Luna &amp; Milo</b></button>
+  <button type="button" data-mobile-action="more" aria-label="Egyéb"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg><b>Egyéb</b></button>
+</nav>
+
+<div id="tailscaleQrModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="tailscaleQrTitle">
+  <div class="modal-card tailscale-qr-card">
+    <div class="modal-head"><h2 id="tailscaleQrTitle">Tailscale QR-kód</h2><button id="tailscaleQrClose" class="icon-action" type="button" aria-label="Bezárás">×</button></div>
+    <p class="muted">Olvasd be a telefon kamerájával. A QR-kód kizárólag a saját Tailscale HTTPS címedet tartalmazza, és helyben készül a SleepMate-ben.</p>
+    <div class="tailscale-qr-wrap"><img id="tailscaleQrImage" alt="SleepMate Tailscale elérési cím QR-kódja"></div>
+    <code id="tailscaleQrUrl" class="tailscale-qr-url"></code>
+    <div class="modal-actions"><button id="tailscaleQrDone" class="primary" type="button">Kész</button></div>
+  </div>
+</div>
+<div id="patientModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="patientModalTitle">
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="patientModalTitle">Szerkesztés</h2><button id="patientModalClose" class="icon-action" type="button" aria-label="Bezárás">×</button></div>
+    <form id="patientForm"><div id="patientFormFields" class="form-grid"></div><div class="modal-actions"><button type="button" id="patientCancel">Mégse</button><button type="submit" class="primary">Mentés</button></div></form>
+  </div>
+</div>
+<div id="dailyAssessmentModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dailyAssessmentModalTitle">
+  <div class="modal-card assessment-modal-card">
+    <div class="modal-head"><h2 id="dailyAssessmentModalTitle">Napi értékelés</h2><button id="dailyAssessmentModalClose" class="icon-action" type="button" aria-label="Bezárás">×</button></div>
+    <form id="dailyAssessmentForm">
+      <div class="daily-note-grid">
+        <label class="form-field"><span>Reggeli fejfájás</span><select id="dailyHeadache"><option value="nincs">nincs</option><option value="enyhe">enyhe</option><option value="közepes">közepes</option><option value="erős">erős</option></select></label>
+        <label class="form-field"><span>Nappali fáradtság</span><select id="dailyFatigue"><option value="nincs">nincs</option><option value="enyhe">enyhe</option><option value="közepes">közepes</option><option value="erős">erős</option></select></label>
+        <label class="form-field"><span>Ébredések száma</span><input id="dailyAwakenings" type="number" min="0" step="1"></label>
+        <label class="form-field"><span>Alvásminőség 1–10</span><input id="dailySleepQuality" type="number" min="1" max="10" step="1"></label>
+        <label class="form-field checkbox-field"><input id="dailyDryMouth" type="checkbox"><span>Szájszárazság</span></label>
+        <label class="form-field checkbox-field"><input id="dailyCongestion" type="checkbox"><span>Orrdugulás</span></label>
+        <label class="form-field wide"><span>Megjegyzés</span><textarea id="dailyAssessmentNote" rows="4"></textarea></label>
+      </div>
+      <div class="modal-actions"><button id="dailyAssessmentCancel" type="button">Mégse</button><button class="primary" type="submit">Mentés</button></div>
+    </form>
+  </div>
+</div>
+<div id="dataDeleteModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="dataDeleteModalTitle">
+  <div class="modal-card destructive-confirm-card">
+    <div class="modal-head"><h2 id="dataDeleteModalTitle">Programadatok törlése</h2><button id="dataDeleteModalClose" class="icon-action" type="button" aria-label="Bezárás">×</button></div>
+    <div class="destructive-warning">
+      <div class="destructive-warning-icon">!</div>
+      <div><strong>Ez a művelet nem vonható vissza.</strong><p>Csak a SleepMate saját belső adatai törlődnek. A ResMed/SD forrásmappa fájljaihoz a program nem ír és nem töröl belőlük.</p></div>
+    </div>
+    <div class="delete-selection-summary"><span>Törlésre kijelölve</span><div id="dataDeleteSelection"></div></div>
+    <div id="dataDeleteAutoScanBlock" class="delete-autoscan-block hidden">
+      <strong>Automatikus könyvtárfelülvizsgálat</strong>
+      <p>Az automatikus frissítés jelenleg be van kapcsolva. Ha bekapcsolva marad, a következő vizsgálatkor a mérési adatok újra beolvashatók a forrásmappából.</p>
+      <label><input type="radio" name="dataDeleteAutoScan" value="disable" checked> Kapcsolja ki az automatikus felülvizsgálatot a törlés előtt</label>
+      <label><input type="radio" name="dataDeleteAutoScan" value="keep"> Maradjon bekapcsolva</label>
+    </div>
+    <label class="delete-confirm-field"><span>A folytatáshoz írd be pontosan: <b>TÖRLÉS</b></span><input id="dataDeleteConfirmInput" type="text" autocomplete="off" spellcheck="false" placeholder="TÖRLÉS"></label>
+    <div class="modal-actions"><button id="dataDeleteCancel" type="button">Mégse</button><button id="dataDeleteExecute" class="danger" type="button" disabled>Törlés végrehajtása</button></div>
+  </div>
+</div>
+<div id="equipmentImportModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="equipmentImportTitle">
+  <div class="modal-card confirm-card equipment-import-confirm">
+    <h2 id="equipmentImportTitle">Felszerelés visszatöltése</h2>
+    <p>A mentés felszerelési adatokat is tartalmaz: készülékeket, maszkokat, kiegészítőket és használati konfigurációkat.</p>
+    <div id="equipmentImportSummary" class="equipment-import-summary"></div>
+    <p class="muted">Szeretnéd ezeket is importálni? Ha a „Csak személyes adatok” lehetőséget választod, a jelenlegi felszerelési nyilvántartás változatlan marad.</p>
+    <div class="modal-actions equipment-import-actions">
+      <button id="equipmentImportCancel" type="button">Mégse</button>
+      <button id="equipmentImportNo" type="button">Csak személyes adatok</button>
+      <button id="equipmentImportYes" class="primary-action" type="button">Igen, felszereléssel</button>
+    </div>
+  </div>
+</div>
+<div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-card confirm-card"><h2>Megerősítés</h2><p id="confirmText"></p><div class="modal-actions"><button id="confirmNo" type="button">Mégse</button><button id="confirmYes" class="danger" type="button">Törlés</button></div></div></div>
+
+<div id="comparisonModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="comparisonModalTitle">
+  <div class="modal-card comparison-modal-card">
+    <div class="modal-head"><h2 id="comparisonModalTitle">Időszakok összehasonlítása</h2><button id="comparisonModalClose" class="icon-action" type="button" aria-label="Bezárás">×</button></div>
+    <p class="muted">Add meg a két összehasonlítandó terápiás időszakot.</p>
+    <div class="comparison-modal-grid">
+      <fieldset><legend>A időszak</legend><label>Kezdete<input id="compareAStart" type="date"></label><label>Vége<input id="compareAEnd" type="date"></label></fieldset>
+      <div class="comparison-vs">VS</div>
+      <fieldset><legend>B időszak</legend><label>Kezdete<input id="compareBStart" type="date"></label><label>Vége<input id="compareBEnd" type="date"></label></fieldset>
+    </div>
+    <div class="modal-actions"><button id="comparisonCancel" type="button">Mégse</button><button id="runComparison" class="primary" type="button">Összehasonlítás</button></div>
+  </div>
+</div>
+<div id="reportPdfModal" class="modal hidden report-builder-modal" role="dialog" aria-modal="true" aria-labelledby="reportPdfTitle">
+  <div class="modal-card report-builder-card">
+    <div class="modal-head report-builder-head">
+      <div><span class="report-builder-kicker">SleepMate PDF</span><h2 id="reportPdfTitle">PAP-terápiás jelentés összeállítása</h2><p>A kiválasztott időszakból külön, A4-re tervezett jelentés készül.</p></div>
+      <button id="reportPdfClose" class="icon-action" type="button" aria-label="Bezárás">×</button>
+    </div>
+    <div class="report-builder-body">
+      <section class="report-builder-section">
+        <div class="report-step"><b>1</b><div><h3>Jelentés típusa</h3><p>Válassz egy kész összeállítást, vagy állítsd össze saját magad.</p></div></div>
+        <div class="report-mode-cards">
+          <label class="report-mode-card selected"><input type="radio" name="reportMode" value="standard" checked><span><b>Standard</b><small>Ajánlott • lényegre törő, mégis teljes</small></span></label>
+          <label class="report-mode-card"><input type="radio" name="reportMode" value="detailed"><span><b>Részletes</b><small>Minden releváns terápiás blokk + melléklet</small></span></label>
+          <label class="report-mode-card"><input type="radio" name="reportMode" value="custom"><span><b>Egyéni</b><small>Te választod ki a tartalmat</small></span></label>
+        </div>
+      </section>
+
+      <section class="report-builder-section two-col">
+        <div>
+          <div class="report-step"><b>2</b><div><h3>Időszak</h3><p>A Jelentések oldalon kiválasztott tartományt vesszük át.</p></div></div>
+          <div class="report-date-grid"><label>Tól<input id="reportPdfFrom" type="date"></label><label>Ig<input id="reportPdfTo" type="date"></label></div>
+          <label class="report-check emphasis"><input id="reportComparePrevious" type="checkbox"><span><b>Összehasonlítás az előző időszakkal</b><small>Az előző, azonos hosszúságú időszak változásai is bekerülnek.</small></span></label>
+        </div>
+        <div>
+          <div class="report-step"><b>3</b><div><h3>Megjelenés</h3><p>A tartalom ugyanaz, csak a vizuális karakter változik.</p></div></div>
+          <div class="report-theme-options"><label class="selected"><input type="radio" name="reportTheme" value="sleepmate" checked><span><b>SleepMate</b><small>sötétkék • arany • prémium</small></span></label><label><input type="radio" name="reportTheme" value="clinical"><span><b>Klinikai</b><small>letisztult • minimális színezés</small></span></label></div>
+        </div>
+      </section>
+
+      <section class="report-builder-section">
+        <div class="report-step"><b>4</b><div><h3>Kezelt személy adatai</h3><p>Csak akkor kerülnek a PDF-re, ha ezt külön engedélyezed.</p></div></div>
+        <label class="report-master-toggle"><input id="reportIncludePatient" type="checkbox"><span><b>Kezelt személy adatainak feltüntetése</b><small>A TAJ alapértelmezetten nincs kiválasztva.</small></span></label>
+        <div id="reportPatientOptions" class="report-patient-options hidden">
+          <div class="report-options-toolbar"><button id="reportAnonymize" type="button">Anonimizált beállítás</button><span id="reportPatientStatus">A közvetlen azonosítók kikapcsolhatók egy kattintással.</span></div>
+          <div class="report-check-grid patient-fields">
+            <label><input type="checkbox" data-patient-field="name" checked> Név</label>
+            <label><input type="checkbox" data-patient-field="birth_date"> Születési dátum</label>
+            <label><input type="checkbox" data-patient-field="age" checked> Életkor</label>
+            <label class="sensitive"><input type="checkbox" data-patient-field="taj"> TAJ <em>érzékeny</em></label>
+            <label><input type="checkbox" data-patient-field="diagnosis" checked> Diagnózis</label>
+            <label><input type="checkbox" data-patient-field="diagnosis_date"> Diagnózis dátuma</label>
+            <label><input type="checkbox" data-patient-field="diagnostic_ahi" checked> Diagnosztikai AHI</label>
+            <label><input type="checkbox" data-patient-field="therapy_start" checked> PAP-terápia kezdete</label>
+            <label><input type="checkbox" data-patient-field="doctor"> Kezelőorvos</label>
+            <label><input type="checkbox" data-patient-field="institution"> Kezelőintézmény</label>
+            <label><input type="checkbox" data-patient-field="prescription" checked> Aktuális előírás</label>
+            <label><input type="checkbox" data-patient-field="device" checked> Aktuális készülék</label>
+            <label><input type="checkbox" data-patient-field="mask" checked> Aktuális maszk</label>
+            <label><input type="checkbox" data-patient-field="medications"> Aktív gyógyszerek</label>
+          </div>
+        </div>
+      </section>
+
+      <section class="report-builder-section">
+        <div class="report-step"><b>5</b><div><h3>A jelentés tartalma</h3><p>Ha egy kiválasztott blokkhoz nincs adat, a SleepMate automatikusan kihagyja.</p></div></div>
+        <div class="report-check-grid report-sections">
+          <label><input type="checkbox" data-report-section="summary" checked><span><b>Összefoglaló</b><small>6 fő mutató + szabályalapú értelmezés</small></span></label>
+          <label><input type="checkbox" data-report-section="usage" checked><span><b>Használat / compliance</b><small>napi használat és 4+ órás arány</small></span></label>
+          <label><input type="checkbox" data-report-section="events" checked><span><b>AHI és események</b><small>trend + OA / CA / H / RERA</small></span></label>
+          <label><input type="checkbox" data-report-section="pressure_leak" checked><span><b>Nyomás és szivárgás</b><small>medián + P95 trendek</small></span></label>
+          <label><input type="checkbox" data-report-section="timeline" checked><span><b>Terápia története</b><small>változások idővonala</small></span></label>
+          <label><input type="checkbox" data-report-section="calendar" checked><span><b>Napi naptár</b><small>AHI • használat • szivárgás</small></span></label>
+          <label><input type="checkbox" data-report-section="assessments"><span><b>Saját értékelések</b><small>alvásminőség és tünetek</small></span></label>
+          <label><input type="checkbox" data-report-section="equipment"><span><b>Felszerelés</b><small>készülék • maszk • kiegészítők</small></span></label>
+          <label><input type="checkbox" data-report-section="diagnosis"><span><b>Diagnosztika / titrálások</b><small>vizsgálati és titrálási előzmények</small></span></label>
+          <label><input type="checkbox" data-report-section="data_quality" checked><span><b>Adatminőség</b><small>EDF teljesség és hiányok</small></span></label>
+          <label><input type="checkbox" data-report-section="daily_table"><span><b>Részletes napi táblázat</b><small>melléklet napi sorokkal</small></span></label>
+          <label><input type="checkbox" data-report-section="glossary" checked><span><b>Értelmezési kulcs</b><small>AHI, P95, OA, CA, H, RERA</small></span></label>
+        </div>
+      </section>
+    </div>
+    <div class="report-builder-footer">
+      <div id="reportPdfStatus" class="report-pdf-status"><span class="status-dot"></span><span>Készen áll a generálásra.</span></div>
+      <div class="modal-actions"><button id="reportPdfCancel" type="button">Mégse</button><button id="reportPdfPreview" type="button">Előnézet</button><button id="reportPdfSave" class="primary hidden" type="button" disabled>Mentés a Fájlokba</button><button id="reportPdfGenerate" class="primary" type="button">PDF generálása</button></div>
+    </div>
+  </div>
+</div>
+<div id="aiPrintModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiPrintModalTitle">
+  <div class="modal-card confirm-card ai-print-modal">
+    <div class="modal-head"><h2 id="aiPrintModalTitle">PDF export</h2><button id="aiPrintModalClose" class="icon-action" type="button" aria-label="Bezárás">×</button></div>
+    <p>Szeretnéd a beszélgetést is belevenni a PDF-be, vagy csak a kiértékelést?</p>
+    <div class="modal-actions split">
+      <button id="aiPrintOnlyResult" type="button">Csak a kiértékelés</button>
+      <button id="aiPrintWithChat" class="primary" type="button">Kiértékelés + chat</button>
+    </div>
+  </div>
+</div>
+<script src="/app.js?v=5.0.0"></script>
+</body>
+</html>

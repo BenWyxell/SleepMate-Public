@@ -1,0 +1,56 @@
+# SleepMate user state / secrets
+config.json
+private/
+*.cpapbackup
+
+# Python/runtime caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Build/release output
+build/windows/pyi-build*/
+build/windows/web-generated/
+build/windows/version_info.generated.txt
+dist/
+release/
+*.spec.bak
+
+# Signing material – NEVER commit
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+
+# Local service/support exports
+SleepMate_szervizcsomag_*.zip
+SleepMate_teljes_backup_*.zip
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Raw PAP/EDF therapy data – NEVER commit
+*.edf
+*.EDF
+testdata/DATALOG/
+
+# Generated local configuration/state
+*.sqlite3
+*.db
+*.log
+
+# Additional public-repository secret hygiene
+.env
+.env.*
+client_secret*.json
+credentials*.json
+*secrets*.json
+*secrets*.txt
+*.kdbx

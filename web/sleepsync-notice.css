@@ -1,0 +1,420 @@
+/* SleepSync notification geometry: crisp SleepMate toast, never a pill. */
+#sleepSyncInlineNotice.ss-notice{
+  position:fixed!important;
+  top:18px!important;
+  right:18px!important;
+  left:auto!important;
+  z-index:5000!important;
+  width:min(410px,calc(100vw - 36px))!important;
+  min-height:0!important;
+  margin:0!important;
+  padding:11px 14px!important;
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr)!important;
+  grid-template-rows:auto auto!important;
+  align-items:center!important;
+  column-gap:10px!important;
+  row-gap:2px!important;
+  border:1px solid #274966!important;
+  border-left:3px solid currentColor!important;
+  border-radius:6px!important;
+  background:#0b1b2d!important;
+  box-shadow:0 10px 24px rgba(0,0,0,.28)!important;
+  backdrop-filter:blur(8px)!important;
+  -webkit-backdrop-filter:blur(8px)!important;
+}
+#sleepSyncInlineNotice.ss-notice.hidden{display:none!important}
+#sleepSyncInlineNotice.ss-notice b{
+  grid-row:1/3!important;
+  margin:0!important;
+  font-size:14px!important;
+  line-height:1.2!important;
+  min-width:0!important;
+}
+#sleepSyncInlineNotice.ss-notice b:before{
+  font-size:7px!important;
+  margin-right:8px!important;
+  vertical-align:2px!important;
+}
+#sleepSyncInlineNotice.ss-notice span{
+  min-width:0!important;
+  font-size:10px!important;
+  line-height:1.35!important;
+  color:#c5d6e5!important;
+  overflow-wrap:anywhere!important;
+}
+.sleepsync-page .ss-card-line,
+.sleepsync-page .ss-section-title>div,
+.sleepsync-page .ss-metric>i,
+.sleepsync-page .ss-data-flow>article>i{
+  border-radius:0!important;
+}
+
+/*
+ * Critical iOS/PWA isolation.
+ * sleepsync-polish.css decorates #sidebar globally and is loaded after the core
+ * SleepMate stylesheet. Its old `position:relative!important` / `overflow:hidden!important`
+ * therefore overrode the core mobile drawer (`position:fixed!important`). The off-screen
+ * drawer still had height:100dvh in normal document flow and pushed .content-shell one
+ * full viewport downward, producing the apparently blank dark screen while the fixed
+ * bottom navigation remained visible. Restore ONLY the core mobile positioning/scroll
+ * contract here; the aurora remains decorative and cannot affect layout.
+ */
+@media(max-width:900px){
+  #sidebar{
+    position:fixed!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+  /* Avoid expensive WebKit compositing on a transformed fixed drawer. */
+  #sidebar:before,
+  #sidebar:after{filter:none!important}
+
+  #sleepSyncInlineNotice.ss-notice{
+    top:10px!important;
+    right:10px!important;
+    width:calc(100vw - 20px)!important;
+    border-radius:3px!important;
+  }
+}
+
+/* ========================================================================== */
+/* SleepMate Aurora refinement — visual only, no layout/route ownership.      */
+/* ========================================================================== */
+:root{
+  --sm-aurora-cyan:#48d9ff;
+  --sm-aurora-teal:#49e0ba;
+  --sm-aurora-violet:#8d7dff;
+  --sm-aurora-blue:#5e9dff;
+  --sm-edge:rgba(111,174,216,.24);
+  --sm-edge-strong:rgba(105,201,238,.34);
+  --sm-glass:rgba(16,27,40,.82);
+}
+
+.content-shell{
+  background-color:#0b1017;
+  background-image:
+    radial-gradient(ellipse at 88% -10%,rgba(72,217,255,.065),transparent 32%),
+    radial-gradient(ellipse at 8% 110%,rgba(141,125,255,.055),transparent 34%),
+    linear-gradient(180deg,rgba(7,15,24,.24),rgba(7,14,22,.02));
+}
+.topbar{
+  border-bottom-color:rgba(101,170,213,.22)!important;
+  box-shadow:0 1px 0 rgba(72,217,255,.025),0 12px 36px rgba(1,7,14,.12);
+}
+.sidebar{
+  border-right-color:rgba(96,165,205,.24)!important;
+  background-image:
+    radial-gradient(ellipse at 50% 105%,rgba(73,224,186,.07),transparent 34%),
+    radial-gradient(ellipse at 110% 42%,rgba(141,125,255,.055),transparent 30%);
+}
+.brand{border-bottom-color:rgba(92,156,196,.18)!important}
+.nav-item{
+  transition:background .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+.nav-item:hover{
+  background-image:linear-gradient(90deg,rgba(72,217,255,.06),rgba(141,125,255,.025));
+  box-shadow:inset 1px 0 rgba(72,217,255,.14);
+}
+.nav-item.active{
+  background-image:linear-gradient(90deg,rgba(72,217,255,.13),rgba(94,157,255,.08) 55%,rgba(141,125,255,.05));
+  box-shadow:inset 2px 0 0 rgba(72,217,255,.72),0 8px 24px rgba(4,23,39,.12);
+}
+
+.panel,.metric,.placeholder-card,.stack-chart,.overview-card,
+.settings-grid>div,.equipment-grid>div,.record-card,.faq-entry,
+.calendar-cell,.mobile-quick-stats>div,.push-state-card>div{
+  border-color:var(--sm-edge)!important;
+  box-shadow:0 10px 30px rgba(1,7,15,.13),inset 0 1px 0 rgba(255,255,255,.018);
+}
+.panel,.metric,.placeholder-card,.stack-chart,.overview-card{
+  background-image:
+    linear-gradient(135deg,rgba(72,217,255,.018),transparent 38%),
+    radial-gradient(circle at 100% 0,rgba(141,125,255,.035),transparent 28%);
+}
+.panel:hover,.overview-card:hover,.record-card:hover{
+  border-color:var(--sm-edge-strong)!important;
+}
+.panel-head h3,.section-heading h2,.page-row h2,.section-title h3{
+  letter-spacing:-.01em;
+}
+
+button,select,input,textarea{
+  transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease,transform .12s ease;
+}
+button:hover:not(:disabled){
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 6px 18px rgba(1,8,17,.12);
+}
+button:active:not(:disabled){transform:translateY(1px)}
+select,input,textarea{border-color:rgba(91,146,184,.32)!important}
+select:focus,input:focus,textarea:focus{
+  outline:none;
+  border-color:rgba(72,217,255,.58)!important;
+  box-shadow:0 0 0 3px rgba(72,217,255,.07)!important;
+}
+
+.canvas-stack,.navigator,.trend-card canvas,.overview-card canvas,.ss-log{
+  border-color:rgba(82,147,191,.24)!important;
+  box-shadow:inset 0 0 28px rgba(31,95,128,.035);
+}
+.data-table th,.stats-table th{
+  background-color:rgba(14,26,38,.96)!important;
+  border-bottom-color:rgba(92,152,190,.22)!important;
+}
+.data-table td,.stats-table td,.log-row{border-bottom-color:rgba(78,130,166,.16)!important}
+
+.error{
+  box-shadow:0 12px 30px rgba(34,6,10,.16),inset 0 1px 0 rgba(255,255,255,.02);
+}
+.connection-badge{
+  border-color:rgba(76,196,226,.28)!important;
+  box-shadow:0 8px 22px rgba(2,13,24,.2);
+}
+
+/* Pull-to-refresh feedback is intentionally short. The refresh itself continues. */
+@media(max-width:900px){
+  .pull-refresh-indicator{
+    border-radius:12px!important;
+    background:rgba(12,29,43,.94)!important;
+    border-color:rgba(83,158,200,.34)!important;
+    box-shadow:0 10px 26px rgba(0,0,0,.24)!important;
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+  }
+  .pull-refresh-indicator.refreshing{
+    pointer-events:none!important;
+    animation:smPullRefreshAutoHide 1.1s ease-out forwards!important;
+  }
+  @keyframes smPullRefreshAutoHide{
+    0%,58%{opacity:1}
+    100%{opacity:0}
+  }
+
+  .panel,.metric,.placeholder-card,.stack-chart,.overview-card,
+  .settings-grid>div,.equipment-grid>div,.record-card,.faq-entry{
+    box-shadow:0 7px 22px rgba(1,7,15,.11),inset 0 1px 0 rgba(255,255,255,.016);
+  }
+}
+
+/* ========================================================================== */
+/* PWA-only SleepSync facelift. Desktop/browser layout remains unchanged.     */
+/* ========================================================================== */
+@media(max-width:900px){
+  html.pwa-standalone .sleepsync-page{
+    padding:0 0 8px!important;
+  }
+  html.pwa-standalone body:has(#page-sleepsync.active) main{
+    padding:8px 8px calc(78px + env(safe-area-inset-bottom))!important;
+  }
+  html.pwa-standalone .sleepsync-module{
+    padding:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+    overflow:visible!important;
+  }
+  html.pwa-standalone .sleepsync-tabs{
+    position:sticky!important;
+    top:calc(6px + env(safe-area-inset-top))!important;
+    z-index:55!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:4px!important;
+    margin:0 0 10px!important;
+    padding:5px!important;
+    border:1px solid rgba(92,171,213,.28)!important;
+    border-radius:14px!important;
+    background:rgba(7,20,33,.93)!important;
+    box-shadow:0 9px 26px rgba(0,0,0,.18)!important;
+    backdrop-filter:blur(16px)!important;
+    -webkit-backdrop-filter:blur(16px)!important;
+    overflow:visible!important;
+  }
+  html.pwa-standalone .sleepsync-tabs button{
+    min-width:0!important;
+    width:100%!important;
+    height:36px!important;
+    padding:0 4px!important;
+    border-radius:10px!important;
+    font-size:9.5px!important;
+  }
+  html.pwa-standalone .sleepsync-tabs button.active{
+    background:linear-gradient(135deg,rgba(40,119,159,.7),rgba(74,71,153,.48))!important;
+    border-color:rgba(90,205,230,.42)!important;
+    box-shadow:inset 0 1px rgba(255,255,255,.04),0 4px 14px rgba(26,91,130,.15)!important;
+  }
+
+  html.pwa-standalone .sleepsync-page .ss-card{
+    border-radius:17px!important;
+    border-color:rgba(93,171,213,.27)!important;
+    padding:14px!important;
+    box-shadow:0 9px 26px rgba(0,0,0,.14),inset 0 1px 0 rgba(255,255,255,.018)!important;
+  }
+  html.pwa-standalone .sleepsync-page .ss-card-line{margin:-2px 0 12px!important}
+
+  html.pwa-standalone .ss-overview-hero{
+    min-height:0!important;
+    display:block!important;
+    padding:18px!important;
+    margin-bottom:10px!important;
+    border-radius:20px!important;
+    overflow:hidden!important;
+    background:
+      radial-gradient(ellipse at 100% 0,rgba(72,217,255,.13),transparent 38%),
+      radial-gradient(ellipse at 8% 100%,rgba(141,125,255,.12),transparent 42%),
+      linear-gradient(145deg,#0b1b31,#0a1729 62%,#0c1630)!important;
+  }
+  html.pwa-standalone .ss-overview-hero:after{
+    position:absolute!important;
+    right:12px!important;
+    top:12px!important;
+    width:78px!important;
+    height:78px!important;
+    margin:0!important;
+    opacity:.42!important;
+    filter:none!important;
+  }
+  html.pwa-standalone .ss-overview-hero .ss-hero-copy{padding-right:62px!important}
+  html.pwa-standalone .ss-hero-copy h2{font-size:29px!important;letter-spacing:-.03em!important}
+  html.pwa-standalone .ss-tagline{font-size:12px!important;margin:2px 0 10px!important}
+  html.pwa-standalone .ss-overview-state{font-size:10.5px!important;margin-bottom:13px!important}
+  html.pwa-standalone .sleepsync-module .ss-main-action{
+    width:100%!important;
+    min-width:0!important;
+    height:46px!important;
+    border-radius:12px!important;
+    font-size:11.5px!important;
+  }
+
+  html.pwa-standalone .ss-overview-metrics,
+  html.pwa-standalone .ss-sync-metrics{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:7px!important;
+    margin-bottom:10px!important;
+  }
+  html.pwa-standalone .ss-metric{
+    padding:11px 12px!important;
+    border-radius:14px!important;
+  }
+  html.pwa-standalone .ss-metric i{left:11px!important;right:11px!important;top:8px!important}
+  html.pwa-standalone .ss-metric span{font-size:8px!important;margin-top:8px!important}
+  html.pwa-standalone .ss-metric strong{font-size:15px!important;margin-top:4px!important}
+  html.pwa-standalone .ss-metric small{font-size:8px!important;margin-top:3px!important}
+
+  html.pwa-standalone .ss-data-flow{
+    grid-template-columns:1fr!important;
+    gap:5px!important;
+    margin-top:6px!important;
+  }
+  html.pwa-standalone .ss-data-flow article{
+    padding:12px 10px 10px!important;
+    border-radius:12px!important;
+  }
+  html.pwa-standalone .ss-data-flow em{
+    height:16px!important;
+    line-height:16px!important;
+    font-size:19px!important;
+    transform:rotate(90deg)!important;
+  }
+  html.pwa-standalone .ss-flow-card,
+  html.pwa-standalone .ss-recent-card,
+  html.pwa-standalone .ss-sync-action,
+  html.pwa-standalone .ss-schedule-card,
+  html.pwa-standalone .ss-backup-card,
+  html.pwa-standalone .ss-log-card,
+  html.pwa-standalone .ss-settings-card{margin-bottom:10px!important}
+
+  html.pwa-standalone .ss-section-title{margin:2px 3px 11px!important}
+  html.pwa-standalone .ss-section-title h2{font-size:22px!important}
+  html.pwa-standalone .ss-section-title p{font-size:10px!important;line-height:1.45!important}
+  html.pwa-standalone .ss-section-title>div{margin-top:6px!important;height:2px!important}
+
+  html.pwa-standalone .ss-card-head{gap:8px!important;align-items:flex-start!important}
+  html.pwa-standalone .ss-card-head h3{font-size:14px!important}
+  html.pwa-standalone .ss-live-state{font-size:9px!important;text-align:right!important}
+  html.pwa-standalone .ss-current-file{font-size:8.5px!important;line-height:1.4!important}
+  html.pwa-standalone .ss-progress{height:10px!important;margin-bottom:10px!important}
+  html.pwa-standalone .ss-pipeline{
+    grid-template-columns:1fr!important;
+    gap:5px!important;
+    padding:8px!important;
+    border-radius:13px!important;
+  }
+  html.pwa-standalone .ss-pipeline>div{
+    grid-template-columns:27px minmax(0,1fr)!important;
+    column-gap:8px!important;
+    min-height:31px!important;
+  }
+  html.pwa-standalone .ss-pipeline span{width:25px!important;height:25px!important}
+  html.pwa-standalone .ss-pipeline b{font-size:9px!important}
+  html.pwa-standalone .ss-pipeline small{font-size:7.5px!important}
+
+  html.pwa-standalone .ss-days{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:8px!important;
+  }
+  html.pwa-standalone .ss-days label{min-height:34px!important;padding:6px 8px!important;border:1px solid rgba(77,143,180,.2)!important;border-radius:10px!important;background:rgba(7,20,34,.58)!important}
+  html.pwa-standalone .ss-schedule-detail{font-size:9px!important}
+  html.pwa-standalone .ss-schedule-foot{
+    align-items:stretch!important;
+    flex-direction:column!important;
+  }
+  html.pwa-standalone .ss-schedule-foot button{width:100%!important}
+
+  html.pwa-standalone .sleepsync-page #ssTimeList{grid-template-columns:1fr!important}
+  html.pwa-standalone .sleepsync-page #ssTimeList .ssScheduleTime{font-size:16px!important}
+
+  html.pwa-standalone .ss-action-row{gap:8px!important}
+  html.pwa-standalone .ss-backup-card .ss-action-row{grid-template-columns:44px minmax(0,1fr)!important}
+  html.pwa-standalone .ss-wide-link{min-height:40px!important;border-radius:11px!important}
+
+  html.pwa-standalone .ss-log{
+    height:min(42vh,360px)!important;
+    padding:11px!important;
+    border-radius:11px!important;
+    font-size:8.5px!important;
+  }
+  html.pwa-standalone .ss-history-head{align-items:center!important;gap:8px!important}
+  html.pwa-standalone .ss-history-head h3{font-size:15px!important}
+  html.pwa-standalone .ss-danger-action{font-size:9px!important;padding:0 9px!important}
+
+  html.pwa-standalone .ss-setting-row{
+    grid-template-columns:minmax(0,1fr) 44px!important;
+    gap:7px!important;
+    margin-bottom:12px!important;
+  }
+  html.pwa-standalone .ss-setting-row>label{grid-column:1/-1!important;font-size:9px!important}
+  html.pwa-standalone .ss-setting-row.compact{grid-template-columns:1fr!important}
+  html.pwa-standalone .ss-setting-row input,
+  html.pwa-standalone .ss-setting-row select{min-height:42px!important;font-size:16px!important}
+  html.pwa-standalone .ss-settings-card p{font-size:9px!important;line-height:1.5!important}
+  html.pwa-standalone .ss-wifi-box{font-size:9px!important;padding:10px!important}
+  html.pwa-standalone .ss-integrated-update{
+    grid-template-columns:1fr!important;
+    gap:3px!important;
+  }
+  html.pwa-standalone .ss-integrated-update small{grid-column:1!important}
+  html.pwa-standalone .ss-save-button{height:46px!important;border-radius:12px!important}
+
+  html.pwa-standalone .mobile-bottom-nav{
+    border-top-color:rgba(72,217,255,.16)!important;
+    background:
+      radial-gradient(ellipse at 20% 0,rgba(72,217,255,.06),transparent 38%),
+      radial-gradient(ellipse at 82% 100%,rgba(141,125,255,.055),transparent 40%),
+      linear-gradient(180deg,rgba(13,28,42,.982),rgba(6,15,25,.995))!important;
+    box-shadow:0 -12px 34px rgba(0,0,0,.31),0 -1px rgba(73,224,186,.035)!important;
+  }
+}
+
+@media(max-width:430px){
+  html.pwa-standalone .sleepsync-tabs button{font-size:8.8px!important;padding:0 2px!important}
+  html.pwa-standalone .ss-overview-hero{padding:16px!important}
+  html.pwa-standalone .ss-overview-hero:after{width:68px!important;height:68px!important}
+  html.pwa-standalone .ss-hero-copy h2{font-size:27px!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .nav-item,button,select,input,textarea{transition:none!important}
+  .pull-refresh-indicator.refreshing{animation-duration:.01ms!important}
+}

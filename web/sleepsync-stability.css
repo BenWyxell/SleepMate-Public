@@ -1,0 +1,65 @@
+/* Stable overlay feedback for the embedded SleepSync module. */
+.ss-notice{
+  position:fixed!important;
+  top:22px!important;
+  right:22px!important;
+  z-index:5000!important;
+  width:min(430px,calc(100vw - 44px))!important;
+  margin:0!important;
+  box-shadow:0 18px 50px rgba(0,0,0,.35)!important;
+}
+.ss-notice.hidden{display:none!important}
+
+.ss-save-status{
+  min-height:22px;
+  margin:-8px 2px 14px;
+  font-size:10px;
+  line-height:1.4;
+  color:#91a7c5;
+}
+.ss-save-status.working{color:#39d8ff}
+.ss-save-status.success{color:#4de4a9}
+.ss-save-status.error{color:#ff7183}
+
+/* The one common system backup stays in SleepMate -> Beállítások -> Backup. */
+.system-backup-card:has(#createFullBackup) h3,
+.system-backup-card:has(#restoreFullBackup) h3,
+.system-backup-card:has(#createFullBackup) p,
+.system-backup-card:has(#restoreFullBackup) p,
+#createFullBackup,
+#restoreFullBackup{font-size:0!important}
+
+.system-backup-card:has(#createFullBackup) h3::after{
+  content:"SleepMate és SleepSync teljes mentés";
+  font-size:17px;
+}
+.system-backup-card:has(#restoreFullBackup) h3::after{
+  content:"SleepMate és SleepSync teljes visszaállítás";
+  font-size:17px;
+}
+.system-backup-card:has(#createFullBackup) p::after{
+  content:"Egyetlen közös ZIP: tartalmazza a SleepMate mérési adattárát, kezelt személyét, felszereléseit, napi értékeléseit, naplóit és beállításait, valamint a SleepSync beállításait, szinkronállapotát, előzményeit és technikai naplóját is.";
+  font-size:12px;
+  line-height:1.55;
+}
+.system-backup-card:has(#restoreFullBackup) p::after{
+  content:"A közös mentésből a SleepMate és a SleepSync állapota együtt áll vissza. A külső ResMed/SD forrásmappához a visszaállítás nem nyúl.";
+  font-size:12px;
+  line-height:1.55;
+}
+#createFullBackup::after{
+  content:"SleepMate és SleepSync teljes mentés…";
+  font-size:13px;
+}
+#restoreFullBackup::after{
+  content:"SleepMate és SleepSync teljes visszaállítás";
+  font-size:13px;
+}
+
+@media(max-width:700px){
+  .ss-notice{
+    top:12px!important;
+    right:12px!important;
+    width:calc(100vw - 24px)!important;
+  }
+}

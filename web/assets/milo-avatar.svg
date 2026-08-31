@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#061a2d"/>
+      <stop offset="0.55" stop-color="#0d3656"/>
+      <stop offset="1" stop-color="#123f47"/>
+    </linearGradient>
+    <radialGradient id="moon" cx="50%" cy="42%" r="55%">
+      <stop offset="0" stop-color="#f6fbff"/>
+      <stop offset="0.65" stop-color="#bfe5ff"/>
+      <stop offset="1" stop-color="#7fd5dc"/>
+    </radialGradient>
+    <linearGradient id="aurora" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#5ce1e6"/>
+      <stop offset="0.5" stop-color="#70c9ff"/>
+      <stop offset="1" stop-color="#83f3c8"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="url(#bg)"/>
+  <circle cx="64" cy="62" r="34" fill="url(#moon)" opacity="0.98"/>
+  <path d="M24 97c12-8 22-10 31-7 10 4 18 4 28 0 8-3 14-4 21-1" fill="none" stroke="url(#aurora)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M27 86c9-6 18-8 25-6 8 3 15 3 22 0 7-3 14-3 24 1" fill="none" stroke="#5aa6ff" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <circle cx="33" cy="35" r="3" fill="#9edfff"/>
+  <circle cx="92" cy="27" r="2.5" fill="#80f0cf"/>
+  <path d="M101 44l3 6 6 3-6 3-3 6-3-6-6-3 6-3 3-6Z" fill="#e5fff6" opacity="0.9"/>
+</svg>

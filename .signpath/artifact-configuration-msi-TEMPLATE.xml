@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TEMPLATE ONLY.
+  SignPath recommends generating/reviewing artifact configuration from a real
+  sample. Internal MSI paths must be validated after the MSI migration.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <msi-file path="SleepMate_Setup_v${version}.msi">
+      <!-- Replace/verify MSI-internal paths from the real sample. -->
+      <pe-file path="SleepMate.exe" product-name="SleepMate" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+      <pe-file path="SleepMateUpdater.exe" product-name="SleepMate" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+      <authenticode-sign />
+    </msi-file>
+    <zip-file path="SleepMate_v${version}_windows_x64.zip">
+      <pe-file path="SleepMate_v${version}/SleepMate.exe" product-name="SleepMate" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+      <pe-file path="SleepMate_v${version}/SleepMateUpdater.exe" product-name="SleepMate" product-version="${version}">
+        <authenticode-sign />
+      </pe-file>
+    </zip-file>
+  </zip-file>
+</artifact-configuration>

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 760" fill="none">
+  <defs>
+    <linearGradient id="g1" x1="18" y1="690" x2="302" y2="218" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#43E6C4" stop-opacity="0"/>
+      <stop offset=".18" stop-color="#43E6C4" stop-opacity=".62"/>
+      <stop offset=".52" stop-color="#39D8FF" stop-opacity=".72"/>
+      <stop offset=".78" stop-color="#7867FF" stop-opacity=".55"/>
+      <stop offset="1" stop-color="#7867FF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="g2" x1="-10" y1="720" x2="334" y2="302" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#39D8FF" stop-opacity="0"/>
+      <stop offset=".24" stop-color="#39D8FF" stop-opacity=".44"/>
+      <stop offset=".57" stop-color="#8A72FF" stop-opacity=".58"/>
+      <stop offset=".84" stop-color="#FFD978" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#FFD978" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="spark" cx="0" cy="0" r="1" gradientTransform="translate(166 496) rotate(90) scale(120 96)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#39D8FF" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#39D8FF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.4"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="166" cy="496" rx="96" ry="120" fill="url(#spark)"/>
+
+  <path d="M-52 713C12 695 42 638 78 596C115 552 137 530 178 520C229 507 240 456 272 415C294 386 318 367 361 352" stroke="url(#g1)" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M-42 676C18 661 46 604 88 566C124 533 145 505 188 491C229 478 250 433 280 397C304 368 327 348 357 334" stroke="url(#g2)" stroke-width="1.25" stroke-linecap="round" opacity=".9"/>
+  <path d="M-34 740C26 713 61 665 99 628C137 591 161 567 204 554C243 542 272 507 300 473C322 447 342 432 364 423" stroke="url(#g1)" stroke-width=".9" stroke-linecap="round" opacity=".72"/>
+  <path d="M6 617C48 595 78 545 115 515C150 486 172 465 213 451C249 439 273 404 298 373C317 349 337 333 354 326" stroke="url(#g2)" stroke-width=".75" stroke-linecap="round" opacity=".62"/>
+  <path d="M21 690C62 659 85 618 121 588C157 558 179 542 217 529C255 516 282 485 310 451" stroke="url(#g1)" stroke-width="6" stroke-linecap="round" opacity=".08" filter="url(#glow)"/>
+
+  <path d="M28 662C75 635 91 575 132 542C172 510 199 514 229 474C255 439 268 388 316 353" stroke="url(#g1)" stroke-width=".58" stroke-linecap="round" opacity=".52"/>
+  <path d="M50 711C90 677 115 637 148 614C181 591 207 586 238 555C271 521 287 483 326 454" stroke="url(#g2)" stroke-width=".52" stroke-linecap="round" opacity=".5"/>
+
+  <circle cx="86" cy="590" r="1.5" fill="#43E6C4" opacity=".72"/>
+  <circle cx="116" cy="545" r="1" fill="#43E6C4" opacity=".48"/>
+  <circle cx="178" cy="520" r="1.7" fill="#39D8FF" opacity=".76"/>
+  <circle cx="215" cy="466" r="1.05" fill="#39D8FF" opacity=".56"/>
+  <circle cx="250" cy="430" r="1.4" fill="#7867FF" opacity=".6"/>
+  <circle cx="282" cy="393" r=".9" fill="#FFD978" opacity=".5"/>
+  <circle cx="65" cy="647" r=".75" fill="#39D8FF" opacity=".45"/>
+  <circle cx="205" cy="558" r=".75" fill="#43E6C4" opacity=".42"/>
+</svg>

@@ -1,0 +1,7 @@
+{
+  "version": null,
+  "build_id": "sleepmate-source",
+  "git_commit": null,
+  "channel": "stable",
+  "packaging": "windows-onedir-ready"
+}
