@@ -115,7 +115,7 @@ def install_onboarding(app_module) -> None:
     original_load_config = app_module.load_config
 
     # Preserve upgrades exactly as they are. Only a genuinely fresh installation
-    # inherits the Windows-startup feature selected in the MSI wizard.
+    # inherits installer defaults and starts without a pretend CPAP source path.
     try:
         existing_config = bool(app_module.config_path(app_module.APP_BASE).is_file())
     except Exception:
@@ -126,6 +126,7 @@ def install_onboarding(app_module) -> None:
         cfg = original_load_config()
         if not existing_config and not _load(app_module).get("completed", False):
             cfg["start_with_windows"] = installer_startup
+            cfg["data_dir"] = ""
         return cfg
 
     app_module.load_config = load_config
