@@ -390,7 +390,7 @@ def main() -> int:
     install = ET.SubElement(programs, q("Directory"), {"Id": "INSTALLFOLDER", "Name": "SleepMate"})
     program_menu = ET.SubElement(target, q("Directory"), {"Id": "ProgramMenuFolder"})
     app_menu = ET.SubElement(program_menu, q("Directory"), {"Id": "ApplicationProgramsFolder", "Name": "SleepMate"})
-    desktop = ET.SubElement(target, q("Directory"), {"Id": "DesktopFolder"})
+    ET.SubElement(target, q("Directory"), {"Id": "DesktopFolder"})
 
     dir_elements: dict[str, ET.Element] = {"": install}
 
@@ -436,9 +436,12 @@ def main() -> int:
     ET.SubElement(menu_component, q("RemoveFolder"), {"Id": "RemoveSleepMateStartMenuFolder", "On": "uninstall"})
     component_ids.append("SleepMateStartMenu")
 
-    desktop_component = ET.SubElement(desktop, q("Component"), {"Id": "SleepMateDesktopShortcut", "Guid": guid_for("component", "desktop-shortcut"), "Win64": "yes"})
+    # Keep the component rooted in INSTALLFOLDER so its registry value is a real
+    # KeyPath. The Shortcut itself explicitly targets the DesktopFolder. This
+    # avoids ICE18 on special-folder components without creating/removing Desktop.
+    desktop_component = ET.SubElement(install, q("Component"), {"Id": "SleepMateDesktopShortcut", "Guid": guid_for("component", "desktop-shortcut"), "Win64": "yes"})
     ET.SubElement(desktop_component, q("RegistryValue"), {"Root": "HKCU", "Key": r"Software\SleepMate\Installer", "Name": "DesktopShortcut", "Type": "string", "Value": "1", "KeyPath": "yes"})
-    ET.SubElement(desktop_component, q("Shortcut"), {"Id": "SleepMateDesktopShortcutLink", "Name": "SleepMate", "Description": "SleepMate PAP/CPAP therapy companion", "Target": "[INSTALLFOLDER]SleepMate.exe", "WorkingDirectory": "INSTALLFOLDER", "Icon": "SleepMateIcon", "Advertise": "no"})
+    ET.SubElement(desktop_component, q("Shortcut"), {"Id": "SleepMateDesktopShortcutLink", "Directory": "DesktopFolder", "Name": "SleepMate", "Description": "SleepMate PAP/CPAP therapy companion", "Target": "[INSTALLFOLDER]SleepMate.exe", "WorkingDirectory": "INSTALLFOLDER", "Icon": "SleepMateIcon", "Advertise": "no"})
 
     feature = ET.SubElement(product, q("Feature"), {"Id": "SleepMateFeature", "Title": "SleepMate", "Description": "SleepMate application files and Windows integration", "Level": "1", "AllowAdvertise": "no", "Absent": "disallow"})
     for component_id in component_ids:
