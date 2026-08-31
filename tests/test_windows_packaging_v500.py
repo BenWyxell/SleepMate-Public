@@ -12,12 +12,17 @@ def test_windows_release_pipeline_uses_msi_and_no_active_inno_builder():
 
     workflow = (ROOT / ".github/workflows/windows-release.yml").read_text(encoding="utf-8")
     assert "Windows build + MSI - unsigned CI only" in workflow
-    assert "sudo apt-get install -y msitools" in workflow
-    assert "wixl -v -a x64" in workflow
-    assert "SleepMate_Setup_v${VERSION}.msi" in workflow
+    assert "Install pinned WiX Toolset v3.14.1" in workflow
+    assert "wix3141rtm" in workflow
+    assert "candle.exe" in workflow
+    assert "light.exe" in workflow
+    assert "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31" in workflow
+    assert "SleepMate_Setup_v${version}.msi" in workflow
     assert "msiexec.exe" in workflow
     assert "'/i'" in workflow
     assert "'/x'" in workflow
+    assert "sudo apt-get install -y msitools" not in workflow
+    assert "wixl -v -a x64" not in workflow
     assert "Install Inno Setup" not in workflow
     assert "WINDOWS_CERT_PFX_BASE64" not in workflow
     assert "WINDOWS_CERT_PASSWORD" not in workflow
@@ -74,6 +79,7 @@ def test_msi_generator_contract():
     assert "SleepMateStartMenuShortcut" in text
     assert "SleepMateUninstallShortcut" in text
     assert "SleepMateDesktopShortcut" in text
+    assert "DesktopShortcutFeature" in text
     assert "LEGACY_INNO_UNINSTALL" in text
     assert "SleepMateUpdater.exe" in text
     assert "SleepMate.ico" in text
@@ -91,11 +97,9 @@ def test_msi_generator_contract():
     assert "LaunchSleepMate" in text
     assert "DoAction" in text
     assert "setup wizard" in text.lower() or "beállítás" in text.lower()
-    # Architecture is supplied to wixl with `-a x64`; wixl 0.103 rejects
-    # newer WiX attributes such as Package/@Platform and File/@Vital.
+    assert '"Codepage": "1250"' in text
+    # x64 architecture is supplied by candle.exe -arch x64 in CI.
     assert '"Platform": "x64"' not in text
-    assert '"CompressionLevel": "high"' not in text
-    assert '"Vital": "yes"' not in text
 
 
 def test_first_run_setup_contract_is_bilingual_and_remote_capable():
