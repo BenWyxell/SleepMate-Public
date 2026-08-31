@@ -117,11 +117,15 @@ def main() -> int:
     )
     ET.SubElement(product, q("MediaTemplate"), {"EmbedCab": "yes"})
 
+    # Windows Installer's VersionNT/VersionNT64 values are compatibility values
+    # on modern Windows and cannot reliably distinguish Windows 10/11 from older
+    # NT releases. Enforce x64 here; supported Windows versions are documented
+    # and the application/runtime performs the remaining compatibility checks.
     ET.SubElement(
         product,
         q("Condition"),
-        {"Message": "SleepMate requires 64-bit Windows 10 or newer."},
-    ).text = "Installed OR (VersionNT64 >= 1000)"
+        {"Message": "SleepMate requires 64-bit Windows."},
+    ).text = "Installed OR VersionNT64"
 
     legacy_prop = ET.SubElement(product, q("Property"), {"Id": "LEGACY_INNO_UNINSTALL"})
     ET.SubElement(
