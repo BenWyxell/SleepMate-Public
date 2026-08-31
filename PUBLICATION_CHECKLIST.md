@@ -1,6 +1,6 @@
 # Public publication checklist
 
-This repository snapshot is prepared for open-source publication, but the following items must be confirmed before changing repository visibility to public.
+The canonical public repository is live. This checklist tracks the remaining requirements for the first public Windows binary release and the SignPath Foundation application.
 
 ## Blocking items
 
@@ -16,13 +16,13 @@ This repository snapshot is prepared for open-source publication, but the follow
 
 - [x] Public repository exists and is the canonical source repository: `BenWyxell/SleepMate-Public`.
 - [x] `README.md` exposes a section named **Code signing policy**.
-- [ ] `CODE_SIGNING_POLICY.md` remains accurate.
+- [x] `CODE_SIGNING_POLICY.md` remains accurate for the current MSI + GitHub-hosted build architecture.
 - [x] Privacy policy is complete in this public source snapshot.
 - [x] Team roles are accurate for the current single-maintainer repository.
 - [ ] SignPath and GitHub MFA enabled.
 - [x] Public CI/release workflow definitions use GitHub-hosted runners.
-- [ ] Installer architecture is migrated to the SignPath-supported production format.
-- [ ] A release exists in the same general form that will later be signed.
+- [x] Installer architecture is migrated to the intended SignPath-supported MSI production format and has passed build/install/runtime/uninstall CI.
+- [ ] A public release exists in the same general MSI form that will later be signed.
 - [ ] SignPath Foundation application submitted only after the above are true.
 
 ## Production signing activation
@@ -36,4 +36,3 @@ After acceptance:
 - [ ] Verify Authenticode signature for every SleepMate-owned executable and the installer before release publication.
 - [ ] Generate hashes and update manifest only from the final signed files.
 - [ ] Generate/publish SBOM and exact third-party notices.
-
