@@ -57,9 +57,28 @@ def content_hash(source_dir: Path) -> str:
     return h.hexdigest()
 
 
+def write_license_rtf(output_dir: Path) -> Path:
+    """Create a deterministic RTF copy of the repository license for WixUI."""
+    repo_root = Path(__file__).resolve().parents[1]
+    license_path = repo_root / "LICENSE"
+    text = license_path.read_text(encoding="utf-8", errors="replace")
+    escaped = (
+        text.replace("\\", r"\\")
+        .replace("{", r"\{")
+        .replace("}", r"\}")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\n", r"\par " + "\n")
+    )
+    rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Segoe UI;}}\\fs18\n" + escaped + "\n}"
+    target = output_dir / "SleepMate-License.rtf"
+    target.write_text(rtf, encoding="ascii", errors="backslashreplace")
+    return target
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Generate deterministic WiX v3-compatible WXS for GNOME wixl 0.103."
+        description="Generate deterministic WiX v3 WXS for the SleepMate Windows installer."
     )
     ap.add_argument("--source-dir", required=True)
     ap.add_argument("--output", required=True)
@@ -81,6 +100,8 @@ def main() -> int:
     tree_sha256 = content_hash(source_dir)
     product_code = uuid.uuid5(PRODUCT_NAMESPACE, f"SleepMate:{version}")
     package_code = uuid.uuid5(PACKAGE_NAMESPACE, f"SleepMate:{version}:{tree_sha256}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    license_rtf = write_license_rtf(output.parent)
 
     wix = ET.Element(q("Wix"))
     product = ET.SubElement(
@@ -117,10 +138,6 @@ def main() -> int:
     )
     ET.SubElement(product, q("MediaTemplate"), {"EmbedCab": "yes"})
 
-    # Windows Installer's VersionNT/VersionNT64 values are compatibility values
-    # on modern Windows and cannot reliably distinguish Windows 10/11 from older
-    # NT releases. Enforce x64 here; supported Windows versions are documented
-    # and the application/runtime performs the remaining compatibility checks.
     ET.SubElement(
         product,
         q("Condition"),
@@ -182,6 +199,7 @@ def main() -> int:
     app_menu = ET.SubElement(
         program_menu, q("Directory"), {"Id": "ApplicationProgramsFolder", "Name": "SleepMate"}
     )
+    desktop = ET.SubElement(target, q("Directory"), {"Id": "DesktopFolder"})
 
     dir_elements: dict[str, ET.Element] = {"": install}
 
@@ -202,7 +220,8 @@ def main() -> int:
         dir_elements[key] = el
         return el
 
-    component_ids: list[str] = []
+    core_component_ids: list[str] = []
+    main_exe_file_id = ""
     for path in files:
         rel = path.relative_to(source_dir)
         rel_posix = rel.as_posix()
@@ -225,7 +244,12 @@ def main() -> int:
                 "KeyPath": "yes",
             },
         )
-        component_ids.append(component_id)
+        if rel_posix == "SleepMate.exe":
+            main_exe_file_id = file_id
+        core_component_ids.append(component_id)
+
+    if not main_exe_file_id:
+        raise SystemExit("SleepMate.exe file id was not generated")
 
     registry_component = ET.SubElement(
         install,
@@ -266,7 +290,7 @@ def main() -> int:
             "Value": version,
         },
     )
-    component_ids.append("SleepMateRegistry")
+    core_component_ids.append("SleepMateRegistry")
 
     menu_component = ET.SubElement(
         app_menu,
@@ -315,7 +339,55 @@ def main() -> int:
         q("RemoveFolder"),
         {"Id": "RemoveSleepMateStartMenuFolder", "On": "uninstall"},
     )
-    component_ids.append("SleepMateStartMenu")
+
+    desktop_component = ET.SubElement(
+        desktop,
+        q("Component"),
+        {"Id": "SleepMateDesktopShortcut", "Guid": guid_for("component", "desktop-shortcut"), "Win64": "yes"},
+    )
+    ET.SubElement(
+        desktop_component,
+        q("RegistryValue"),
+        {
+            "Root": "HKCU",
+            "Key": r"Software\SleepMate\Installer",
+            "Name": "DesktopShortcut",
+            "Type": "integer",
+            "Value": "1",
+            "KeyPath": "yes",
+        },
+    )
+    ET.SubElement(
+        desktop_component,
+        q("Shortcut"),
+        {
+            "Id": "SleepMateDesktopShortcutLink",
+            "Name": "SleepMate",
+            "Description": "SleepMate PAP/CPAP therapy companion",
+            "Target": "[INSTALLFOLDER]SleepMate.exe",
+            "WorkingDirectory": "INSTALLFOLDER",
+            "Icon": "SleepMateIcon",
+            "Advertise": "no",
+        },
+    )
+
+    startup_component = ET.SubElement(
+        install,
+        q("Component"),
+        {"Id": "SleepMateStartup", "Guid": guid_for("component", "startup"), "Win64": "yes"},
+    )
+    ET.SubElement(
+        startup_component,
+        q("RegistryValue"),
+        {
+            "Root": "HKCU",
+            "Key": r"Software\Microsoft\Windows\CurrentVersion\Run",
+            "Name": "SleepMate",
+            "Type": "string",
+            "Value": '"[INSTALLFOLDER]SleepMate.exe"',
+            "KeyPath": "yes",
+        },
+    )
 
     feature = ET.SubElement(
         product,
@@ -323,23 +395,97 @@ def main() -> int:
         {
             "Id": "SleepMateFeature",
             "Title": "SleepMate",
-            "Description": "SleepMate application files and Start menu integration",
+            "Description": "A SleepMate alkalmazás és a szükséges programfájlok.",
             "Level": "1",
+            "Display": "expand",
             "AllowAdvertise": "no",
             "Absent": "disallow",
         },
     )
-    for component_id in component_ids:
+    for component_id in core_component_ids:
         ET.SubElement(feature, q("ComponentRef"), {"Id": component_id})
 
-    output.parent.mkdir(parents=True, exist_ok=True)
+    start_feature = ET.SubElement(
+        feature,
+        q("Feature"),
+        {
+            "Id": "StartMenuFeature",
+            "Title": "Start menü parancsikon",
+            "Description": "SleepMate parancsikon és eltávolítási parancs a Start menüben.",
+            "Level": "1",
+            "AllowAdvertise": "no",
+        },
+    )
+    ET.SubElement(start_feature, q("ComponentRef"), {"Id": "SleepMateStartMenu"})
+
+    desktop_feature = ET.SubElement(
+        feature,
+        q("Feature"),
+        {
+            "Id": "DesktopShortcutFeature",
+            "Title": "Asztali parancsikon",
+            "Description": "SleepMate parancsikon létrehozása az Asztalon.",
+            "Level": "1",
+            "AllowAdvertise": "no",
+        },
+    )
+    ET.SubElement(desktop_feature, q("ComponentRef"), {"Id": "SleepMateDesktopShortcut"})
+
+    startup_feature = ET.SubElement(
+        feature,
+        q("Feature"),
+        {
+            "Id": "StartupFeature",
+            "Title": "Automatikus indítás a Windowszal",
+            "Description": "A SleepMate automatikusan elindul a felhasználói bejelentkezés után.",
+            "Level": "2",
+            "AllowAdvertise": "no",
+        },
+    )
+    ET.SubElement(startup_feature, q("ComponentRef"), {"Id": "SleepMateStartup"})
+
+    # Real Windows Installer wizard. FeatureTree gives the user a destination
+    # browser, disk-cost information and explicit optional Windows integration.
+    ET.SubElement(product, q("Property"), {"Id": "WIXUI_INSTALLDIR", "Value": "INSTALLFOLDER"})
+    ET.SubElement(product, q("Property"), {"Id": "WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Value": "SleepMate indítása"})
+    ET.SubElement(product, q("Property"), {"Id": "WIXUI_EXITDIALOGOPTIONALCHECKBOX", "Value": "1"})
+    ET.SubElement(product, q("WixVariable"), {"Id": "WixUILicenseRtf", "Value": license_rtf.as_posix()})
+    ET.SubElement(product, q("UIRef"), {"Id": "WixUI_FeatureTree"})
+    ET.SubElement(product, q("UIRef"), {"Id": "WixUI_ErrorProgressText"})
+
+    ET.SubElement(
+        product,
+        q("CustomAction"),
+        {
+            "Id": "LaunchSleepMate",
+            "FileKey": main_exe_file_id,
+            "ExeCommand": "",
+            "Execute": "immediate",
+            "Return": "asyncNoWait",
+            "Impersonate": "yes",
+        },
+    )
+    ui = ET.SubElement(product, q("UI"))
+    publish = ET.SubElement(
+        ui,
+        q("Publish"),
+        {
+            "Dialog": "ExitDialog",
+            "Control": "Finish",
+            "Event": "DoAction",
+            "Value": "LaunchSleepMate",
+            "Order": "1",
+        },
+    )
+    publish.text = "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed"
+
     tree = ET.ElementTree(wix)
     ET.indent(tree, space="  ")
     tree.write(output, encoding="utf-8", xml_declaration=True)
 
     print(
         f"Generated {output} with {len(files)} payload files; "
-        f"tree_sha256={tree_sha256}; product_code={product_code}"
+        f"tree_sha256={tree_sha256}; product_code={product_code}; wizard=WixUI_FeatureTree"
     )
     return 0
 
