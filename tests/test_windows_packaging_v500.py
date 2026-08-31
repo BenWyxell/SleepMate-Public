@@ -21,12 +21,50 @@ def test_windows_release_pipeline_uses_msi_and_no_active_inno_builder():
     assert "Install Inno Setup" not in workflow
     assert "WINDOWS_CERT_PFX_BASE64" not in workflow
     assert "WINDOWS_CERT_PASSWORD" not in workflow
+    # The one-time public unsigned 5.2.16 candidate has already been published.
+    # Normal CI must never publish a GitHub Release on its own.
+    assert "gh release create" not in workflow
+    assert "publish-unsigned" not in workflow
 
     build = (ROOT / "build/windows/build_release.ps1").read_text(encoding="utf-8")
     assert "SLEEPMATE_SIGN_PFX" not in build
     assert "ISCC.exe" not in build
     assert "windows-onedir-msi-ready" in build
     assert "MSI packaging is performed" in build
+
+
+def test_windows_release_uses_locked_dependencies_and_packages_notices():
+    runtime_lock = ROOT / "build/windows/requirements-runtime.lock"
+    build_lock = ROOT / "build/windows/requirements-build.lock"
+    notices = ROOT / "THIRD_PARTY_NOTICES.md"
+    assert runtime_lock.is_file()
+    assert build_lock.is_file()
+    assert notices.is_file()
+
+    runtime = runtime_lock.read_text(encoding="utf-8")
+    build_deps = build_lock.read_text(encoding="utf-8")
+    assert "groq==1.7.0" in runtime
+    assert "Pillow==12.3.0" in runtime
+    assert "pystray==0.19.5" in runtime
+    assert "cryptography==50.0.1" in runtime
+    assert "pyinstaller==6.22.2" in build_deps
+    assert "pytest==9.1.1" in build_deps
+
+    build = (ROOT / "build/windows/build_release.ps1").read_text(encoding="utf-8")
+    assert "pip==26.2.1" in build
+    assert "requirements-runtime.lock" in build
+    assert "requirements-build.lock" in build
+    assert "pip freeze --all" in build
+    assert "THIRD_PARTY_NOTICES.md" in build
+    assert "PRIVACY.md" in build
+    assert "LICENSE" in build
+
+    notice_text = notices.read_text(encoding="utf-8")
+    assert "Reference release: `v5.2.16`" in notice_text
+    assert "LGPL-3.0-or-later" in notice_text
+    assert "MIT-CMU" in notice_text
+    assert "BSD-3-Clause" in notice_text
+    assert "No proprietary Python runtime dependency" in notice_text
 
 
 def test_msi_generator_contract():
