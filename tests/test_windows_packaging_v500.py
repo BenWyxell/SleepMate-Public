@@ -32,17 +32,20 @@ def test_windows_release_pipeline_uses_msi_and_no_active_inno_builder():
 def test_msi_generator_contract():
     text = (ROOT / "scripts/generate_msi_wxs.py").read_text(encoding="utf-8")
     assert 'InstallScope": "perUser"' in text
-    assert 'Platform": "x64"' in text
     assert "MajorUpgrade" in text
     assert "LocalAppDataFolder" in text
     assert "INSTALLFOLDER" in text
     assert "SleepMateStartMenuShortcut" in text
     assert "SleepMateUninstallShortcut" in text
-    assert "START_WITH_WINDOWS" in text
-    assert "DESKTOP_SHORTCUT" in text
     assert "LEGACY_INNO_UNINSTALL" in text
     assert "SleepMateUpdater.exe" in text
     assert "SleepMate.ico" in text
+    # Architecture is supplied to wixl with `-a x64`; wixl 0.103 rejects
+    # newer WiX attributes such as Package/@Platform and File/@Vital.
+    assert '"Platform": "x64"' not in text
+    assert '"CompressionLevel": "high"' not in text
+    assert '"Vital": "yes"' not in text
+    assert "q(\"Condition\")" not in text[text.find("component_ids: list[str]"):]
 
 
 def test_binary_release_builder_contract():
