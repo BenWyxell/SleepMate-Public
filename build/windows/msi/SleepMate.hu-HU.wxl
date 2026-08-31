@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WixLocalization Culture="hu-HU" Codepage="1250" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="LicenseAgreementDlgTitle">{\WixUI_Font_Title}Licencfeltételek és adatvédelem</String>
+  <String Id="LicenseAgreementDlgDescription">Kérjük, olvasd el a licencfeltételeket és az Adatvédelmi tájékoztatót.</String>
+  <String Id="LicenseAgreementDlgLicenseAcceptedCheckBox">Elolvastam és &amp;elfogadom a licencfeltételeket és az Adatvédelmi tájékoztatót</String>
+  <String Id="WelcomeDlgTitle">{\WixUI_Font_Bigger}Üdvözöl a [ProductName] telepítővarázsló</String>
+</WixLocalization>
