@@ -59,7 +59,7 @@ def content_hash(source_dir: Path) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser(
-        description="Generate a deterministic WiX v3-compatible WXS for GNOME wixl."
+        description="Generate deterministic WiX v3-compatible WXS for GNOME wixl 0.103."
     )
     ap.add_argument("--source-dir", required=True)
     ap.add_argument("--output", required=True)
@@ -73,12 +73,9 @@ def main() -> int:
 
     if not source_dir.is_dir():
         raise SystemExit(f"Source directory does not exist: {source_dir}")
-    if not (source_dir / "SleepMate.exe").is_file():
-        raise SystemExit("SleepMate.exe missing from MSI source tree")
-    if not (source_dir / "SleepMateUpdater.exe").is_file():
-        raise SystemExit("SleepMateUpdater.exe missing from MSI source tree")
-    if not (source_dir / "SleepMate.ico").is_file():
-        raise SystemExit("SleepMate.ico missing from MSI source tree")
+    for required in ("SleepMate.exe", "SleepMateUpdater.exe", "SleepMate.ico"):
+        if not (source_dir / required).is_file():
+            raise SystemExit(f"{required} missing from MSI source tree")
 
     files = sorted(p for p in source_dir.rglob("*") if p.is_file())
     tree_sha256 = content_hash(source_dir)
@@ -108,7 +105,6 @@ def main() -> int:
             "InstallerVersion": "500",
             "Compressed": "yes",
             "InstallScope": "perUser",
-            "Platform": "x64",
         },
     )
     ET.SubElement(
@@ -119,11 +115,7 @@ def main() -> int:
             "DowngradeErrorMessage": "A newer version of SleepMate is already installed.",
         },
     )
-    ET.SubElement(
-        product,
-        q("MediaTemplate"),
-        {"EmbedCab": "yes", "CompressionLevel": "high"},
-    )
+    ET.SubElement(product, q("MediaTemplate"), {"EmbedCab": "yes"})
 
     ET.SubElement(
         product,
@@ -156,12 +148,6 @@ def main() -> int:
         },
     ).text = "Installed OR NOT LEGACY_INNO_UNINSTALL"
 
-    ET.SubElement(
-        product, q("Property"), {"Id": "DESKTOP_SHORTCUT", "Value": "0", "Secure": "yes"}
-    )
-    ET.SubElement(
-        product, q("Property"), {"Id": "START_WITH_WINDOWS", "Value": "0", "Secure": "yes"}
-    )
     ET.SubElement(product, q("Property"), {"Id": "ARPNOREPAIR", "Value": "1"})
     ET.SubElement(
         product, q("Property"), {"Id": "ARPURLINFOABOUT", "Value": "https://mysleepmate.hu"}
@@ -189,8 +175,9 @@ def main() -> int:
     install = ET.SubElement(programs, q("Directory"), {"Id": "INSTALLFOLDER", "Name": "SleepMate"})
 
     program_menu = ET.SubElement(target, q("Directory"), {"Id": "ProgramMenuFolder"})
-    app_menu = ET.SubElement(program_menu, q("Directory"), {"Id": "ApplicationProgramsFolder", "Name": "SleepMate"})
-    desktop = ET.SubElement(target, q("Directory"), {"Id": "DesktopFolder"})
+    app_menu = ET.SubElement(
+        program_menu, q("Directory"), {"Id": "ApplicationProgramsFolder", "Name": "SleepMate"}
+    )
 
     dir_elements: dict[str, ET.Element] = {"": install}
 
@@ -203,7 +190,11 @@ def main() -> int:
         parent_rel = rel_dir.parent
         parent_key = "" if parent_rel.as_posix() == "." else parent_rel.as_posix()
         parent_el = ensure_dir(Path(parent_key)) if parent_key else install
-        el = ET.SubElement(parent_el, q("Directory"), {"Id": stable_id("Dir", key), "Name": rel_dir.name})
+        el = ET.SubElement(
+            parent_el,
+            q("Directory"),
+            {"Id": stable_id("Dir", key), "Name": rel_dir.name},
+        )
         dir_elements[key] = el
         return el
 
@@ -228,7 +219,6 @@ def main() -> int:
                 "Name": path.name,
                 "Source": path.as_posix(),
                 "KeyPath": "yes",
-                "Vital": "yes",
             },
         )
         component_ids.append(component_id)
@@ -316,61 +306,12 @@ def main() -> int:
             "Advertise": "no",
         },
     )
-    ET.SubElement(menu_component, q("RemoveFolder"), {"Id": "RemoveSleepMateStartMenuFolder", "On": "uninstall"})
+    ET.SubElement(
+        menu_component,
+        q("RemoveFolder"),
+        {"Id": "RemoveSleepMateStartMenuFolder", "On": "uninstall"},
+    )
     component_ids.append("SleepMateStartMenu")
-
-    desktop_component = ET.SubElement(
-        desktop,
-        q("Component"),
-        {"Id": "SleepMateDesktopShortcut", "Guid": guid_for("component", "desktop-shortcut"), "Win64": "yes"},
-    )
-    ET.SubElement(desktop_component, q("Condition")).text = 'DESKTOP_SHORTCUT = "1"'
-    ET.SubElement(
-        desktop_component,
-        q("RegistryValue"),
-        {
-            "Root": "HKCU",
-            "Key": r"Software\SleepMate\Installer",
-            "Name": "DesktopShortcut",
-            "Type": "integer",
-            "Value": "1",
-            "KeyPath": "yes",
-        },
-    )
-    ET.SubElement(
-        desktop_component,
-        q("Shortcut"),
-        {
-            "Id": "SleepMateDesktopShortcutLink",
-            "Name": "SleepMate",
-            "Description": "SleepMate PAP/CPAP therapy companion",
-            "Target": "[INSTALLFOLDER]SleepMate.exe",
-            "WorkingDirectory": "INSTALLFOLDER",
-            "Icon": "SleepMateIcon",
-            "Advertise": "no",
-        },
-    )
-    component_ids.append("SleepMateDesktopShortcut")
-
-    startup_component = ET.SubElement(
-        install,
-        q("Component"),
-        {"Id": "SleepMateStartup", "Guid": guid_for("component", "startup"), "Win64": "yes"},
-    )
-    ET.SubElement(startup_component, q("Condition")).text = 'START_WITH_WINDOWS = "1"'
-    ET.SubElement(
-        startup_component,
-        q("RegistryValue"),
-        {
-            "Root": "HKCU",
-            "Key": r"Software\Microsoft\Windows\CurrentVersion\Run",
-            "Name": "SleepMate",
-            "Type": "string",
-            "Value": '"[INSTALLFOLDER]SleepMate.exe"',
-            "KeyPath": "yes",
-        },
-    )
-    component_ids.append("SleepMateStartup")
 
     feature = ET.SubElement(
         product,
@@ -378,7 +319,7 @@ def main() -> int:
         {
             "Id": "SleepMateFeature",
             "Title": "SleepMate",
-            "Description": "SleepMate application files and integration shortcuts",
+            "Description": "SleepMate application files and Start menu integration",
             "Level": "1",
             "AllowAdvertise": "no",
             "Absent": "disallow",
