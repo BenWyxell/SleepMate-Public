@@ -41,6 +41,14 @@ def install_setup_v5217(app_module) -> None:
     original_post = app_module.Handler.do_POST
     installer = _installer_defaults()
 
+    # Capture this before the first-run wizard writes anything. A previous
+    # SleepMate installation may not know setup_complete yet, but its config and
+    # CPAP source must still be preserved during an upgrade.
+    try:
+        existing_config_file = bool(app_module.config_path(app_module.APP_BASE).is_file())
+    except Exception:
+        existing_config_file = False
+
     def load_config():
         cfg = original_load_config()
         fresh_setup = "setup_complete" not in cfg
@@ -52,6 +60,11 @@ def install_setup_v5217(app_module) -> None:
             # consumes /api/config and applies the matching HKCU Run entry.
             cfg["start_with_windows"] = bool(installer["setup_start_with_windows"])
             cfg["setup_complete"] = False
+            if not existing_config_file:
+                # A brand-new install must not pretend that Documents/CPAP_mentes
+                # is a valid source. The user can choose a real source or simply
+                # continue and configure it later. Upgrades keep their old path.
+                cfg["data_dir"] = ""
         if "setup_start_with_windows" not in cfg:
             cfg["setup_start_with_windows"] = bool(installer["setup_start_with_windows"])
         return cfg
@@ -67,6 +80,7 @@ def install_setup_v5217(app_module) -> None:
                 "complete": bool(cfg.get("setup_complete", False)),
                 "language": str(cfg.get("setup_language") or "hu"),
                 "start_with_windows_default": bool(cfg.get("setup_start_with_windows", True)),
+                "existing_configuration": existing_config_file,
                 "version": app_module.APP_VERSION,
             })
         return original_get(self)
@@ -92,6 +106,7 @@ def install_setup_v5217(app_module) -> None:
                 "complete": bool(cfg.get("setup_complete", False)),
                 "language": str(cfg.get("setup_language") or "hu"),
                 "start_with_windows_default": bool(cfg.get("setup_start_with_windows", True)),
+                "existing_configuration": existing_config_file,
             })
         return original_post(self)
 
