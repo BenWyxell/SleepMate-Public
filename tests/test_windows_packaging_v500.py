@@ -21,8 +21,6 @@ def test_windows_release_pipeline_uses_msi_and_no_active_inno_builder():
     assert "Install Inno Setup" not in workflow
     assert "WINDOWS_CERT_PFX_BASE64" not in workflow
     assert "WINDOWS_CERT_PASSWORD" not in workflow
-    # The one-time public unsigned 5.2.16 candidate has already been published.
-    # Normal CI must never publish a GitHub Release on its own.
     assert "gh release create" not in workflow
     assert "publish-unsigned" not in workflow
 
@@ -75,15 +73,53 @@ def test_msi_generator_contract():
     assert "INSTALLFOLDER" in text
     assert "SleepMateStartMenuShortcut" in text
     assert "SleepMateUninstallShortcut" in text
+    assert "SleepMateDesktopShortcut" in text
     assert "LEGACY_INNO_UNINSTALL" in text
     assert "SleepMateUpdater.exe" in text
     assert "SleepMate.ico" in text
+    assert "LanguageDlg" in text
+    assert "WelcomeHuDlg" in text
+    assert "WelcomeEnDlg" in text
+    assert "InstallDirHuDlg" in text
+    assert "InstallDirEnDlg" in text
+    assert "OptionsHuDlg" in text
+    assert "OptionsEnDlg" in text
+    assert "SETUPLANG" in text
+    assert "DESKTOP_SHORTCUT" in text
+    assert "START_WITH_WINDOWS" in text
+    assert "SetupLanguage" in text
+    assert "LaunchSleepMate" in text
+    assert "DoAction" in text
+    assert "setup wizard" in text.lower() or "beállítás" in text.lower()
     # Architecture is supplied to wixl with `-a x64`; wixl 0.103 rejects
     # newer WiX attributes such as Package/@Platform and File/@Vital.
     assert '"Platform": "x64"' not in text
     assert '"CompressionLevel": "high"' not in text
     assert '"Vital": "yes"' not in text
-    assert "q(\"Condition\")" not in text[text.find("component_ids: list[str]"):]
+
+
+def test_first_run_setup_contract_is_bilingual_and_remote_capable():
+    setup = (ROOT / "cpap/setup_v5217.py").read_text(encoding="utf-8")
+    wizard = (ROOT / "web/setup-wizard-v5217.js").read_text(encoding="utf-8")
+    launcher = (ROOT / "sleepmate_main.py").read_text(encoding="utf-8")
+    shell = (ROOT / "cpap/sleep_analysis_v522.py").read_text(encoding="utf-8")
+
+    assert "install_setup_v5217(app)" in launcher
+    assert "/api/setup/config" in setup
+    assert "SetupLanguage" in setup
+    assert "StartWithWindows" in setup
+    assert "setup-wizard-v5217.js?v=5.2.17" in shell
+    assert "Tailscale" in wizard
+    assert "Cloudflare Tunnel" in wizard
+    assert "/api/remote/install" in wizard
+    assert "component:'tailscale'" in wizard
+    assert "component:'cloudflared'" in wizard
+    assert "Web Push" in wizard
+    assert "PWA" in wizard
+    assert "lang==='en'" in wizard
+    assert "Üdvözöl a SleepMate" in wizard
+    assert "Welcome to SleepMate" in wizard
+    assert "complete:true" in wizard
 
 
 def test_binary_release_builder_contract():
