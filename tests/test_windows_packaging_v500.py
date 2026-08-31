@@ -94,7 +94,7 @@ def test_msi_generator_contract():
     assert 'repo_root / "LICENSE"' in text
     assert 'repo_root / "PRIVACY.md"' in text
     assert "SleepMate-Legal.rtf" in text
-    assert "Licencfeltételek" in text
+    assert "LICENCFELTÉTELEK" in text
     assert "ADATVÉDELMI TÁJÉKOZTATÓ" in text
     assert "WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" in text
     assert "SleepMate indítása" in text
