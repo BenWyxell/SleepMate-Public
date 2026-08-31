@@ -84,12 +84,25 @@ $BuildInfoObject = [ordered]@{
 $BuildInfoJson = $BuildInfoObject | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $Root 'build_info.json'), $BuildInfoJson + [Environment]::NewLine, $Utf8NoBom)
 
-python -m pip install --upgrade pip
-Assert-LastExitCode 'pip upgrade'
-python -m pip install -r requirements.txt
-Assert-LastExitCode 'runtime dependency installation'
-python -m pip install -r build\windows\requirements-build.txt
-Assert-LastExitCode 'build dependency installation'
+$RuntimeLock = 'build\windows\requirements-runtime.lock'
+$BuildLock = 'build\windows\requirements-build.lock'
+if (-not (Test-Path $RuntimeLock)) { throw "Runtime dependency lock missing: $RuntimeLock" }
+if (-not (Test-Path $BuildLock)) { throw "Build dependency lock missing: $BuildLock" }
+
+# Keep the public release resolver deterministic. The exact versions below were
+# captured from the successful public v5.2.16 GitHub-hosted build.
+python -m pip install --upgrade 'pip==26.2.1'
+Assert-LastExitCode 'pip pin'
+python -m pip install -r $RuntimeLock
+Assert-LastExitCode 'locked runtime dependency installation'
+python -m pip install -r $BuildLock
+Assert-LastExitCode 'locked build dependency installation'
+
+$BuildEnvironmentPath = Join-Path $Root 'build\windows\python-build-environment.txt'
+$BuildEnvironment = @(& python -m pip freeze --all) | Sort-Object
+Assert-LastExitCode 'pip freeze build environment'
+[IO.File]::WriteAllLines($BuildEnvironmentPath, [string[]]$BuildEnvironment, $Utf8NoBom)
+Write-Host "Recorded exact Python build environment: $BuildEnvironmentPath"
 
 if (-not $SkipTests) {
   $pytestArgs = @('-m','pytest','-q','tests','--ignore=tests/test_v29.py')
@@ -145,6 +158,14 @@ Copy-Item SleepMate.ico dist\SleepMate\SleepMate.ico -Force
 Copy-Item build_info.json dist\SleepMate\build_info.json -Force
 Copy-Item build\windows\installed.marker dist\SleepMate\installed.marker -Force
 
+# License/privacy material is part of both the portable program tree and the MSI
+# because the MSI is generated from this exact dist\SleepMate directory.
+$ReleaseNoticeFiles = @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'PRIVACY.md')
+foreach ($notice in $ReleaseNoticeFiles) {
+  if (-not (Test-Path $notice)) { throw "Required release notice missing: $notice" }
+  Copy-Item $notice (Join-Path 'dist\SleepMate' $notice) -Force
+}
+
 # Production signing is intentionally NOT performed here.
 # Official signing will be requested from SignPath by the trusted GitHub Actions
 # workflow after the Foundation application and project configuration are ready.
@@ -180,6 +201,12 @@ if ($UnexpectedZips.Count -gt 0) {
 $LegacyInstallerOutputs = @(Get-ChildItem 'release\SleepMate_Setup_v*.exe' -ErrorAction SilentlyContinue)
 if ($LegacyInstallerOutputs.Count -gt 0) {
   throw "Legacy Inno Setup output must not be produced by the active build: $($LegacyInstallerOutputs.Name -join ', ')"
+}
+
+foreach ($notice in $ReleaseNoticeFiles) {
+  if (-not (Test-Path (Join-Path 'dist\SleepMate' $notice))) {
+    throw "Required release notice was not packaged: $notice"
+  }
 }
 
 Write-Host "Program-tree release contract OK: app/EXE/updater/manifest/ZIP = $AppVersion"
