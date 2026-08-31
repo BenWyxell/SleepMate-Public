@@ -1,4 +1,6 @@
 from pathlib import Path
+import shutil
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -94,6 +96,8 @@ def test_msi_generator_contract():
     assert "SleepMate-Legal.rtf" in text
     assert "Licencfeltételek" in text
     assert "ADATVÉDELMI TÁJÉKOZTATÓ" in text
+    assert "WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" in text
+    assert "SleepMate indítása" in text
     # Architecture is supplied to candle with -arch x64.
     assert '"Platform": "x64"' not in text
     assert '"CompressionLevel": "high"' not in text
@@ -103,6 +107,79 @@ def test_msi_generator_contract():
     assert 'Culture="hu-HU"' in loc
     assert "Licencfeltételek és adatvédelem" in loc
     assert "Adatvédelmi tájékoztatót" in loc
+    assert "Elolvastam és" in loc
+
+
+def test_first_run_onboarding_contract():
+    onboarding = ROOT / "cpap/onboarding.py"
+    first_run = ROOT / "web/first-run.js"
+    first_css = ROOT / "web/first-run.css"
+    hydration = ROOT / "web/sleepsync-hydration-v529.js"
+    launcher = ROOT / "sleepmate_main.py"
+    spec = ROOT / "build/windows/SleepMate.spec"
+
+    for path in (onboarding, first_run, first_css, hydration, launcher, spec):
+        assert path.is_file(), path
+
+    backend = onboarding.read_text(encoding="utf-8")
+    compile(backend, str(onboarding), "exec")
+    assert "/api/onboarding/status" in backend
+    assert "/api/onboarding/state" in backend
+    assert "private/onboarding.json" in backend
+    assert "cloudflare_token" not in backend
+    assert "api_key" not in backend
+
+    launcher_text = launcher.read_text(encoding="utf-8")
+    assert "from cpap.onboarding import install_onboarding" in launcher_text
+    assert "install_onboarding(app)" in launcher_text
+
+    js = first_run.read_text(encoding="utf-8")
+    for required in (
+        "/api/onboarding/status",
+        "/api/onboarding/state",
+        "/api/system/pick-folder",
+        "/api/sleepsync/settings",
+        "/api/remote/install",
+        "/api/remote/tailscale",
+        "/api/remote/cloudflare",
+        "/api/ai/config",
+        "window.installPwa",
+        "window.enablePwaNotifications",
+        "Tailscale",
+        "Cloudflare Tunnel",
+        "Google Gemini",
+        "Groq",
+    ):
+        assert required in js
+
+    hydration_text = hydration.read_text(encoding="utf-8")
+    assert "loadPackagedOnboarding" in hydration_text
+    assert "lateBootPackagedOnboarding" in hydration_text
+    assert "/first-run.js?v=1" in hydration_text
+
+    spec_text = spec.read_text(encoding="utf-8")
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec_text
+    # first-run.js/css therefore enter the exact packaged MSI/PWA web tree even
+    # though the release builder restores app-core.js as the primary app.js.
+    assert "shutil.copy2(core_app, WEB_GENERATED / 'app.js')" in spec_text
+
+
+def test_first_run_frontend_javascript_syntax():
+    node = shutil.which("node")
+    if not node:
+        return
+    for path in (
+        ROOT / "web/first-run.js",
+        ROOT / "web/app.js",
+        ROOT / "web/sleepsync-hydration-v529.js",
+    ):
+        result = subprocess.run(
+            [node, "--check", str(path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        assert result.returncode == 0, f"{path.name}: {result.stdout}\n{result.stderr}"
 
 
 def test_binary_release_builder_contract():
