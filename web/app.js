@@ -2,6 +2,7 @@
   const ENGINE='/app-engine119.js?v=130';
   const POLISH='/sleepsync-polish.js?v=130';
   const HYDRATION='/sleepsync-hydration-v529.js?v=130';
+  const FIRST_RUN='/first-run.js?v=1';
 
   function appendEngine(){
     if(window.__sleepmateStableEngine130)return;
@@ -18,6 +19,16 @@
     document.write('<script src="'+ENGINE+'"><\/script>');
   }else{
     appendEngine();
+  }
+
+  // Register the first-run module before window.load. It stays completely silent
+  // on already-configured installations and can later be reopened from Settings.
+  if(!document.querySelector('script[data-sleepmate-first-run="1"]')){
+    const firstRun=document.createElement('script');
+    firstRun.src=FIRST_RUN;
+    firstRun.async=false;
+    firstRun.dataset.sleepmateFirstRun='1';
+    document.head.appendChild(firstRun);
   }
 
   // SleepSync presentation and settings hydration are non-critical add-ons.
