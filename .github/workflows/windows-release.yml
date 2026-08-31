@@ -11,9 +11,6 @@ on:
   push:
     branches:
       - main
-      - msi-migration
-      - sleepsync-integration
-      - v5.1.1-development
     tags:
       - 'v*'
 
@@ -49,7 +46,7 @@ jobs:
         shell: powershell
         run: |
           python -m pip install pytest
-          python -m py_compile .\app.py .\cpap\sleepsync_integration.py .\cpap\sleepsync_engine_v2.py .\cpap\google_drive_integration.py .\cpap\v511_features.py .\sleepmate_main.py .\scripts\generate_msi_wxs.py
+          python -m py_compile .\app.py .\cpap\sleepsync_integration.py .\cpap\sleepsync_engine_v2.py .\cpap\google_drive_integration.py .\cpap\v511_features.py .\cpap\setup_v5217.py .\sleepmate_main.py .\scripts\generate_msi_wxs.py
           node --check .\web\app.js
           node --check .\web\app-core.js
           node --check .\web\mobile-boot-diagnostics.js
@@ -57,6 +54,7 @@ jobs:
           node --check .\web\sleepmate-enhancements.js
           node --check .\web\sleepmate-offline-runtime.js
           node --check .\web\service-worker-v508-base.js
+          node --check .\web\setup-wizard-v5217.js
           python .\scripts\verify_sleepsync_integration.py
           python -m pytest -q .\tests\test_release_version_contract.py .\tests\test_tailscale_v401.py .\tests\test_tailscale_v402.py .\tests\test_v511_contract.py .\tests\test_windows_packaging_v500.py
 
@@ -79,8 +77,8 @@ jobs:
 
   build-msi:
     needs: build-windows-x64
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: windows-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout canonical source
@@ -93,15 +91,29 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install GNOME msitools and wixl
-        shell: bash
+      - name: Install pinned WiX Toolset v3.14.1
+        shell: powershell
         run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y msitools wixl
-          wixl --version
-          msiextract --help >/dev/null
-          dpkg-query -W -f='${Package}=${Version}\n' msitools wixl wixl-data | sort | tee build-msi-toolchain.txt
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip'
+          $expected = '6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31'
+          $zip = Join-Path $env:RUNNER_TEMP 'wix314-binaries.zip'
+          $dir = Join-Path $env:RUNNER_TEMP 'wix314'
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          $actual = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "WiX v3.14.1 archive SHA-256 mismatch. Expected $expected, got $actual"
+          }
+          Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -Path $zip -DestinationPath $dir -Force
+          if (-not (Test-Path (Join-Path $dir 'candle.exe'))) { throw 'candle.exe missing from pinned WiX archive.' }
+          if (-not (Test-Path (Join-Path $dir 'light.exe'))) { throw 'light.exe missing from pinned WiX archive.' }
+          "WIX314_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          @(
+            'WiX Toolset v3.14.1 (wix3141rtm)',
+            "archive=$url",
+            "sha256=$actual"
+          ) | Set-Content -Path build-msi-toolchain.txt -Encoding utf8
 
       - name: Download Windows program tree
         uses: actions/download-artifact@v4
@@ -110,42 +122,61 @@ jobs:
           path: ci-input
 
       - name: Generate deterministic MSI source
-        shell: bash
+        shell: powershell
         run: |
-          set -euxo pipefail
-          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
-          test -f ci-input/dist/SleepMate/SleepMate.exe
-          test -f ci-input/dist/SleepMate/SleepMateUpdater.exe
-          test -f ci-input/dist/SleepMate/SleepMate.ico
-          mkdir -p build/windows/msi release
-          python scripts/generate_msi_wxs.py \
-            --source-dir ci-input/dist/SleepMate \
-            --output build/windows/msi/SleepMate.generated.wxs \
-            --version "$VERSION"
+          $ErrorActionPreference = 'Stop'
+          $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMate.exe')) { throw 'SleepMate.exe missing from program tree.' }
+          if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMateUpdater.exe')) { throw 'SleepMateUpdater.exe missing from program tree.' }
+          if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMate.ico')) { throw 'SleepMate.ico missing from program tree.' }
+          New-Item -ItemType Directory -Force -Path 'build\windows\msi','release' | Out-Null
+          python .\scripts\generate_msi_wxs.py `
+            --source-dir .\ci-input\dist\SleepMate `
+            --output .\build\windows\msi\SleepMate.generated.wxs `
+            --version $version
 
-      - name: Build unsigned MSI with wixl
-        shell: bash
+      - name: Build unsigned interactive MSI with WiX v3.14.1
+        shell: powershell
         run: |
-          set -euxo pipefail
-          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
-          MSI="release/SleepMate_Setup_v${VERSION}.msi"
-          wixl -v -a x64 -o "$MSI" build/windows/msi/SleepMate.generated.wxs
-          test -s "$MSI"
-          sha256sum "$MSI" | tee "${MSI}.sha256"
+          $ErrorActionPreference = 'Stop'
+          $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          $wxs = (Resolve-Path '.\build\windows\msi\SleepMate.generated.wxs').Path
+          $wixobj = Join-Path $PWD 'build\windows\msi\SleepMate.generated.wixobj'
+          $msi = Join-Path $PWD "release\SleepMate_Setup_v${version}.msi"
+          & (Join-Path $env:WIX314_DIR 'candle.exe') -nologo -arch x64 -out $wixobj $wxs
+          if ($LASTEXITCODE -ne 0) { throw "candle.exe failed with exit code $LASTEXITCODE" }
+          & (Join-Path $env:WIX314_DIR 'light.exe') -nologo -spdb -out $msi $wixobj
+          if ($LASTEXITCODE -ne 0) { throw "light.exe failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path $msi)) { throw 'Expected MSI was not created.' }
+          $hash = (Get-FileHash -Algorithm SHA256 $msi).Hash.ToLowerInvariant()
+          "$hash  SleepMate_Setup_v${version}.msi" | Set-Content -Path "$msi.sha256" -Encoding ascii
+          Write-Host "MSI built: $msi"
+          Write-Host "SHA-256: $hash"
 
-      - name: Inspect MSI payload
-        shell: bash
+      - name: Inspect MSI payload with Windows Installer
+        shell: powershell
         run: |
-          set -euxo pipefail
-          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
-          MSI="release/SleepMate_Setup_v${VERSION}.msi"
-          rm -rf msi-extracted
-          mkdir -p msi-extracted
-          msiextract -C msi-extracted "$MSI"
-          find msi-extracted -type f -print | sort | tee release/msi-inventory.txt
-          test -n "$(find msi-extracted -type f -name SleepMate.exe -print -quit)"
-          test -n "$(find msi-extracted -type f -name SleepMateUpdater.exe -print -quit)"
-          test -n "$(find msi-extracted -type f -name SleepMate.ico -print -quit)"
+          $ErrorActionPreference = 'Stop'
+          $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          $msi = (Resolve-Path ".\release\SleepMate_Setup_v${version}.msi").Path
+          $target = Join-Path $env:RUNNER_TEMP 'SleepMate-MSI-AdminImage'
+          $log = Join-Path $env:RUNNER_TEMP 'SleepMate-MSI-AdminImage.log'
+          Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $args = @('/a', "`"$msi`"", '/qn', '/norestart', "TARGETDIR=`"$target`"", '/L*v', "`"$log`"")
+          $p = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -Wait -PassThru
+          if ($p.ExitCode -notin @(0,3010)) {
+            if (Test-Path $log) { Get-Content $log | Select-Object -Last 200 | Write-Host }
+            throw "MSI administrative image failed with exit code $($p.ExitCode)."
+          }
+          $files = Get-ChildItem -Path $target -File -Recurse
+          $files.FullName | Sort-Object | Set-Content -Path '.\release\msi-inventory.txt' -Encoding utf8
+          if (-not ($files | Where-Object Name -eq 'SleepMate.exe')) { throw 'SleepMate.exe missing from MSI payload.' }
+          if (-not ($files | Where-Object Name -eq 'SleepMateUpdater.exe')) { throw 'SleepMateUpdater.exe missing from MSI payload.' }
+          if (-not ($files | Where-Object Name -eq 'SleepMate.ico')) { throw 'SleepMate.ico missing from MSI payload.' }
+          if (-not ($files | Where-Object Name -eq 'LICENSE')) { throw 'LICENSE missing from MSI payload.' }
+          if (-not ($files | Where-Object Name -eq 'THIRD_PARTY_NOTICES.md')) { throw 'THIRD_PARTY_NOTICES.md missing from MSI payload.' }
+          if (-not ($files | Where-Object Name -eq 'PRIVACY.md')) { throw 'PRIVACY.md missing from MSI payload.' }
 
       - name: Upload unsigned MSI
         uses: actions/upload-artifact@v4
@@ -156,6 +187,7 @@ jobs:
             release/SleepMate_Setup_v*.msi.sha256
             release/msi-inventory.txt
             build/windows/msi/SleepMate.generated.wxs
+            build/windows/msi/SleepMate.generated.wixobj
             build-msi-toolchain.txt
           if-no-files-found: error
           retention-days: 1
@@ -170,6 +202,11 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
       - name: Download portable release inputs
         uses: actions/download-artifact@v4
@@ -232,15 +269,11 @@ jobs:
           try {
             $version = $null
             for ($i = 0; $i -lt 40; $i++) {
-              if ($backend.HasExited) {
-                throw "Installed SleepMate backend exited early with code $($backend.ExitCode)."
-              }
+              if ($backend.HasExited) { throw "Installed SleepMate backend exited early with code $($backend.ExitCode)." }
               try {
                 $version = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/version" -TimeoutSec 2
                 break
-              } catch {
-                Start-Sleep -Milliseconds 500
-              }
+              } catch { Start-Sleep -Milliseconds 500 }
             }
 
             if (-not $version) { throw 'Installed SleepMate backend did not become healthy in time.' }
@@ -248,10 +281,13 @@ jobs:
               throw "Unexpected installed API identity: $($version | ConvertTo-Json -Compress)"
             }
 
-            $ssSettings = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/sleepsync/settings" -TimeoutSec 5
-            if (-not $ssSettings.therapy_data_dir) {
-              throw 'Installed SleepSync settings API did not return therapy_data_dir.'
+            $setup = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/setup/status" -TimeoutSec 5
+            if ($setup.complete -ne $false -or $setup.language -notin @('hu','en')) {
+              throw "Installed first-run setup status is invalid: $($setup | ConvertTo-Json -Compress)"
             }
+
+            $ssSettings = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/sleepsync/settings" -TimeoutSec 5
+            if (-not $ssSettings.therapy_data_dir) { throw 'Installed SleepSync settings API did not return therapy_data_dir.' }
 
             $drive = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/google-drive/status" -TimeoutSec 5
             if ($drive.available -ne $true -or $drive.connected -ne $false) {
@@ -265,45 +301,24 @@ jobs:
 
             Write-Host "MSI-installed SleepMate smoke test OK: version=$expectedVersion"
 
-            try {
-              Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5 | Out-Null
-            } catch {}
-
-            if (-not $backend.WaitForExit(10000)) {
-              Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
-            }
+            try { Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5 | Out-Null } catch {}
+            if (-not $backend.WaitForExit(10000)) { Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue }
           }
           finally {
-            if (-not $backend.HasExited) {
-              Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
-            }
+            if (-not $backend.HasExited) { Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue }
           }
 
-          if (-not (Test-Path $stateDir)) {
-            throw 'Smoke-test state directory was not created.'
-          }
+          if (-not (Test-Path $stateDir)) { throw 'Smoke-test state directory was not created.' }
 
-          $uninstallArgs = @(
-            '/x',
-            "`"$msi`"",
-            '/qn',
-            '/norestart',
-            '/L*v',
-            "`"$uninstallLog`""
-          )
+          $uninstallArgs = @('/x', "`"$msi`"", '/qn', '/norestart', '/L*v', "`"$uninstallLog`"")
           $uninstaller = Start-Process -FilePath 'msiexec.exe' -ArgumentList $uninstallArgs -Wait -PassThru
           if ($uninstaller.ExitCode -notin @(0, 3010)) {
             if (Test-Path $uninstallLog) { Get-Content $uninstallLog | Select-Object -Last 200 | Write-Host }
             throw "MSI uninstall failed with exit code $($uninstaller.ExitCode)."
           }
 
-          if (Test-Path $exe) {
-            throw 'SleepMate.exe remained after MSI uninstall.'
-          }
-          if (-not (Test-Path $stateDir)) {
-            throw 'User state was removed by MSI uninstall; state must be preserved.'
-          }
-
+          if (Test-Path $exe) { throw 'SleepMate.exe remained after MSI uninstall.' }
+          if (-not (Test-Path $stateDir)) { throw 'User state was removed by MSI uninstall; state must be preserved.' }
           Write-Host 'MSI uninstall contract OK: program removed, user state preserved.'
 
       - name: Upload complete unsigned CI release set
