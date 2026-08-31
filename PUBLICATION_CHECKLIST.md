@@ -24,7 +24,8 @@ The canonical public repository and the first public MSI-form Windows candidate 
 - [x] Installer architecture is migrated to the intended SignPath-supported MSI production format and has passed build/install/runtime/uninstall CI.
 - [x] A public release exists in the same general MSI form that will later be signed: `v5.2.16` / `SleepMate_Setup_v5.2.16.msi`.
 - [x] The one-time unsigned release publisher used only to satisfy the pre-application MSI-release requirement has been removed; normal CI does not publish GitHub Releases.
-- [ ] Submit the SignPath Foundation application.
+- [ ] Add a visible **Code signing policy** section/link to the `v5.2.16` GitHub Release page, including the required SignPath Foundation attribution and privacy-policy link.
+- [ ] Submit the SignPath Foundation application only after the release-page requirement above is complete.
 
 ## Production signing activation
 
