@@ -57,22 +57,63 @@ def content_hash(source_dir: Path) -> str:
     return h.hexdigest()
 
 
-def write_license_rtf(output_dir: Path) -> Path:
-    """Create a deterministic RTF copy of the repository license for WixUI."""
+def _rtf_escape(text: str) -> str:
+    """Escape Unicode text for a deterministic ANSI RTF stream."""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    out: list[str] = []
+    for char in text:
+        if char == "\\":
+            out.append(r"\\")
+        elif char == "{":
+            out.append(r"\{")
+        elif char == "}":
+            out.append(r"\}")
+        elif char == "\n":
+            out.append("\\par\n")
+        else:
+            code = ord(char)
+            if code < 128:
+                out.append(char)
+            elif code <= 0xFFFF:
+                signed = code if code <= 32767 else code - 65536
+                out.append(f"\\u{signed}?")
+            else:
+                # Encode supplementary characters as UTF-16 surrogate pairs.
+                value = code - 0x10000
+                high = 0xD800 + (value >> 10)
+                low = 0xDC00 + (value & 0x3FF)
+                out.append(f"\\u{high - 65536}?\\u{low - 65536}?")
+    return "".join(out)
+
+
+def write_legal_rtf(output_dir: Path) -> Path:
+    """Create the single scrollable legal document accepted by the MSI wizard."""
     repo_root = Path(__file__).resolve().parents[1]
-    license_path = repo_root / "LICENSE"
-    text = license_path.read_text(encoding="utf-8", errors="replace")
-    escaped = (
-        text.replace("\\", r"\\")
-        .replace("{", r"\{")
-        .replace("}", r"\}")
-        .replace("\r\n", "\n")
-        .replace("\r", "\n")
-        .replace("\n", r"\par " + "\n")
+    license_text = (repo_root / "LICENSE").read_text(encoding="utf-8", errors="replace")
+    privacy_text = (repo_root / "PRIVACY.md").read_text(encoding="utf-8", errors="replace")
+    combined = (
+        "SLEEPMATE — JOGI FELTÉTELEK ÉS ADATVÉDELEM\n\n"
+        "A telepítés folytatásával az alábbi licencfeltételeket és adatvédelmi "
+        "tájékoztatót együttesen fogadod el. A dokumentumok a telepített "
+        "alkalmazás mellett és a projekt nyilvános GitHub-tárhelyén külön is "
+        "elérhetők.\n\n"
+        "============================================================\n"
+        "LICENCFELTÉTELEK\n"
+        "============================================================\n\n"
+        + license_text
+        + "\n\n============================================================\n"
+        "ADATVÉDELMI TÁJÉKOZTATÓ\n"
+        "============================================================\n\n"
+        + privacy_text
     )
-    rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Segoe UI;}}\\fs18\n" + escaped + "\n}"
-    target = output_dir / "SleepMate-License.rtf"
-    target.write_text(rtf, encoding="ascii", errors="backslashreplace")
+    rtf = (
+        "{\\rtf1\\ansi\\ansicpg1250\\uc1\\deff0"
+        "{\\fonttbl{\\f0 Segoe UI;}}\\fs18\n"
+        + _rtf_escape(combined)
+        + "\n}"
+    )
+    target = output_dir / "SleepMate-Legal.rtf"
+    target.write_text(rtf, encoding="ascii")
     return target
 
 
@@ -101,7 +142,7 @@ def main() -> int:
     product_code = uuid.uuid5(PRODUCT_NAMESPACE, f"SleepMate:{version}")
     package_code = uuid.uuid5(PACKAGE_NAMESPACE, f"SleepMate:{version}:{tree_sha256}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    license_rtf = write_license_rtf(output.parent)
+    legal_rtf = write_legal_rtf(output.parent)
 
     wix = ET.Element(q("Wix"))
     product = ET.SubElement(
@@ -110,7 +151,7 @@ def main() -> int:
         {
             "Id": "{" + str(product_code).upper() + "}",
             "Name": "SleepMate",
-            "Language": "1033",
+            "Language": "1038",
             "Version": version,
             "Manufacturer": PUBLISHER,
             "UpgradeCode": "{" + str(UPGRADE_CODE).upper() + "}",
@@ -121,11 +162,12 @@ def main() -> int:
         q("Package"),
         {
             "Id": "{" + str(package_code).upper() + "}",
-            "Description": "SleepMate PAP/CPAP therapy companion",
+            "Description": "SleepMate PAP/CPAP terápiás társalkalmazás",
             "Manufacturer": PUBLISHER,
             "InstallerVersion": "500",
             "Compressed": "yes",
             "InstallScope": "perUser",
+            "SummaryCodepage": "1250",
         },
     )
     ET.SubElement(
@@ -133,7 +175,7 @@ def main() -> int:
         q("MajorUpgrade"),
         {
             "AllowSameVersionUpgrades": "yes",
-            "DowngradeErrorMessage": "A newer version of SleepMate is already installed.",
+            "DowngradeErrorMessage": "A SleepMate újabb verziója már telepítve van ezen a számítógépen.",
         },
     )
     ET.SubElement(product, q("MediaTemplate"), {"EmbedCab": "yes"})
@@ -141,7 +183,7 @@ def main() -> int:
     ET.SubElement(
         product,
         q("Condition"),
-        {"Message": "SleepMate requires 64-bit Windows."},
+        {"Message": "A SleepMate 64 bites Windows rendszert igényel."},
     ).text = "Installed OR VersionNT64"
 
     legacy_prop = ET.SubElement(product, q("Property"), {"Id": "LEGACY_INNO_UNINSTALL"})
@@ -162,9 +204,9 @@ def main() -> int:
         q("Condition"),
         {
             "Message": (
-                "A legacy SleepMate installer is still registered. "
-                "Uninstall the previous SleepMate application first; "
-                "your data under %LOCALAPPDATA%\\SleepMate will be preserved."
+                "Egy korábbi SleepMate telepítő még regisztrálva van. "
+                "Előbb távolítsd el a korábbi SleepMate alkalmazást; "
+                "a %LOCALAPPDATA%\\SleepMate mappában tárolt felhasználói adatok megmaradnak."
             )
         },
     ).text = "Installed OR NOT LEGACY_INNO_UNINSTALL"
@@ -315,7 +357,7 @@ def main() -> int:
         {
             "Id": "SleepMateStartMenuShortcut",
             "Name": "SleepMate",
-            "Description": "SleepMate PAP/CPAP therapy companion",
+            "Description": "SleepMate PAP/CPAP terápiás társalkalmazás",
             "Target": "[INSTALLFOLDER]SleepMate.exe",
             "WorkingDirectory": "INSTALLFOLDER",
             "Icon": "SleepMateIcon",
@@ -363,7 +405,7 @@ def main() -> int:
         {
             "Id": "SleepMateDesktopShortcutLink",
             "Name": "SleepMate",
-            "Description": "SleepMate PAP/CPAP therapy companion",
+            "Description": "SleepMate PAP/CPAP terápiás társalkalmazás",
             "Target": "[INSTALLFOLDER]SleepMate.exe",
             "WorkingDirectory": "INSTALLFOLDER",
             "Icon": "SleepMateIcon",
@@ -444,12 +486,12 @@ def main() -> int:
     )
     ET.SubElement(startup_feature, q("ComponentRef"), {"Id": "SleepMateStartup"})
 
-    # Real Windows Installer wizard. FeatureTree gives the user a destination
-    # browser, disk-cost information and explicit optional Windows integration.
+    # A WixUI_FeatureTree valódi telepítővarázslót ad: jogi elfogadás,
+    # komponensválasztás, telepítési mappa, lemezterület és összegzés.
     ET.SubElement(product, q("Property"), {"Id": "WIXUI_INSTALLDIR", "Value": "INSTALLFOLDER"})
     ET.SubElement(product, q("Property"), {"Id": "WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Value": "SleepMate indítása"})
     ET.SubElement(product, q("Property"), {"Id": "WIXUI_EXITDIALOGOPTIONALCHECKBOX", "Value": "1"})
-    ET.SubElement(product, q("WixVariable"), {"Id": "WixUILicenseRtf", "Value": license_rtf.as_posix()})
+    ET.SubElement(product, q("WixVariable"), {"Id": "WixUILicenseRtf", "Value": legal_rtf.as_posix()})
     ET.SubElement(product, q("UIRef"), {"Id": "WixUI_FeatureTree"})
     ET.SubElement(product, q("UIRef"), {"Id": "WixUI_ErrorProgressText"})
 
@@ -485,7 +527,7 @@ def main() -> int:
 
     print(
         f"Generated {output} with {len(files)} payload files; "
-        f"tree_sha256={tree_sha256}; product_code={product_code}; wizard=WixUI_FeatureTree"
+        f"tree_sha256={tree_sha256}; product_code={product_code}; wizard=WixUI_FeatureTree; language=hu-HU"
     )
     return 0
 
