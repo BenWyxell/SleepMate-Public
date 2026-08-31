@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
@@ -54,6 +55,29 @@ def _write(app_module, state: dict[str, Any]) -> dict[str, Any]:
     return state
 
 
+def _installer_startup_choice() -> bool:
+    """Read the MSI startup feature from the HKCU Run entry it owns.
+
+    The MSI creates the SleepMate Run value only when the optional StartupFeature
+    is selected. Reading it before app.main() lets a brand-new config inherit the
+    installer's choice instead of the tray immediately undoing that choice with
+    its historical default (False). Existing configs are never overridden.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import winreg
+
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Run",
+        ) as key:
+            value, _ = winreg.QueryValueEx(key, "SleepMate")
+            return bool(str(value or "").strip())
+    except OSError:
+        return False
+
+
 def _safe_choices(value: Any) -> dict[str, Any]:
     """Persist only non-secret first-run choices; never credentials or tokens."""
     if not isinstance(value, dict):
@@ -88,6 +112,23 @@ def install_onboarding(app_module) -> None:
     handler_cls = app_module.Handler
     original_get = handler_cls.do_GET
     original_post = handler_cls.do_POST
+    original_load_config = app_module.load_config
+
+    # Preserve upgrades exactly as they are. Only a genuinely fresh installation
+    # inherits the Windows-startup feature selected in the MSI wizard.
+    try:
+        existing_config = bool(app_module.config_path(app_module.APP_BASE).is_file())
+    except Exception:
+        existing_config = False
+    installer_startup = _installer_startup_choice()
+
+    def load_config():
+        cfg = original_load_config()
+        if not existing_config and not _load(app_module).get("completed", False):
+            cfg["start_with_windows"] = installer_startup
+        return cfg
+
+    app_module.load_config = load_config
 
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
@@ -97,6 +138,8 @@ def install_onboarding(app_module) -> None:
                 **state,
                 "app_version": app_module.APP_VERSION,
                 "state_file": "private/onboarding.json",
+                "installer_start_with_windows": installer_startup if not existing_config else None,
+                "existing_configuration": existing_config,
             })
         return original_get(self)
 
