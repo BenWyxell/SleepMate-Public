@@ -3,26 +3,30 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_windows_release_pipeline_uses_msi_and_no_active_inno_builder():
+def test_windows_release_pipeline_uses_localized_msi_and_no_active_inno_builder():
     assert (ROOT / "sleepmate_main.py").is_file()
     assert (ROOT / "build/windows/SleepMate.spec").is_file()
     assert (ROOT / "build/windows/SleepMateUpdater.spec").is_file()
     assert (ROOT / "scripts/generate_msi_wxs.py").is_file()
+    assert (ROOT / "build/windows/msi/SleepMate.hu-HU.wxl").is_file()
     assert (ROOT / ".github/workflows/windows-release.yml").is_file()
 
     workflow = (ROOT / ".github/workflows/windows-release.yml").read_text(encoding="utf-8")
-    assert "Windows build + MSI - unsigned CI only" in workflow
-    assert "sudo apt-get install -y msitools" in workflow
-    assert "wixl -v -a x64" in workflow
-    assert "SleepMate_Setup_v${VERSION}.msi" in workflow
+    assert "Windows build + Hungarian MSI - unsigned CI only" in workflow
+    assert "choco install wixtoolset --version 3.14.1.20250415" in workflow
+    assert "WIX_CANDLE" in workflow
+    assert "WIX_LIGHT" in workflow
+    assert "-ext WixUIExtension" in workflow
+    assert "-cultures:hu-HU" in workflow
+    assert "SleepMate.hu-HU.wxl" in workflow
+    assert "SleepMate-Legal.rtf" in workflow
+    assert "SleepMate_Setup_v${version}.msi" in workflow
     assert "msiexec.exe" in workflow
     assert "'/i'" in workflow
     assert "'/x'" in workflow
     assert "Install Inno Setup" not in workflow
     assert "WINDOWS_CERT_PFX_BASE64" not in workflow
     assert "WINDOWS_CERT_PASSWORD" not in workflow
-    # The one-time public unsigned 5.2.16 candidate has already been published.
-    # Normal CI must never publish a GitHub Release on its own.
     assert "gh release create" not in workflow
     assert "publish-unsigned" not in workflow
 
@@ -70,20 +74,35 @@ def test_windows_release_uses_locked_dependencies_and_packages_notices():
 def test_msi_generator_contract():
     text = (ROOT / "scripts/generate_msi_wxs.py").read_text(encoding="utf-8")
     assert 'InstallScope": "perUser"' in text
+    assert '"Language": "1038"' in text
+    assert '"SummaryCodepage": "1250"' in text
     assert "MajorUpgrade" in text
     assert "LocalAppDataFolder" in text
     assert "INSTALLFOLDER" in text
     assert "SleepMateStartMenuShortcut" in text
     assert "SleepMateUninstallShortcut" in text
+    assert "SleepMateDesktopShortcut" in text
+    assert "SleepMateStartup" in text
     assert "LEGACY_INNO_UNINSTALL" in text
     assert "SleepMateUpdater.exe" in text
     assert "SleepMate.ico" in text
-    # Architecture is supplied to wixl with `-a x64`; wixl 0.103 rejects
-    # newer WiX attributes such as Package/@Platform and File/@Vital.
+    assert "WixUI_FeatureTree" in text
+    assert "WixUI_ErrorProgressText" in text
+    assert "write_legal_rtf" in text
+    assert 'repo_root / "LICENSE"' in text
+    assert 'repo_root / "PRIVACY.md"' in text
+    assert "SleepMate-Legal.rtf" in text
+    assert "Licencfeltételek" in text
+    assert "ADATVÉDELMI TÁJÉKOZTATÓ" in text
+    # Architecture is supplied to candle with -arch x64.
     assert '"Platform": "x64"' not in text
     assert '"CompressionLevel": "high"' not in text
     assert '"Vital": "yes"' not in text
-    assert "q(\"Condition\")" not in text[text.find("component_ids: list[str]"):]
+
+    loc = (ROOT / "build/windows/msi/SleepMate.hu-HU.wxl").read_text(encoding="utf-8")
+    assert 'Culture="hu-HU"' in loc
+    assert "Licencfeltételek és adatvédelem" in loc
+    assert "Adatvédelmi tájékoztatót" in loc
 
 
 def test_binary_release_builder_contract():
