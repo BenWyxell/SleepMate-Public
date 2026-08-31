@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from urllib.parse import urlparse
 
@@ -9,7 +8,7 @@ _installed = False
 
 
 def _installer_defaults() -> dict:
-    """Read the choices written by the Windows MSI, without making MSI own app state."""
+    """Read choices written by the MSI without making MSI own application state."""
     defaults = {"setup_language": "hu", "setup_start_with_windows": True}
     if os.name != "nt":
         return defaults
@@ -32,7 +31,7 @@ def _installer_defaults() -> dict:
 
 
 def install_setup_v5217(app_module) -> None:
-    """Install the v5.2.17 first-run setup contract without duplicating app settings logic."""
+    """Install the v5.2.17 first-run setup contract."""
     global _installed
     if _installed:
         return
@@ -44,10 +43,14 @@ def install_setup_v5217(app_module) -> None:
 
     def load_config():
         cfg = original_load_config()
+        fresh_setup = "setup_complete" not in cfg
         if "setup_language" not in cfg:
             cfg["setup_language"] = installer["setup_language"]
         cfg["setup_language"] = "en" if str(cfg.get("setup_language") or "hu").lower() == "en" else "hu"
-        if "setup_complete" not in cfg:
+        if fresh_setup:
+            # Honour the choice made in the MSI immediately. The tray monitor
+            # consumes /api/config and applies the matching HKCU Run entry.
+            cfg["start_with_windows"] = bool(installer["setup_start_with_windows"])
             cfg["setup_complete"] = False
         if "setup_start_with_windows" not in cfg:
             cfg["setup_start_with_windows"] = bool(installer["setup_start_with_windows"])
