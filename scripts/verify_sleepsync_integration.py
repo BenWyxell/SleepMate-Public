@@ -199,9 +199,11 @@ force = UPDATER.index("stop_process_tree(tray_pid", gr)
 image_fallback = UPDATER.index("stop_sleepmate_image_processes(launcher_exe", gr)
 require(gr < force < image_fallback, "force-kill can run before graceful tray icon cleanup")
 
-# Release/PWA shell. No shell asset changed in 5.2.16, so the existing shell cache
-# generation intentionally remains 5.2.14-ss131 while the desktop backend version advances.
-require('APP_VERSION = "5.2.16"' in VERSION, "release version is not 5.2.16")
+# Release/PWA shell. Installer/onboarding releases can advance the desktop app
+# without changing these field-proven PWA shell asset generations. The actual
+# release version has one canonical source in cpap/version.py and must remain semver.
+version_match = re.search(r'^APP_VERSION\s*=\s*"(\d+\.\d+\.\d+)"\s*$', VERSION, re.MULTILINE)
+require(version_match is not None, "release version source is missing or invalid")
 require("sleepmate-shell-v5.2.14-ss131" in SERVICE_WORKER, "live PWA shell cache is not 5.2.14-ss131")
 require("sleepmate-api-v5.2.14-ss131" in SERVICE_WORKER, "live PWA API cache is not 5.2.14-ss131")
 for asset in (
