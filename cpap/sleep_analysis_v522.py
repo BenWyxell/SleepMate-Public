@@ -52,6 +52,7 @@ def _install_shell_loader(app_module) -> None:
                 if "sleepmate-sleep-v524.js" not in text: scripts.append('<script src="/sleepmate-sleep-v524.js?v=5.2.6"></script>')
                 if "sleepmate-sleep-refresh-v5212.js" not in text: scripts.append('<script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>')
                 if "o2ring.js" not in text: scripts.append('<script src="/o2ring.js?v=5.3.0"></script>')
+                if "o2ring-report-ui.js" not in text: scripts.append('<script src="/o2ring-report-ui.js?v=5.3.0"></script>')
                 if scripts:
                     marker="</body>"; inject="\n"+"\n".join(scripts)+"\n"; text=text.replace(marker,inject+marker,1) if marker in text else text+inject
                 body=text.encode("utf-8"); self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8"); self.send_header("Content-Length",str(len(body))); self.send_header("Cache-Control","no-cache"); self.end_headers(); self.wfile.write(body); return
