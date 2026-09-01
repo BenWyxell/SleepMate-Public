@@ -4,6 +4,7 @@ import urllib.parse
 from typing import Any
 
 from .o2ring_integration import get_service
+from .o2ring_lifecycle import start_reliably
 
 
 _installed = False
@@ -70,7 +71,7 @@ def install_o2ring_device_config(app_module) -> None:
                 if not update:
                     return self._json({"error": "Nincs módosítható készülékbeállítás."}, 400)
                 service.manager.queue_device_config(update)
-                service.manager.start(sync_on_start=False)
+                start_reliably(service.manager, sync_on_start=False)
                 return self._json({"ok": True, "queued": sorted(update)})
             except Exception as exc:
                 return self._json({"error": str(exc)}, 400)
