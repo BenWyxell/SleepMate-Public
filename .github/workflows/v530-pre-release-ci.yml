@@ -83,6 +83,14 @@ jobs:
           foreach ($needle in @('env(safe-area-inset-bottom)','--sm-mobile-items','@media (max-width:900px)','@media (max-width:520px)')) {
             if ($css -notmatch [regex]::Escape($needle)) { throw "Responsive PWA CSS contract missing: $needle" }
           }
+          $shell = Get-Content '.\cpap\v530_features.py' -Raw
+          if ($shell -notmatch 'sm-o2-master-visibility' -or $shell -notmatch 'smO2Enabled:not\(:checked\)') {
+            throw 'O2Ring master-off visibility guard is missing.'
+          }
+          $reportUi = Get-Content '.\web\o2ring-report-ui.js' -Raw
+          if ($reportUi -notmatch "dataset\.o2ringFeature='1'" -or $reportUi -notmatch 'function uninstall') {
+            throw 'O2Ring report option is not removable when the master feature is disabled.'
+          }
 
       - name: Upload program tree for MSI job
         uses: actions/upload-artifact@v4
@@ -220,7 +228,7 @@ jobs:
               try { $version = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/version" -TimeoutSec 2; break } catch { Start-Sleep -Milliseconds 500 }
             }
             if (-not $version) { throw 'Installed backend did not become healthy.' }
-            if ($version.app -ne 'SleepMate' -or $version.version -ne '5.3.0' -or [int]$version.api -ne 20) { throw "Unexpected version API: $($version|ConvertTo-Json -Compress)" }
+            if ($version.app -ne 'SleepMate' -or $version.version -ne '5.3.0' -or [int]$version.api -ne 19) { throw "Unexpected version API: $($version|ConvertTo-Json -Compress)" }
 
             $o2 = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/o2ring/status" -TimeoutSec 5
             if ($o2.feature_enabled -ne $false -or $o2.ble_enabled -ne $false) { throw "O2Ring must be fully hidden/disabled by default: $($o2|ConvertTo-Json -Compress)" }
@@ -243,7 +251,7 @@ jobs:
             if ($o2Off.feature_enabled -ne $false -or $o2Off.settings.o2ring_preferred_address -ne 'CI-RING-REMEMBERED') { throw 'Master-off must preserve remembered ring.' }
 
             $html = (Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 5).Content
-            foreach ($needle in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css')) { if ($html -notmatch [regex]::Escape($needle)) { throw "Installed shell missing $needle" } }
+            foreach ($needle in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','sm-o2-master-visibility')) { if ($html -notmatch [regex]::Escape($needle)) { throw "Installed shell missing $needle" } }
             if ($html -match 'data-page="oximetry"') { throw 'Base HTML must not hard-code an Oximetria menu slot while feature is disabled.' }
 
             try { Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5 | Out-Null } catch {}
