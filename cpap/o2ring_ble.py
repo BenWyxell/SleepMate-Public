@@ -140,7 +140,8 @@ class O2RingBLEManager:
     )
 
     def __init__(self, *, known_file: Callable[[str], bool] | None = None,
-                 on_file: Callable[[str, bytes, dict[str, Any]], None] | None = None):
+                 on_file: Callable[[str, bytes, dict[str, Any]], None] | None = None,
+                 auto_sync_enabled: Callable[[], bool] | None = None):
         self._state = LiveO2State()
         self._lock = threading.RLock()
         self._thread: threading.Thread | None = None
@@ -150,6 +151,7 @@ class O2RingBLEManager:
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._known_file = known_file or (lambda _name: False)
         self._on_file = on_file
+        self._auto_sync_enabled = auto_sync_enabled or (lambda: True)
         self._assembler = _FrameAssembler()
         self._responses: asyncio.Queue[bytes] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -177,6 +179,7 @@ class O2RingBLEManager:
         self._preferred_address = str(address or "").strip() or None
 
     def request_sync(self):
+        """Explicit/manual sync request; this works even when auto-sync is off."""
         self._sync_requested.set()
 
     def queue_device_config(self, update: dict[str, Any]):
@@ -374,8 +377,16 @@ class O2RingBLEManager:
             self._state.last_sample_ts = now
             self._state.last_error = None
             payload = asdict(self._state)
+        # Ring removal only schedules an automatic VLD download when the user's
+        # auto-sync preference is enabled. Explicit /sync requests remain valid
+        # regardless of this preference.
         if previous_worn is True and update.get("worn") is False:
-            self._sync_requested.set()
+            try:
+                auto_sync = bool(self._auto_sync_enabled())
+            except Exception:
+                auto_sync = False
+            if auto_sync:
+                self._sync_requested.set()
         for listener in tuple(self._listeners):
             try:
                 listener(payload)
