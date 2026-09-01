@@ -28,10 +28,17 @@ jobs:
           python-version: '3.13'
           cache: 'pip'
 
-      - name: Validate Python and browser syntax
+      - name: Install locked Windows runtime
         shell: powershell
         run: |
+          python -m pip install --upgrade 'pip==26.2.1'
+          python -m pip install -r .\build\windows\requirements-runtime.lock
           python -m pip install pytest
+
+      - name: Validate BLE runtime and syntax
+        shell: powershell
+        run: |
+          python -c "from bleak import BleakClient, BleakScanner; import winrt.windows.devices.bluetooth; import winrt.windows.devices.bluetooth.genericattributeprofile; print('BLEAK_WINDOWS_RUNTIME_OK')"
           python -m py_compile .\cpap\oximetry.py .\cpap\o2ring_vld.py .\cpap\o2ring_ble.py .\cpap\o2ring_integration.py .\cpap\o2ring_device_config.py .\cpap\o2ring_report.py .\sleepmate_main.py
           node --check .\web\o2ring.js
 
