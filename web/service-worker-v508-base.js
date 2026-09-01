@@ -1,8 +1,8 @@
 const CACHE='sleepmate-shell-v5.2.14';
 const SHELL_CACHE='sleepmate-shell-v5.2.14';
 const API_CACHE='sleepmate-api-v5.2.14';
-const SHELL=['/','/index.html','/style.css?v=5.0.0','/app.js?v=5.0.0','/sleepmate-enhancements.js','/sleepmate-offline-runtime.js','/sleepsync-hydration-v529.js','/sleepsync-mobile-v5213.css','/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14','/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12','/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp'];
-const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|equipment(?:\/catalog)?|faq|glossary|system\/status|logs\/diagnostics|sleep-analysis)/;
+const SHELL=['/','/index.html','/style.css?v=5.0.0','/app.js?v=5.0.0','/sleepmate-enhancements.js','/sleepmate-offline-runtime.js','/sleepsync-hydration-v529.js','/sleepsync-mobile-v5213.css','/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14','/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12','/sleepmate-aurora.css?v=5.3.2','/sleepmate-v530.css?v=5.3.2','/sleepmate-v530.js?v=5.3.2','/o2ring.css?v=5.3.2','/o2ring.js?v=5.3.2','/o2ring-report-ui.js?v=5.3.2','/o2ring-v532.css?v=5.3.2','/o2ring-v532.js?v=5.3.2','/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp'];
+const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|equipment(?:\/catalog)?|faq|glossary|system\/status|logs\/diagnostics|sleep-analysis|o2ring\/(?:day|day-batch|trends))/;
 
 /*
  * A service worker must never fail to install merely because one optional shell
@@ -30,9 +30,8 @@ self.addEventListener('activate',event=>{event.waitUntil((async()=>{
   const stale=keys.filter(k=>![SHELL_CACHE,API_CACHE].includes(k));
   await Promise.all(stale.map(k=>caches.delete(k)));
   await self.clients.claim();
-  // Feature modules (notably Szekciók → Alvások) are versioned shell assets.
-  // When a new worker replaces an old PWA shell, reload live clients once so
-  // iOS/Android cannot keep running stale HTML that lacks the new module.
+  // Feature modules are versioned shell assets. When a new worker replaces an
+  // old PWA shell, reload live clients once so O2Ring/dashboard code cannot stay stale.
   if(stale.length){
     const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     await Promise.all(windows.map(async client=>{try{if('navigate'in client)await client.navigate(client.url)}catch{}}));
@@ -79,6 +78,6 @@ async function codeNetworkFirst(req){
     return fresh;
   }catch{const hit=await cache.match(req);if(hit)return hit;throw new Error('offline')}
 }
-self.addEventListener('fetch',event=>{const req=event.request,url=new URL(req.url);if(req.method!=='GET'||url.origin!==self.location.origin)return;if(url.pathname.startsWith('/api/')){if(OFFLINE_API.test(url.pathname)){event.respondWith(apiNetworkWithFallback(req));return}event.respondWith(fetch(req,{cache:'no-store'}));return}if(req.mode==='navigate'){event.respondWith(navigationFallback(req));return}const codeAsset=['/style.css','/app.js','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'].includes(url.pathname);if(codeAsset){event.respondWith(codeNetworkFirst(req));return}event.respondWith(caches.open(SHELL_CACHE).then(cache=>cache.match(req).then(hit=>hit||fetch(req).then(r=>{if(r.ok&&['image','font'].includes(req.destination))cache.put(req,r.clone());return r}))));});
+self.addEventListener('fetch',event=>{const req=event.request,url=new URL(req.url);if(req.method!=='GET'||url.origin!==self.location.origin)return;if(url.pathname.startsWith('/api/')){if(OFFLINE_API.test(url.pathname)){event.respondWith(apiNetworkWithFallback(req));return}event.respondWith(fetch(req,{cache:'no-store'}));return}if(req.mode==='navigate'){event.respondWith(navigationFallback(req));return}const codeAsset=['/style.css','/app.js','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/sleepmate-aurora.css','/sleepmate-v530.css','/sleepmate-v530.js','/o2ring.css','/o2ring.js','/o2ring-report-ui.js','/o2ring-v532.css','/o2ring-v532.js','/manifest.webmanifest'].includes(url.pathname);if(codeAsset){event.respondWith(codeNetworkFirst(req));return}event.respondWith(caches.open(SHELL_CACHE).then(cache=>cache.match(req).then(hit=>hit||fetch(req).then(r=>{if(r.ok&&['image','font'].includes(req.destination))cache.put(req,r.clone());return r}))));});
 self.addEventListener('push',event=>{let data={};try{data=event.data?.json()||{}}catch{data={body:event.data?.text()||''}}const title=data.title||'SleepMate';event.waitUntil(self.registration.showNotification(title,{body:data.body||'',tag:data.tag||'sleepmate',icon:'/assets/pwa-192.png',badge:'/assets/pwa-192.png',data:{url:data.url||'/#dashboard',event:data.event||'push'},renotify:false}))});
 self.addEventListener('notificationclick',event=>{event.notification.close();const raw=event.notification.data?.url||'/#dashboard',url=new URL(raw,self.location.origin).href;event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(async list=>{for(const c of list){if('navigate'in c)await c.navigate(url);if('focus'in c)return c.focus()}return clients.openWindow(url)}))});
