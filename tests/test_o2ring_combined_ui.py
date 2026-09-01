@@ -30,15 +30,18 @@ def test_combined_oximetry_timeline_has_shared_time_contract():
     assert "model.unit||SIGNALS[currentSignal].unit" in js
 
 
-def test_combined_timeline_is_embedded_in_dynamic_v53_shell_only():
+def test_combined_timeline_is_owned_by_v532_dynamic_shell_only():
     shell = (ROOT / "cpap" / "v530_features.py").read_text(encoding="utf-8")
+    runtime = (ROOT / "web" / "o2ring-v532.js").read_text(encoding="utf-8")
     base_html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 
-    assert '("o2ring-combined.js", "sm-o2-combined-inline")' in shell
-    assert "feature_path = app_module.WEB / filename" in shell
-    assert "sm-o2-combined-inline" in shell
+    assert 'feature_path = app_module.WEB / "o2ring-v532.js"' in shell
+    assert "sm-o2-v532-inline" in shell
     assert 'replace("</script", "<\\\\/script")' in shell
-    assert "o2ring-combined.js" not in base_html
+    assert "o2ring-combined.js" not in shell
+    assert "o2ring-v532.js" not in base_html
+    for marker in ("smO2FocusDual", "smStackO2Dual", "o2rLiveCombinedV532"):
+        assert marker in runtime
 
 
 def test_combined_timeline_is_inert_without_dynamic_o2_daily_panel():
