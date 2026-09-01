@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Patch the canonical publisher to support draft releases
+      - name: Build canonical publisher fix
         shell: bash
         run: |
           set -euo pipefail
@@ -65,16 +65,13 @@ jobs:
           git diff --check
           grep -F 'gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets' .github/workflows/windows-release.yml
 
-      - name: Persist canonical publisher fix and remove this one-time workflow
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          rm .github/workflows/fix-release-publisher-v5217.yml
-          git add .github/workflows/windows-release.yml .github/workflows/fix-release-publisher-v5217.yml
-          git commit -m 'fix(release): verify draft releases through gh release view'
-          git push origin HEAD:installer-wizard
+      - name: Export patched canonical workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: patched-windows-release-v5217
+          path: .github/workflows/windows-release.yml
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Re-verify the already smoke-tested draft release
         shell: bash
