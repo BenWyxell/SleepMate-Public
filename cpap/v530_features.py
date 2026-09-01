@@ -37,6 +37,11 @@ def install_v530_features(app_module) -> None:
             try:
                 index_path = app_module.WEB / "index.html"
                 text = index_path.read_text(encoding="utf-8")
+                # Never expose a stale source-shell cache key. Packaged builds may
+                # already contain the current version; these replacements are safe.
+                text = text.replace('/style.css?v=5.0.0', '/style.css?v=5.3.3')
+                text = text.replace('/app.js?v=5.0.0', '/app.js?v=5.3.3')
+                text = text.replace('<strong id="sidebarVersion">v2.7</strong>', '<strong id="sidebarVersion">v5.3.3</strong>')
 
                 head_assets: list[str] = []
                 if 'name="sleepmate-ui-version"' not in text:
