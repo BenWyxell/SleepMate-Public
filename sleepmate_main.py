@@ -81,19 +81,7 @@ def _tray_mutex_exists() -> bool:
 
 
 def _recover_stuck_tray() -> bool:
-    """Recover only a genuinely stale tray, never a healthy tray still starting.
-
-    A second SleepMate launch can happen while the first tray already owns the
-    singleton mutex but its backend has not finished binding yet.  The old logic
-    treated a *fresh* heartbeat as permission to taskkill that tray. Repeated
-    launches could therefore create several short-lived tray icons that Windows
-    kept as notification-area ghosts until Explorer refreshed them.
-
-    A fresh heartbeat now means exactly what it should mean: the tray is alive,
-    so leave it alone and let the normal singleton/open-request path handle the
-    second launch. Forced recovery is reserved for a tray whose heartbeat has
-    actually stopped for a meaningful period.
-    """
+    """Recover only a genuinely stale tray, never a healthy tray still starting."""
     if os.name != "nt" or not _tray_mutex_exists():
         return False
     if _sleepmate_port() is not None:
@@ -114,8 +102,6 @@ def _recover_stuck_tray() -> bool:
     except Exception:
         return False
 
-    # Give a stale tray one final chance to recover its backend before killing
-    # it. This path is intentionally unavailable to a freshly-starting tray.
     end = time.time() + 3.5
     while time.time() < end:
         if _sleepmate_port() is not None:
@@ -174,6 +160,7 @@ def main() -> int:
         from cpap.sleep_analysis_v522 import install_sleep_analysis_v522
         from cpap.sleepsync_integration import install_sleepsync_integration
         from cpap.google_drive_integration import install_google_drive_integration
+        from cpap.o2ring_integration import install_o2ring_integration
         install_v511_features()
         install_v512_features()
         install_v513_diagnostics()
@@ -182,6 +169,7 @@ def main() -> int:
         install_sleep_analysis_v522(app)
         install_sleepsync_integration(app)
         install_google_drive_integration(app)
+        install_o2ring_integration(app)
         app.main()
         return 0
 
