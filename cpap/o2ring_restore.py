@@ -15,11 +15,11 @@ import zipfile
 
 from .o2ring_ble import O2RingBLEManager
 from .o2ring_integration import DEFAULTS, get_service
+from .o2ring_lifecycle import start_reliably, stop_and_wait as _stop_and_wait
 from .oximetry import OximetryStore
 
 
 _installed = False
-_STOP_TIMEOUT_SECONDS = 20.0
 _BOOL_KEYS = {
     "o2ring_enabled",
     "o2ring_ble_enabled",
@@ -28,19 +28,6 @@ _BOOL_KEYS = {
     "o2ring_auto_match",
     "o2ring_show_motion",
 }
-
-
-def _stop_and_wait(manager, timeout: float = _STOP_TIMEOUT_SECONDS) -> None:
-    """Stop BLE and prove the worker cannot write into the restore target."""
-    manager.stop()
-    thread = getattr(manager, "_thread", None)
-    if thread is not None and thread.is_alive():
-        thread.join(max(0.1, float(timeout)))
-    if thread is not None and thread.is_alive():
-        raise RuntimeError(
-            "Az O2Ring Bluetooth háttérfolyamata nem állt le időben; "
-            "a backup visszaállítása biztonsági okból megszakadt."
-        )
 
 
 def _bool_value(value: Any, default: bool) -> bool:
@@ -128,7 +115,7 @@ def _rehydrate_service(service, *, restart: bool = True) -> dict[str, Any]:
         # Preserve the restored snapshot as a stable restore point. Do not
         # immediately pull additional historical files from ring memory during
         # the restore operation; normal later/manual sync remains available.
-        manager.start(sync_on_start=False)
+        start_reliably(manager, sync_on_start=False)
 
     with service._lock:
         known_count = len(service._known_source_names)
