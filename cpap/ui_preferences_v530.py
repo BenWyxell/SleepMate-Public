@@ -10,7 +10,7 @@ PWA_NAV_MAX_ITEMS = 6
 PWA_NAV_ALLOWED = {
     "dashboard", "patient", "sessions", "events", "reports", "ai",
     "equipment", "upload", "logs", "faq", "settings", "oximetry",
-    "charts", "more",
+    "oximetry_live", "charts", "more",
 }
 PWA_NAV_DEFAULT = ["dashboard", "sessions", "charts", "ai", "more"]
 
