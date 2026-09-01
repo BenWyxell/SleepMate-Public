@@ -187,7 +187,8 @@
 
   function drawAll(){
     if(!model)return;
-    const cpapRange=currentSignal==='pressure'?[Math.max(0,Math.min(...model.cpap.map(x=>x.value).filter(Number.isFinite))-1),Math.max(5,Math.max(...model.cpap.map(x=>x.value).filter(Number.isFinite))+1)]:null;
+    const pressureValues=model.cpap.map(x=>x.value).filter(Number.isFinite);
+    const cpapRange=currentSignal==='pressure'&&pressureValues.length?[Math.max(0,Math.min(...pressureValues)-1),Math.max(5,Math.max(...pressureValues)+1)]:null;
     drawBase('o2rCombinedCpap',model.cpap,x=>x.value,cpapRange,'cpap');
     drawBase('o2rCombinedSpo2',model.o2,x=>Number(x.spo2),[75,100],'spo2');
     drawBase('o2rCombinedHr',model.o2,x=>Number(x.heart_rate),niceRange(model.o2.map(x=>Number(x.heart_rate)).filter(Number.isFinite),[35,130]),'hr');
@@ -207,7 +208,7 @@
     const cp=nearest(model.cpap,t),ox=nearest(model.o2,t);
     const set=(id,text)=>{const e=document.getElementById(id);if(e)e.textContent=text};
     set('o2rCombinedTime',t==null?'–':clock(model.dayStart+t));
-    set('o2rCombinedCpapValue',cp?`${num(cp.value,currentSignal==='flow'?1:2)} ${SIGNALS[currentSignal].unit}`:'–');
+    set('o2rCombinedCpapValue',cp?`${num(cp.value,currentSignal==='flow'?1:2)} ${model.unit||SIGNALS[currentSignal].unit}`:'–');
     set('o2rCombinedSpo2Value',ox&&Number.isFinite(Number(ox.spo2))?`${Number(ox.spo2)}%`:'–');
     set('o2rCombinedHrValue',ox&&Number.isFinite(Number(ox.heart_rate))?`${Number(ox.heart_rate)} bpm`:'–');
   }
@@ -238,10 +239,10 @@
       const oxygen=(o2.samples||[]).map(x=>({...x,t:Number(x.t)})).filter(x=>Number.isFinite(x.t)).sort((a,b)=>a.t-b.t);
       if(!o2.available||!oxygen.length)throw new Error('Ehhez a CPAP-éjszakához még nincs időben átfedő O2Ring felvétel.');
       const events=(summary.events||[]).map(e=>({type:String(e.type||'OTHER'),t:new Date(e.time).getTime()/1000-dayStart})).filter(e=>Number.isFinite(e.t));
-      model={dayStart,xMin:0,xMax:Math.max(1,end),cpap,o2:oxygen,events,ref:Number(settings.o2ring_spo2_reference??90),ref2:Number(settings.o2ring_spo2_secondary_reference??88)};
       const meta=SIGNALS[currentSignal];
+      model={dayStart,xMin:0,xMax:Math.max(1,end),cpap,o2:oxygen,events,unit:String(signal.unit||meta.unit),ref:Number(settings.o2ring_spo2_reference??90),ref2:Number(settings.o2ring_spo2_secondary_reference??88)};
       const set=(id,text)=>{const e=document.getElementById(id);if(e)e.textContent=text};
-      set('o2rCombinedCpapTitle',meta.label);set('o2rCombinedCpapLabel',meta.label);set('o2rCombinedCpapUnit',signal.unit||meta.unit);set('o2rCombinedRef',String(model.ref));
+      set('o2rCombinedCpapTitle',meta.label);set('o2rCombinedCpapLabel',meta.label);set('o2rCombinedCpapUnit',model.unit);set('o2rCombinedRef',String(model.ref));
       if(status){const coverage=o2.summary?.coverage_percent;status.textContent=`${o2.matches?.length||0} CPAP–O2Ring átfedés • ${oxygen.length.toLocaleString('hu-HU')} oximetriai minta${coverage!=null?` • ${num(coverage,1)}% lefedettség`:''}`}
       drawAll();
     }catch(error){
