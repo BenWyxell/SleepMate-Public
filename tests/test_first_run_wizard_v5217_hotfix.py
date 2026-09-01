@@ -15,15 +15,19 @@ def test_desktop_first_run_has_no_pwa_or_broken_brand_image():
     assert "PWA / értesítések" not in JS
 
 
-def test_every_wizard_step_uses_global_scrollable_body():
-    assert "grid-template-rows:auto minmax(0,1fr) auto" in CSS
-    assert ".fr-body{min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto" in CSS
+def test_every_wizard_step_uses_forced_global_scrollable_body():
+    assert "display:flex;flex-direction:column" in CSS
+    assert ".fr-top{position:relative;z-index:2;display:flex;flex:0 0 auto" in CSS
+    assert ".fr-body{position:relative;flex:1 1 0;height:0;max-height:100%;min-width:0;min-height:0" in CSS
+    assert "overflow-y:scroll!important" in CSS
+    assert ".fr-footer{position:relative;z-index:3;display:flex;flex:0 0 auto" in CSS
+    assert "#sleepmateFirstRun *,#sleepmateFirstRun *::before,#sleepmateFirstRun *::after{box-sizing:border-box}" in CSS
     assert "height:min(820px,calc(100dvh - 52px))" in CSS
     assert "height:100dvh" in CSS
     assert "html.fr-open,html.fr-open body{overflow:hidden}" in CSS
     assert "body.scrollTop=0" in JS
 
 
-def test_first_run_cache_busters_follow_hotfix():
-    assert "/first-run.css?v=2" in JS
-    assert "/first-run.js?v=2" in HYDRATION
+def test_first_run_cache_busters_follow_scroll_hotfix():
+    assert "/first-run.css?v=3" in JS
+    assert "/first-run.js?v=3" in HYDRATION
