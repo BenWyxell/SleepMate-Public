@@ -41,7 +41,7 @@ def test_combined_timeline_is_owned_by_v532_dynamic_shell_only():
     assert 'replace("</script", "<\\\\/script")' in shell
     assert "o2ring-combined.js" not in shell
     assert "o2ring-v532.js" not in base_html
-    for marker in ("smO2FocusDual", "smStackO2Dual", "o2rLiveCombinedV532"):
+    for marker in ("smO2FocusDual", "smStackO2Dual", "smO2LiveCombined"):
         assert marker in runtime
 
 
