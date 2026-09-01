@@ -155,19 +155,41 @@ def test_first_run_onboarding_contract():
         "/api/remote/tailscale",
         "/api/remote/cloudflare",
         "/api/ai/config",
-        "window.installPwa",
-        "window.enablePwaNotifications",
         "Tailscale",
         "Cloudflare Tunnel",
         "Google Gemini",
         "Groq",
+        "Backup és",
     ):
         assert required in js
+
+    # The Windows MSI onboarding is desktop-focused: PWA installation and browser
+    # notification permission belong to the regular web/PWA settings, not first-run.
+    for forbidden in (
+        "window.installPwa",
+        "window.enablePwaNotifications",
+        "frPwaInstall",
+        "frNotify",
+        "PWA + Web Push",
+        "PWA / értesítések",
+        "sleepmate-logo.webp",
+        "icon-192.png",
+    ):
+        assert forbidden not in js
+
+    css = first_css.read_text(encoding="utf-8")
+    assert "grid-template-rows:auto minmax(0,1fr) auto" in css
+    assert ".fr-body{min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto" in css
+    assert "height:min(820px,calc(100dvh - 52px))" in css
+    assert "height:100dvh" in css
+    assert "html.fr-open,html.fr-open body{overflow:hidden}" in css
+    assert "body.scrollTop=0" in js
+    assert "/first-run.css?v=2" in js
 
     hydration_text = hydration.read_text(encoding="utf-8")
     assert "loadPackagedOnboarding" in hydration_text
     assert "lateBootPackagedOnboarding" in hydration_text
-    assert "/first-run.js?v=1" in hydration_text
+    assert "/first-run.js?v=2" in hydration_text
 
     spec_text = spec.read_text(encoding="utf-8")
     assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec_text
