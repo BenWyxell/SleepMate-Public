@@ -104,30 +104,41 @@ jobs:
           test -s release-v5220-notes.md
           grep -q '^# SleepMate 5.2.20$' release-v5220-notes.md
 
-      - name: Create draft and upload only verified assets
+      - name: Create or resume draft and upload verified assets
         shell: bash
         run: |
           set -euo pipefail
 
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            existing="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG")"
-            test "$(jq -r '.draft' <<<"$existing")" = "true" || {
-              echo "Release $TAG already exists and is not a draft; refusing to overwrite." >&2
-              exit 1
-            }
-            test "$(jq -r '.target_commitish' <<<"$existing")" = "$TARGET_SHA"
-          else
+          if gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" >/dev/null 2>&1; then
+            echo "A published release already exists for $TAG; refusing to overwrite." >&2
+            exit 1
+          fi
+
+          release_id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$TAG\" and .draft == true) | .id" | head -n1)"
+
+          if [[ -z "$release_id" ]]; then
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --target "$TARGET_SHA" \
               --title "SleepMate 5.2.20 — Windows MSI + hivatalos frissítések" \
               --notes-file release-v5220-notes.md \
               --draft
+            release_id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq ".[] | select(.tag_name == \"$TAG\" and .draft == true) | .id" | head -n1)"
           fi
+
+          test -n "$release_id"
+          draft="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id")"
+          test "$(jq -r '.draft' <<<"$draft")" = "true"
+          test "$(jq -r '.tag_name' <<<"$draft")" = "$TAG"
+          test "$(jq -r '.target_commitish' <<<"$draft")" = "$TARGET_SHA"
 
           gh release upload "$TAG" release-staging/* \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
+
+          echo "RELEASE_ID=$release_id" >> "$GITHUB_ENV"
 
       - name: Verify draft asset set and publish
         shell: bash
@@ -144,7 +155,7 @@ jobs:
             "build-msi-toolchain.txt" \
             "SHA256SUMS.txt" | sort)"
 
-          actual="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.assets[].name' | sort)"
+          actual="$(gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?per_page=100" --jq '.[].name' | sort)"
           if [[ "$actual" != "$expected" ]]; then
             echo "Unexpected GitHub Release asset set." >&2
             echo "Expected:" >&2
@@ -154,10 +165,10 @@ jobs:
             exit 1
           fi
 
-          gh release edit "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft=false \
-            --latest
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false \
+            -F prerelease=false \
+            -f make_latest=true >/dev/null
 
           published="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG")"
           test "$(jq -r '.draft' <<<"$published")" = "false"
