@@ -76,13 +76,14 @@ jobs:
             tests/test_windows_packaging_v500.py \
             tests/test_update_resilience_v525.py
 
-      - name: Remove temporary migration helpers
+      - name: Keep workflow-owned files out of runner commit
         shell: bash
         run: |
-          rm -f scripts/hotfix_public_updater_v5220.py
-          rm -f .github/workflows/public-updater-v5220.yml
+          git checkout HEAD -- .github/workflows/windows-release.yml
+          git checkout HEAD -- .github/workflows/public-updater-v5220.yml
+          git checkout HEAD -- scripts/hotfix_public_updater_v5220.py
 
-      - name: Commit final v5.2.20 changes
+      - name: Commit final v5.2.20 code changes
         shell: bash
         run: |
           set -euo pipefail
