@@ -1,0 +1,208 @@
+name: v5.3 O2Ring Aurora PWA pre-release CI
+
+on:
+  push:
+    branches: [v5.3.0-o2ring-aurora-pwa]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sleepmate-v530-pre-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 70
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Verify v5.2.20 ancestry and source syntax
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          git merge-base --is-ancestor d1516fb39a67d4666504c885fe1ab80f5b89022e HEAD
+          if($LASTEXITCODE -ne 0){throw 'Candidate is not descended from public v5.2.20.'}
+          python .\scripts\verify_public_source.py
+          if($LASTEXITCODE -ne 0){throw 'Public source gate failed.'}
+          python -m py_compile .\app.py .\sleepmate_main.py .\cpap\o2ring_ble.py .\cpap\o2ring_integration.py .\cpap\o2ring_vld.py .\cpap\oximetry.py .\cpap\o2ring_device_config.py .\cpap\o2ring_stream.py .\cpap\o2ring_report.py .\cpap\ui_preferences_v530.py .\cpap\v530_features.py
+          if($LASTEXITCODE -ne 0){throw 'Python syntax gate failed.'}
+          foreach($js in @('.\web\app.js','.\web\app-core.js','.\web\sleepmate-v530.js','.\web\o2ring.js','.\web\o2ring-report-ui.js','.\web\service-worker-v508-base.js')){
+            node --check $js
+            if($LASTEXITCODE -ne 0){throw "JavaScript syntax gate failed: $js"}
+          }
+
+      - name: Run all tests and build Windows program tree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          .\build\windows\build_release.ps1
+          if($LASTEXITCODE -ne 0){throw "Program-tree build failed: $LASTEXITCODE"}
+
+      - name: Verify responsive PWA and O2 feature shell
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $generated='build\windows\web-generated'
+          foreach($name in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','o2ring.js','o2ring.css','o2ring-report-ui.js')){
+            if(-not(Test-Path (Join-Path $generated $name))){throw "Generated asset missing: $name"}
+          }
+          $sw=Get-Content (Join-Path $generated 'service-worker.js') -Raw
+          foreach($needle in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','o2ring.js','o2ring.css','o2ring-report-ui.js')){
+            if($sw -notmatch [regex]::Escape($needle)){throw "Service-worker cache contract missing: $needle"}
+          }
+          $controller=Get-Content '.\web\sleepmate-v530.js' -Raw
+          foreach($needle in @('pwa_bottom_nav_max','--sm-mobile-items','availableNavIds','oximetry')){
+            if($controller -notmatch [regex]::Escape($needle)){throw "Dynamic PWA navigation contract missing: $needle"}
+          }
+          $css=Get-Content '.\web\sleepmate-v530.css' -Raw
+          if($css -notmatch 'env\(safe-area-inset-bottom\)'){throw 'Safe-area bottom support missing.'}
+          if($css -notmatch '--sm-mobile-items'){throw 'Dynamic bottom-nav grid variable missing.'}
+          if($css -notmatch '@media\s*\(\s*max-width\s*:\s*900px\s*\)'){throw '900px responsive breakpoint missing.'}
+          if($css -notmatch '@media\s*\(\s*max-width\s*:\s*520px\s*\)'){throw '520px responsive breakpoint missing.'}
+          $shell=Get-Content '.\cpap\v530_features.py' -Raw
+          if($shell -notmatch 'sm-o2-master-visibility' -or $shell -notmatch 'smO2Enabled:not\(:checked\)'){throw 'O2 master-off visibility guard missing.'}
+          $reportUi=Get-Content '.\web\o2ring-report-ui.js' -Raw
+          if($reportUi -notmatch "dataset\.o2ringFeature='1'" -or $reportUi -notmatch 'function uninstall'){throw 'Removable O2 PDF option contract missing.'}
+
+      - name: Upload program tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepMate-v530-PROGRAM-TREE
+          path: |
+            dist/SleepMate/**
+            release/SleepMate_v5.3.0_windows_x64.zip
+            release/sleepmate-update.json
+          if-no-files-found: error
+          retention-days: 2
+
+  build-msi:
+    needs: build-windows-x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install MSI toolchain
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y msitools wixl
+      - name: Download program tree
+        uses: actions/download-artifact@v4
+        with:
+          name: SleepMate-v530-PROGRAM-TREE
+          path: ci-input
+      - name: Generate, build and inspect MSI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test "$(python -c 'from cpap.version import APP_VERSION;print(APP_VERSION)')" = '5.3.0'
+          test -f ci-input/dist/SleepMate/SleepMate.exe
+          mkdir -p build/windows/msi release msi-extracted
+          python scripts/generate_msi_wxs.py --source-dir ci-input/dist/SleepMate --output build/windows/msi/SleepMate.generated.wxs --version 5.3.0
+          wixl -v -a x64 -o release/SleepMate_Setup_v5.3.0.msi build/windows/msi/SleepMate.generated.wxs
+          test -s release/SleepMate_Setup_v5.3.0.msi
+          sha256sum release/SleepMate_Setup_v5.3.0.msi | tee release/SleepMate_Setup_v5.3.0.msi.sha256
+          msiextract -C msi-extracted release/SleepMate_Setup_v5.3.0.msi
+          test -n "$(find msi-extracted -type f -name SleepMate.exe -print -quit)"
+          test -n "$(find msi-extracted -type f -name SleepMateUpdater.exe -print -quit)"
+          find msi-extracted -type f -print | sort > release/msi-inventory.txt
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepMate-v530-MSI-UNSIGNED-CI
+          path: |
+            release/SleepMate_Setup_v5.3.0.msi
+            release/SleepMate_Setup_v5.3.0.msi.sha256
+            release/msi-inventory.txt
+            build/windows/msi/SleepMate.generated.wxs
+          if-no-files-found: error
+          retention-days: 2
+
+  smoke-test-msi:
+    needs: [build-windows-x64, build-msi]
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Download MSI
+        uses: actions/download-artifact@v4
+        with:
+          name: SleepMate-v530-MSI-UNSIGNED-CI
+          path: ci-msi
+      - name: Install, boot, verify feature contracts and uninstall
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $msi=(Get-ChildItem ci-msi -Filter 'SleepMate_Setup_v5.3.0.msi' -File -Recurse|Select-Object -First 1).FullName
+          if(-not $msi){throw 'MSI missing.'}
+          $installDir=Join-Path $env:LOCALAPPDATA 'Programs\SleepMate-v530-CI'
+          $stateDir=Join-Path $env:RUNNER_TEMP 'SleepMate-v530-State'
+          $installLog=Join-Path $env:RUNNER_TEMP 'SleepMate-v530-Install.log'
+          $uninstallLog=Join-Path $env:RUNNER_TEMP 'SleepMate-v530-Uninstall.log'
+          Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+          $p=Start-Process msiexec.exe -ArgumentList @('/i',"`"$msi`"",'/qn','/norestart',"INSTALLFOLDER=`"$installDir`"",'/L*v',"`"$installLog`"") -Wait -PassThru
+          if($p.ExitCode -notin @(0,3010)){if(Test-Path $installLog){Get-Content $installLog|Select-Object -Last 200|Write-Host};throw "Install failed: $($p.ExitCode)"}
+          $exe=Join-Path $installDir 'SleepMate.exe'
+          if(-not(Test-Path $exe)){throw 'Installed EXE missing.'}
+          if(([string](Get-Item $exe).VersionInfo.ProductVersion).Trim() -ne '5.3.0'){throw 'ProductVersion mismatch.'}
+          $env:SLEEPMATE_STATE_DIR=$stateDir
+          $port=59896
+          $backend=Start-Process $exe -ArgumentList @('--backend','--host','127.0.0.1','--port',"$port",'--no-browser') -PassThru
+          try{
+            $v=$null
+            for($i=0;$i -lt 50;$i++){
+              if($backend.HasExited){throw "Backend exited early: $($backend.ExitCode)"}
+              try{$v=Invoke-RestMethod "http://127.0.0.1:$port/api/version" -TimeoutSec 2;break}catch{Start-Sleep -Milliseconds 500}
+            }
+            if(-not $v){throw 'Backend health timeout.'}
+            if($v.app -ne 'SleepMate' -or $v.version -ne '5.3.0' -or [int]$v.api -ne 19){throw "Version contract failed: $($v|ConvertTo-Json -Compress)"}
+            $o2=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/status" -TimeoutSec 5
+            if($o2.feature_enabled -ne $false -or $o2.ble_enabled -ne $false -or $o2.settings.o2ring_ble_enabled -ne $true){throw "Default O2 contract failed: $($o2|ConvertTo-Json -Compress)"}
+            $prefs=Invoke-RestMethod "http://127.0.0.1:$port/api/ui/preferences" -TimeoutSec 5
+            if([int]$prefs.pwa_bottom_nav_max -ne 6 -or @($prefs.pwa_bottom_nav).Count -ne 5){throw 'PWA defaults failed.'}
+            $prefs2=Invoke-RestMethod "http://127.0.0.1:$port/api/ui/preferences" -Method Post -ContentType 'application/json' -Body (@{pwa_bottom_nav=@('dashboard','sessions','charts','ai','reports','more')}|ConvertTo-Json -Compress) -TimeoutSec 5
+            if(@($prefs2.pwa_bottom_nav).Count -ne 6 -or $prefs2.pwa_bottom_nav[4] -ne 'reports'){throw 'Six-item PWA menu order failed.'}
+            $null=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/settings" -Method Post -ContentType 'application/json' -Body (@{o2ring_enabled=$true;o2ring_ble_enabled=$false;o2ring_auto_connect=$true;o2ring_preferred_address='CI-RING-REMEMBERED'}|ConvertTo-Json -Compress) -TimeoutSec 5
+            $on=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/status" -TimeoutSec 5
+            if($on.feature_enabled -ne $true -or $on.ble_enabled -ne $false -or $on.settings.o2ring_preferred_address -ne 'CI-RING-REMEMBERED'){throw 'Master-on/BLE-off contract failed.'}
+            $null=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/settings" -Method Post -ContentType 'application/json' -Body (@{o2ring_enabled=$false}|ConvertTo-Json -Compress) -TimeoutSec 5
+            $off=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/status" -TimeoutSec 5
+            if($off.feature_enabled -ne $false -or $off.settings.o2ring_preferred_address -ne 'CI-RING-REMEMBERED'){throw 'Master-off preservation failed.'}
+            $html=(Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 5).Content
+            foreach($needle in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','sm-o2-master-visibility')){if($html -notmatch [regex]::Escape($needle)){throw "Installed shell missing $needle"}}
+            if($html -match 'data-page="oximetry"'){throw 'Base HTML hard-codes Oximetria slot.'}
+            try{Invoke-RestMethod "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5|Out-Null}catch{}
+            if(-not $backend.WaitForExit(10000)){Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue}
+          }finally{if(-not $backend.HasExited){Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue}}
+          if(-not(Test-Path $stateDir)){throw 'State directory missing.'}
+          $u=Start-Process msiexec.exe -ArgumentList @('/x',"`"$msi`"",'/qn','/norestart','/L*v',"`"$uninstallLog`"") -Wait -PassThru
+          if($u.ExitCode -notin @(0,3010)){throw "Uninstall failed: $($u.ExitCode)"}
+          if(Test-Path $exe){throw 'EXE remained after uninstall.'}
+          if(-not(Test-Path $stateDir)){throw 'User state was removed on uninstall.'}
+      - name: Upload complete candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepMate-v530-UNSIGNED-CANDIDATE
+          path: ci-msi/release/SleepMate_Setup_v5.3.0.msi
+          if-no-files-found: error
+          retention-days: 2
