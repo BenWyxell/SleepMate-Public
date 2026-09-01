@@ -1,0 +1,121 @@
+name: MSI uninstall diagnostic
+
+on:
+  push:
+    branches:
+      - msi-uninstall-diagnostic
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnose:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+
+      - name: Download known MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SleepMate-MSI-UNSIGNED-CI
+          path: ci-msi
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: BenWyxell/SleepMate-Public
+          run-id: 33455598045
+
+      - name: Diagnose install and uninstall
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path 'diagnostics' | Out-Null
+          $msi = (Get-ChildItem -Path 'ci-msi' -Filter 'SleepMate_Setup_v5.2.17.msi' -File -Recurse | Select-Object -First 1).FullName
+          if (-not $msi) { throw 'SleepMate 5.2.17 MSI not found.' }
+
+          function Snapshot([string]$label, [string]$installDir) {
+            "===== $label =====" | Add-Content 'diagnostics\snapshot.txt'
+            "InstallDir=$installDir" | Add-Content 'diagnostics\snapshot.txt'
+            "Exists=$(Test-Path $installDir)" | Add-Content 'diagnostics\snapshot.txt'
+            if (Test-Path $installDir) {
+              Get-ChildItem $installDir -Recurse -Force -ErrorAction SilentlyContinue |
+                Select-Object FullName,Length,Attributes |
+                Format-Table -AutoSize | Out-String -Width 300 | Add-Content 'diagnostics\snapshot.txt'
+            }
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+              Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($installDir, [System.StringComparison]::OrdinalIgnoreCase) } |
+              Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine |
+              Format-List | Out-String -Width 500 | Add-Content 'diagnostics\snapshot.txt'
+          }
+
+          function Install([string]$installDir, [string]$log) {
+            Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+            $args = @('/i', "`"$msi`"", '/qn', '/norestart', "INSTALLFOLDER=`"$installDir`"", '/L*v', "`"$log`"")
+            $p = Start-Process msiexec.exe -ArgumentList $args -Wait -PassThru
+            "INSTALL $installDir EXIT=$($p.ExitCode)" | Add-Content 'diagnostics\result.txt'
+            if ($p.ExitCode -notin @(0,3010)) { throw "Install failed: $($p.ExitCode)" }
+          }
+
+          function Uninstall([string]$label, [string]$installDir, [string]$log) {
+            Snapshot "$label before uninstall" $installDir
+            $args = @('/x', "`"$msi`"", '/qn', '/norestart', '/L*v', "`"$log`"")
+            $p = Start-Process msiexec.exe -ArgumentList $args -Wait -PassThru
+            "UNINSTALL $label EXIT=$($p.ExitCode)" | Add-Content 'diagnostics\result.txt'
+            Start-Sleep -Seconds 2
+            Snapshot "$label after uninstall" $installDir
+            "LEFTOVER_EXE_$label=$(Test-Path (Join-Path $installDir 'SleepMate.exe'))" | Add-Content 'diagnostics\result.txt'
+            if (Test-Path $log) {
+              "===== $label uninstall log tail =====" | Add-Content 'diagnostics\uninstall-tails.txt'
+              Get-Content $log | Select-Object -Last 350 | Add-Content 'diagnostics\uninstall-tails.txt'
+            }
+          }
+
+          # Phase A: pure MSI install/uninstall, SleepMate is never launched.
+          $a = Join-Path $env:LOCALAPPDATA 'Programs\SleepMate-CI-Diag-A'
+          Install $a (Join-Path $env:RUNNER_TEMP 'diag-a-install.log')
+          Uninstall 'A_NO_LAUNCH' $a (Join-Path $env:RUNNER_TEMP 'diag-a-uninstall.log')
+
+          # Phase B: install, launch backend, verify API, shut it down, then uninstall.
+          $b = Join-Path $env:LOCALAPPDATA 'Programs\SleepMate-CI-Diag-B'
+          $state = Join-Path $env:RUNNER_TEMP 'SleepMate-Diag-State'
+          Remove-Item $state -Recurse -Force -ErrorAction SilentlyContinue
+          Install $b (Join-Path $env:RUNNER_TEMP 'diag-b-install.log')
+          $exe = Join-Path $b 'SleepMate.exe'
+          $env:SLEEPMATE_STATE_DIR = $state
+          $port = 59896
+          $backend = Start-Process -FilePath $exe -ArgumentList @('--backend','--host','127.0.0.1','--port',"$port",'--no-browser') -PassThru
+          for ($i=0; $i -lt 40; $i++) {
+            if ($backend.HasExited) { break }
+            try {
+              $v = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/version" -TimeoutSec 2
+              "API=$($v | ConvertTo-Json -Compress)" | Add-Content 'diagnostics\result.txt'
+              break
+            } catch { Start-Sleep -Milliseconds 500 }
+          }
+          Snapshot 'B_RUNNING' $b
+          try { Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5 | Out-Null } catch {
+            "SHUTDOWN_ERROR=$($_.Exception.Message)" | Add-Content 'diagnostics\result.txt'
+          }
+          if (-not $backend.WaitForExit(10000)) {
+            "BACKEND_DID_NOT_EXIT=true" | Add-Content 'diagnostics\result.txt'
+            Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
+          } else {
+            "BACKEND_EXIT=$($backend.ExitCode)" | Add-Content 'diagnostics\result.txt'
+          }
+          Start-Sleep -Seconds 2
+          Snapshot 'B_AFTER_SHUTDOWN' $b
+          Uninstall 'B_AFTER_BACKEND' $b (Join-Path $env:RUNNER_TEMP 'diag-b-uninstall.log')
+
+          Get-Content 'diagnostics\result.txt' | Write-Host
+          Get-Content 'diagnostics\snapshot.txt' | Write-Host
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepMate-MSI-UNINSTALL-DIAGNOSTICS
+          path: diagnostics/**
+          if-no-files-found: warn
+          retention-days: 1
