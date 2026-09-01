@@ -65,6 +65,10 @@ def test_windows_release_uses_locked_dependencies_and_packages_notices():
     assert "Pillow==12.3.0" in runtime
     assert "pystray==0.19.5" in runtime
     assert "cryptography==50.0.1" in runtime
+    assert "bleak==3.0.2" in runtime
+    assert "winrt-runtime==3.2.1" in runtime
+    assert "winrt-Windows.Devices.Bluetooth==3.2.1" in runtime
+    assert "winrt-Windows.Devices.Bluetooth.GenericAttributeProfile==3.2.1" in runtime
     assert "pyinstaller==6.22.2" in build_deps
     assert "pytest==9.1.1" in build_deps
 
@@ -78,7 +82,11 @@ def test_windows_release_uses_locked_dependencies_and_packages_notices():
     assert "LICENSE" in build
 
     notice_text = notices.read_text(encoding="utf-8")
-    assert "Reference release: `v5.2.16`" in notice_text
+    assert "Reference release: `v5.3.0`" in notice_text
+    assert "Bleak 3.0.2" in notice_text
+    assert "PyWinRT 3.2.1" in notice_text
+    assert "WiX Toolset" in notice_text
+    assert "3.14.1.20250415" in notice_text
     assert "LGPL-3.0-or-later" in notice_text
     assert "MIT-CMU" in notice_text
     assert "BSD-3-Clause" in notice_text
