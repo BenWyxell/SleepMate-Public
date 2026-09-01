@@ -1,0 +1,99 @@
+name: MSI remembered install path diagnostic
+
+on:
+  push:
+    branches:
+      - msi-remember-path-diagnostic
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-custom-path-uninstall:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout patched source
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Download known-good Windows program tree
+        uses: actions/download-artifact@v4
+        with:
+          name: SleepMate-Windows-x64-PROGRAM-TREE
+          path: ci-input
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: BenWyxell/SleepMate-Public
+          run-id: 33455598045
+
+      - name: Install pinned WiX Toolset 3.14.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install wixtoolset --version 3.14.1.20250415 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "WiX Toolset installation failed: $LASTEXITCODE" }
+          $wixRoot = Get-ChildItem "${env:ProgramFiles(x86)}" -Directory -Filter 'WiX Toolset v3*' | Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $wixRoot) { throw 'WiX Toolset installation directory was not found.' }
+          "WIX_CANDLE=$(Join-Path $wixRoot.FullName 'bin\candle.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WIX_LIGHT=$(Join-Path $wixRoot.FullName 'bin\light.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build patched MSI from known-good payload
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path 'build\windows\msi','diag-release' | Out-Null
+          python .\scripts\generate_msi_wxs.py --source-dir .\ci-input\dist\SleepMate --output .\build\windows\msi\SleepMate.generated.wxs --version 5.2.17
+          if ($LASTEXITCODE -ne 0) { throw "MSI source generation failed: $LASTEXITCODE" }
+          & $env:WIX_CANDLE -nologo -arch x64 -out 'build\windows\msi\SleepMate.generated.wixobj' 'build\windows\msi\SleepMate.generated.wxs'
+          if ($LASTEXITCODE -ne 0) { throw "candle.exe failed: $LASTEXITCODE" }
+          & $env:WIX_LIGHT -nologo -ext WixUIExtension -cultures:hu-HU -loc 'build\windows\msi\SleepMate.hu-HU.wxl' -out 'diag-release\SleepMate_Setup_v5.2.17.msi' 'build\windows\msi\SleepMate.generated.wixobj'
+          if ($LASTEXITCODE -ne 0) { throw "light.exe failed: $LASTEXITCODE" }
+
+      - name: Install to custom path and uninstall without repeating path
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = (Resolve-Path 'diag-release\SleepMate_Setup_v5.2.17.msi').Path
+          $custom = Join-Path $env:LOCALAPPDATA 'Programs\SleepMate-CI-Remembered-Path'
+          $installLog = Join-Path $env:RUNNER_TEMP 'remember-install.log'
+          $uninstallLog = Join-Path $env:RUNNER_TEMP 'remember-uninstall.log'
+          Remove-Item $custom -Recurse -Force -ErrorAction SilentlyContinue
+
+          $installArgs = @('/i', "`"$msi`"", '/qn', '/norestart', "INSTALLFOLDER=`"$custom`"", '/L*v', "`"$installLog`"")
+          $install = Start-Process msiexec.exe -ArgumentList $installArgs -Wait -PassThru
+          if ($install.ExitCode -notin @(0,3010)) { Get-Content $installLog | Select-Object -Last 200 | Write-Host; throw "Install failed: $($install.ExitCode)" }
+          $exe = Join-Path $custom 'SleepMate.exe'
+          if (-not (Test-Path $exe)) { throw "Custom-path install did not create $exe" }
+
+          $saved = Get-ItemPropertyValue -Path 'HKCU:\Software\SleepMate' -Name 'InstallPath' -ErrorAction Stop
+          Write-Host "Saved InstallPath=$saved"
+          if ([IO.Path]::GetFullPath($saved).TrimEnd('\') -ne [IO.Path]::GetFullPath($custom).TrimEnd('\')) {
+            throw "Registry did not remember custom install path: $saved"
+          }
+
+          # Deliberately do NOT pass INSTALLFOLDER to uninstall. The MSI must
+          # restore it from HKCU\Software\SleepMate\InstallPath itself.
+          $uninstallArgs = @('/x', "`"$msi`"", '/qn', '/norestart', '/L*v', "`"$uninstallLog`"")
+          $uninstall = Start-Process msiexec.exe -ArgumentList $uninstallArgs -Wait -PassThru
+          if ($uninstall.ExitCode -notin @(0,3010)) { Get-Content $uninstallLog | Select-Object -Last 250 | Write-Host; throw "Uninstall failed: $($uninstall.ExitCode)" }
+
+          $resolvedLine = Get-Content $uninstallLog | Select-String -SimpleMatch 'Property(S): INSTALLFOLDER =' | Select-Object -Last 1
+          if ($resolvedLine) { Write-Host $resolvedLine.Line }
+          if (Test-Path $exe) {
+            Get-Content $uninstallLog | Select-Object -Last 350 | Write-Host
+            throw 'SleepMate.exe remained after custom-path uninstall.'
+          }
+          if (Test-Path $custom) {
+            $leftovers = Get-ChildItem $custom -Force -Recurse -ErrorAction SilentlyContinue
+            if ($leftovers) {
+              $leftovers | Select-Object -First 50 FullName | Format-Table | Out-String | Write-Host
+              throw 'Custom install directory still contains MSI payload after uninstall.'
+            }
+          }
+          Write-Host 'CUSTOM PATH UNINSTALL OK: remembered INSTALLFOLDER was restored and payload removed.'
