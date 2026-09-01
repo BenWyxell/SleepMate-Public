@@ -17,6 +17,12 @@ def install_v530_features(app_module) -> None:
     if _installed:
         return
 
+    # Keep v5.3-only endpoint wiring inside the v5.3 layer. This leaves the
+    # proven v5.2.20 launcher untouched while still applying persisted O2Ring
+    # tombstones before the backend begins serving requests.
+    from .o2ring_data_management import install_o2ring_data_management
+    install_o2ring_data_management(app_module)
+
     handler_cls = app_module.Handler
     previous_get = handler_cls.do_GET
 
@@ -65,14 +71,18 @@ def install_v530_features(app_module) -> None:
                 if "sleepmate-v530.js" not in text:
                     scripts.append('<script src="/sleepmate-v530.js?v=5.3.0"></script>')
 
-                # The synchronized CPAP + SpO2 + pulse timeline is embedded into
-                # the HTML shell rather than loaded as another cache-sensitive PWA
-                # resource. It stays inert until o2ring.js creates the Oximetry
-                # daily panel, so master-OFF still leaves no visible O2Ring UI.
-                combined_path = app_module.WEB / "o2ring-combined.js"
-                if combined_path.is_file() and "sm-o2-combined-inline" not in text:
-                    combined = combined_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
-                    scripts.append(f'<script id="sm-o2-combined-inline">{combined}</script>')
+                # v5.3 feature helpers are embedded into the HTML shell rather
+                # than loaded as extra cache-sensitive PWA resources. They remain
+                # inert until o2ring.js creates the corresponding O2Ring panels.
+                inline_features = (
+                    ("o2ring-combined.js", "sm-o2-combined-inline"),
+                    ("o2ring-data-management.js", "sm-o2-data-management-inline"),
+                )
+                for filename, element_id in inline_features:
+                    feature_path = app_module.WEB / filename
+                    if feature_path.is_file() and element_id not in text:
+                        feature_js = feature_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
+                        scripts.append(f'<script id="{element_id}">{feature_js}</script>')
 
                 if scripts:
                     marker = "</body>"
