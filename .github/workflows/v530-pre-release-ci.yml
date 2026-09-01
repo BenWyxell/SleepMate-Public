@@ -21,13 +21,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           cache: pip
-
       - name: Verify v5.2.20 ancestry and source syntax
         shell: powershell
         run: |
@@ -42,14 +40,12 @@ jobs:
             node --check $js
             if($LASTEXITCODE -ne 0){throw "JavaScript syntax gate failed: $js"}
           }
-
       - name: Run all tests and build Windows program tree
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           .\build\windows\build_release.ps1
           if($LASTEXITCODE -ne 0){throw "Program-tree build failed: $LASTEXITCODE"}
-
       - name: Verify responsive PWA and O2 feature shell
         shell: powershell
         run: |
@@ -75,7 +71,6 @@ jobs:
           if($shell -notmatch 'sm-o2-master-visibility' -or $shell -notmatch 'smO2Enabled:not\(:checked\)'){throw 'O2 master-off visibility guard missing.'}
           $reportUi=Get-Content '.\web\o2ring-report-ui.js' -Raw
           if($reportUi -notmatch "dataset\.o2ringFeature='1'" -or $reportUi -notmatch 'function uninstall'){throw 'Removable O2 PDF option contract missing.'}
-
       - name: Upload program tree
         uses: actions/upload-artifact@v4
         with:
@@ -89,8 +84,8 @@ jobs:
 
   build-msi:
     needs: build-windows-x64
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+    runs-on: windows-latest
+    timeout-minutes: 35
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -98,32 +93,57 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Install MSI toolchain
-        shell: bash
+      - name: Install pinned WiX Toolset 3.14
+        shell: powershell
         run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y msitools wixl
+          $ErrorActionPreference='Stop'
+          choco install wixtoolset --version 3.14.1.20250415 --yes --no-progress
+          if($LASTEXITCODE -ne 0){throw "WiX installation failed: $LASTEXITCODE"}
+          $wixRoot=Get-ChildItem "${env:ProgramFiles(x86)}" -Directory -Filter 'WiX Toolset v3*'|Sort-Object Name -Descending|Select-Object -First 1
+          if(-not $wixRoot){throw 'WiX Toolset directory not found.'}
+          $candle=Join-Path $wixRoot.FullName 'bin\candle.exe'
+          $light=Join-Path $wixRoot.FullName 'bin\light.exe'
+          if(-not(Test-Path $candle) -or -not(Test-Path $light)){throw 'WiX candle/light missing.'}
+          "WIX_CANDLE=$candle"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "WIX_LIGHT=$light"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Download program tree
         uses: actions/download-artifact@v4
         with:
           name: SleepMate-v530-PROGRAM-TREE
           path: ci-input
-      - name: Generate, build and inspect MSI
-        shell: bash
+      - name: Generate and build Hungarian MSI
+        shell: powershell
         run: |
-          set -euxo pipefail
-          test "$(python -c 'from cpap.version import APP_VERSION;print(APP_VERSION)')" = '5.3.0'
-          test -f ci-input/dist/SleepMate/SleepMate.exe
-          mkdir -p build/windows/msi release msi-extracted
-          python scripts/generate_msi_wxs.py --source-dir ci-input/dist/SleepMate --output build/windows/msi/SleepMate.generated.wxs --version 5.3.0
-          wixl -v -a x64 -o release/SleepMate_Setup_v5.3.0.msi build/windows/msi/SleepMate.generated.wxs
-          test -s release/SleepMate_Setup_v5.3.0.msi
-          sha256sum release/SleepMate_Setup_v5.3.0.msi | tee release/SleepMate_Setup_v5.3.0.msi.sha256
-          msiextract -C msi-extracted release/SleepMate_Setup_v5.3.0.msi
-          test -n "$(find msi-extracted -type f -name SleepMate.exe -print -quit)"
-          test -n "$(find msi-extracted -type f -name SleepMateUpdater.exe -print -quit)"
-          find msi-extracted -type f -print | sort > release/msi-inventory.txt
+          $ErrorActionPreference='Stop'
+          $version=(& python -c "from cpap.version import APP_VERSION;print(APP_VERSION)").Trim()
+          if($version -ne '5.3.0'){throw "Unexpected version: $version"}
+          if(-not(Test-Path 'ci-input\dist\SleepMate\SleepMate.exe')){throw 'Program tree missing SleepMate.exe.'}
+          New-Item -ItemType Directory -Force -Path 'build\windows\msi','release'|Out-Null
+          python .\scripts\generate_msi_wxs.py --source-dir .\ci-input\dist\SleepMate --output .\build\windows\msi\SleepMate.generated.wxs --version $version
+          if($LASTEXITCODE -ne 0){throw 'MSI source generation failed.'}
+          $obj='build\windows\msi\SleepMate.generated.wixobj'
+          $msi="release\SleepMate_Setup_v${version}.msi"
+          & $env:WIX_CANDLE -nologo -arch x64 -out $obj 'build\windows\msi\SleepMate.generated.wxs'
+          if($LASTEXITCODE -ne 0){throw "candle failed: $LASTEXITCODE"}
+          & $env:WIX_LIGHT -nologo -ext WixUIExtension -cultures:hu-HU -loc 'build\windows\msi\SleepMate.hu-HU.wxl' -out $msi $obj
+          if($LASTEXITCODE -ne 0){throw "light failed: $LASTEXITCODE"}
+          if(-not(Test-Path $msi)){throw 'MSI output missing.'}
+          $hash=(Get-FileHash $msi -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path $msi -Leaf)"|Set-Content "${msi}.sha256" -Encoding ascii
+      - name: Inspect MSI payload by administrative extraction
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $msi=(Resolve-Path 'release\SleepMate_Setup_v5.3.0.msi').Path
+          $extract=Join-Path $env:RUNNER_TEMP 'SleepMate-v530-MSI-Administrative'
+          Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $extract|Out-Null
+          $p=Start-Process msiexec.exe -ArgumentList @('/a',"`"$msi`"",'/qn','/norestart',"TARGETDIR=`"$extract`"") -Wait -PassThru
+          if($p.ExitCode -notin @(0,3010)){throw "MSI administrative extraction failed: $($p.ExitCode)"}
+          foreach($name in @('SleepMate.exe','SleepMateUpdater.exe','SleepMate.ico')){
+            if(-not(Get-ChildItem $extract -File -Recurse -Filter $name|Select-Object -First 1)){throw "$name missing from MSI payload."}
+          }
+          Get-ChildItem $extract -File -Recurse|Sort-Object FullName|ForEach-Object FullName|Set-Content 'release\msi-inventory.txt' -Encoding utf8
       - name: Upload MSI
         uses: actions/upload-artifact@v4
         with:
@@ -160,7 +180,7 @@ jobs:
           $uninstallLog=Join-Path $env:RUNNER_TEMP 'SleepMate-v530-Uninstall.log'
           Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $stateDir -Recurse -Force -ErrorAction SilentlyContinue
-          $p=Start-Process msiexec.exe -ArgumentList @('/i',"`"$msi`"",'/qn','/norestart',"INSTALLFOLDER=`"$installDir`"",'/L*v',"`"$installLog`"") -Wait -PassThru
+          $p=Start-Process msiexec.exe -ArgumentList @('/i',"`"$msi`"",'/qn','/norestart',"INSTALLFOLDER=`"$installDir`"",'DESKTOP_SHORTCUT=0','START_WITH_WINDOWS=0','/L*v',"`"$installLog`"") -Wait -PassThru
           if($p.ExitCode -notin @(0,3010)){if(Test-Path $installLog){Get-Content $installLog|Select-Object -Last 200|Write-Host};throw "Install failed: $($p.ExitCode)"}
           $exe=Join-Path $installDir 'SleepMate.exe'
           if(-not(Test-Path $exe)){throw 'Installed EXE missing.'}
@@ -196,7 +216,7 @@ jobs:
           }finally{if(-not $backend.HasExited){Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue}}
           if(-not(Test-Path $stateDir)){throw 'State directory missing.'}
           $u=Start-Process msiexec.exe -ArgumentList @('/x',"`"$msi`"",'/qn','/norestart','/L*v',"`"$uninstallLog`"") -Wait -PassThru
-          if($u.ExitCode -notin @(0,3010)){throw "Uninstall failed: $($u.ExitCode)"}
+          if($u.ExitCode -notin @(0,3010)){if(Test-Path $uninstallLog){Get-Content $uninstallLog|Select-Object -Last 200|Write-Host};throw "Uninstall failed: $($u.ExitCode)"}
           if(Test-Path $exe){throw 'EXE remained after uninstall.'}
           if(-not(Test-Path $stateDir)){throw 'User state was removed on uninstall.'}
       - name: Upload complete candidate
