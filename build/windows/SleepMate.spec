@@ -21,8 +21,8 @@ if WEB_GENERATED.exists():
 shutil.copytree(WEB_SOURCE, WEB_GENERATED)
 
 # For integration test builds start from the exact PWA worker that shipped with
-# the known-good v5.0.8 frontend. Extra SleepSync assets are added below, but the
-# navigation/cache algorithm itself stays identical to that release.
+# the known-good v5.0.8 frontend. Extra SleepSync/v5.3 assets are added below,
+# but the navigation/cache algorithm itself stays identical to that release.
 proven_sw = WEB_GENERATED / 'service-worker-v508-base.js'
 if proven_sw.exists():
     shutil.copy2(proven_sw, WEB_GENERATED / 'service-worker.js')
@@ -61,23 +61,16 @@ replace_exact(
 
 # Core behaviour fixes are deliberately applied to the packaged copy while the
 # frozen v5.0.8 source blob stays available as a known-good reference.
-# 1) Opening the latest night must explicitly route even when a wrapper or an
-#    already-identical hash would otherwise swallow the click.
 replace_literal(
     sidebar_app_js,
     "$('#openLatestSleep').onclick=()=>{if(state.latestDay)navigate('dashboard',state.latestDay)};",
     "$('#openLatestSleep').onclick=()=>{const day=state.latestDay||state.currentDay||state.days[0];if(!day)return;const next=`#dashboard/${day}`,reroute=()=>{const fn=typeof window.route==='function'?window.route:route;fn()};if(standalonePwa()){history.replaceState({sleepmate:true},'',next);reroute()}else if(location.hash===next)reroute();else location.hash=next};",
 )
-# 2) A zero-second usage delta is valid data. The old truthiness check converted
-#    exactly equal nights to null and rendered "Nincs elég adat".
 replace_literal(
     sidebar_app_js,
     "d.average_usage_seconds?d.average_usage_seconds/60:null",
     "d.average_usage_seconds==null?null:d.average_usage_seconds/60",
 )
-# 3) Pull-to-refresh feedback is transient. The refresh itself may continue in
-#    the background, but the mobile indicator must not sit on screen for the full
-#    EDF/dashboard refresh duration.
 replace_literal(
     sidebar_app_js,
     "ind.classList.add('refreshing');ind.querySelector('b').textContent='Adatok ellenőrzése…';refreshData()",
@@ -89,8 +82,6 @@ replace_exact(
     r'<strong id="sidebarVersion">v[^<]+</strong>',
     f'<strong id="sidebarVersion">v{APP_VERSION}</strong>',
 )
-
-# Keep normal release version replacements valid first.
 replace_exact(
     'index.html',
     r'href="/style\.css\?v=\d+\.\d+\.\d+"',
@@ -126,10 +117,6 @@ replace_exact(
 # ---------------------------------------------------------------------------
 # Mobile/PWA stability contract for SleepSync integration builds
 # ---------------------------------------------------------------------------
-# The original application must complete its own asynchronous init() before
-# SleepSync replaces route()/navigate(). Merely placing SleepSync after app.js is
-# not enough because app.js calls async init() and returns while init is awaiting
-# /api/version, /api/config and /api/days.
 core_app = WEB_GENERATED / 'app-core.js'
 engine_app = WEB_GENERATED / 'app-engine119.js'
 if core_app.exists() and engine_app.exists():
@@ -152,10 +139,6 @@ if core_app.exists() and engine_app.exists():
     )
     (WEB_GENERATED / 'sleepsync-integration.js').write_text(bridge_text, encoding='utf-8')
 
-    # SleepSync bootstrap is intentionally tiny and passive. It waits for the
-    # original v5.0.8 init() to execute hideStartupSplash(), which adds .ready to
-    # .hidden-until-ready. Only after that proven core boot has COMPLETED may the
-    # integration touch navigation or add the SleepSync page.
     bootstrap_text = f"""(function(){{
   'use strict';
   const ID='{FRONTEND_ID}';
@@ -187,17 +170,12 @@ if core_app.exists() and engine_app.exists():
 """
     (WEB_GENERATED / 'sleepsync-bootstrap.js').write_text(bootstrap_text, encoding='utf-8')
 
-    # Passive mobile diagnostics starts BEFORE app.js so Safari syntax/runtime
-    # errors and the exact core visibility state are captured. It never patches
-    # fetch, route, DOM mutation observers or service-worker registration.
     diag_path = WEB_GENERATED / 'mobile-boot-diagnostics.js'
     if not diag_path.exists():
         raise RuntimeError('mobile-boot-diagnostics.js is missing')
     diag_text = diag_path.read_text(encoding='utf-8').replace('__SLEEPMATE_FRONTEND_ID__', FRONTEND_ID)
     diag_path.write_text(diag_text, encoding='utf-8')
 
-    # Keep the entire original core boot isolated. The bootstrap script itself
-    # does nothing except wait until the core shell is visibly ready.
     index_path = WEB_GENERATED / 'index.html'
     index_text = index_path.read_text(encoding='utf-8')
     old_script = f'<script src="/app.js?v={APP_VERSION}"></script>'
@@ -211,9 +189,6 @@ if core_app.exists() and engine_app.exists():
     index_text = index_text.replace(old_script, new_scripts, 1)
     index_text = index_text.replace(f'/style.css?v={APP_VERSION}', f'/style.css?v={FRONTEND_ID}', 1)
 
-    # The core Aurora layer is part of SleepMate itself and loads immediately,
-    # independently from SleepSync. This prevents the visual system from only
-    # appearing after the SleepSync bootstrap has completed.
     style_link = f'<link rel="stylesheet" href="/style.css?v={FRONTEND_ID}">'
     aurora_link = f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={FRONTEND_ID}">'
     if index_text.count(style_link) != 1:
@@ -222,7 +197,8 @@ if core_app.exists() and engine_app.exists():
     index_path.write_text(index_text, encoding='utf-8')
 
     # Give every portable workflow run its own PWA generation while preserving
-    # the exact v5.0.8 worker algorithm.
+    # the exact proven worker algorithm. v5.3 UI/O2 assets are always cached, but
+    # the O2Ring controller only activates them when the user enables the feature.
     sw_path = WEB_GENERATED / 'service-worker.js'
     sw = sw_path.read_text(encoding='utf-8')
     sw = sw.replace(f'sleepmate-shell-v{APP_VERSION}', f'sleepmate-shell-v{APP_VERSION}-b{BUILD_ID}')
@@ -233,6 +209,11 @@ if core_app.exists() and engine_app.exists():
     extra_shell = (
         app_entry
         + f",'/sleepmate-aurora.css?v={FRONTEND_ID}'"
+        + f",'/sleepmate-v530.css?v={FRONTEND_ID}'"
+        + f",'/sleepmate-v530.js?v={FRONTEND_ID}'"
+        + f",'/o2ring.css?v={FRONTEND_ID}'"
+        + f",'/o2ring.js?v={FRONTEND_ID}'"
+        + f",'/o2ring-report-ui.js?v={FRONTEND_ID}'"
         + f",'/mobile-boot-diagnostics.js?v={FRONTEND_ID}'"
         + f",'/sleepsync-bootstrap.js?v={FRONTEND_ID}'"
         + f",'/sleepsync-integration.js?v={FRONTEND_ID}'"
@@ -245,7 +226,7 @@ if core_app.exists() and engine_app.exists():
         raise RuntimeError('proven service worker shell does not contain packaged app.js')
     sw = sw.replace(app_entry, extra_shell, 1)
     old_code = "const codeAsset=['/style.css','/app.js','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'].includes(url.pathname);"
-    new_code = "const codeAsset=['/style.css','/sleepmate-aurora.css','/app.js','/mobile-boot-diagnostics.js','/sleepsync-bootstrap.js','/sleepsync-integration.js','/sleepsync-polish.js','/sleepsync.css','/sleepsync-polish.css','/sleepsync-notice.css','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'].includes(url.pathname);"
+    new_code = "const codeAsset=['/style.css','/sleepmate-aurora.css','/sleepmate-v530.css','/sleepmate-v530.js','/o2ring.css','/o2ring.js','/o2ring-report-ui.js','/app.js','/mobile-boot-diagnostics.js','/sleepsync-bootstrap.js','/sleepsync-integration.js','/sleepsync-polish.js','/sleepsync.css','/sleepsync-polish.css','/sleepsync-notice.css','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'].includes(url.pathname);"
     if old_code not in sw:
         raise RuntimeError('proven service worker code-asset rule changed unexpectedly')
     sw = sw.replace(old_code, new_code, 1)
