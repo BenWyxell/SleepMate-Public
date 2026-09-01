@@ -35,7 +35,8 @@ def test_combined_timeline_is_owned_by_v532_dynamic_shell_only():
     runtime = (ROOT / "web" / "o2ring-v532.js").read_text(encoding="utf-8")
     base_html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 
-    assert 'v532_js_path = app_module.WEB / "o2ring-v532.js"' in shell
+    assert '("o2ring-v532.js", "sm-o2-v532-inline")' in shell
+    assert "feature_path = app_module.WEB / filename" in shell
     assert "sm-o2-v532-inline" in shell
     assert 'replace("</script", "<\\\\/script")' in shell
     assert "o2ring-combined.js" not in shell
