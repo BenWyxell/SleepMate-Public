@@ -56,6 +56,12 @@ def install_v530_features(app_module) -> None:
                         'body:has(#smO2Enabled:not(:checked)) .o2ring-report-option{display:none!important}'
                         '</style>'
                     )
+                # The post-release polish layer is embedded, not cache-fetched.
+                # This keeps PWA/web and packaged source runs on one deterministic UI.
+                polish_css_path = app_module.WEB / "o2ring-polish.css"
+                if polish_css_path.is_file() and "sm-o2-polish-inline-css" not in text:
+                    polish_css = polish_css_path.read_text(encoding="utf-8").replace("</style", "<\\/style")
+                    head_assets.append(f'<style id="sm-o2-polish-inline-css">{polish_css}</style>')
                 if head_assets:
                     marker = "</head>"
                     inject = "\n  " + "\n  ".join(head_assets) + "\n"
@@ -79,10 +85,14 @@ def install_v530_features(app_module) -> None:
 
                 # v5.3 feature helpers are embedded into the HTML shell rather
                 # than loaded as extra cache-sensitive PWA resources. They remain
-                # inert until o2ring.js creates the corresponding O2Ring panels.
+                # inert until their corresponding host panels exist.
                 inline_features = (
                     ("o2ring-combined.js", "sm-o2-combined-inline"),
                     ("o2ring-data-management.js", "sm-o2-data-management-inline"),
+                    ("o2ring-polish-core.js", "sm-o2-polish-core-inline"),
+                    ("o2ring-polish-trends.js", "sm-o2-polish-trends-inline"),
+                    ("o2ring-polish-daily.js", "sm-o2-polish-daily-inline"),
+                    ("o2ring-polish-dashboard.js", "sm-o2-polish-dashboard-inline"),
                 )
                 for filename, element_id in inline_features:
                     feature_path = app_module.WEB / filename
