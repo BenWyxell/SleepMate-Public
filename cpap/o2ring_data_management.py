@@ -8,6 +8,7 @@ import urllib.parse
 from typing import Any
 
 from .o2ring_integration import get_service
+from .o2ring_restore import _stop_and_wait
 
 
 _installed = False
@@ -80,7 +81,10 @@ def _delete_local_oximetry(service) -> dict[str, Any]:
     # present locally, never silent re-import of data the user already deleted.
     _save_tombstones(service, tombstones)
 
-    service.manager.stop()
+    # stop() alone is asynchronous. Prove that the BLE worker has exited before
+    # deleting files so an in-flight download callback cannot recreate health
+    # data while the deletion transaction is running.
+    _stop_and_wait(service.manager)
     deleted_recordings = 0
     deleted_raw = 0
     try:
