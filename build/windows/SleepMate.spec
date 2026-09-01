@@ -237,6 +237,16 @@ if core_app.exists() and engine_app.exists():
     if not code_asset_match:
         raise RuntimeError('proven service worker code-asset rule is missing')
     code_items = code_asset_match.group('items')
+    protected_base_assets = (
+        '/sleepmate-chart-v523.js',
+        '/sleepmate-sleep-v523.js',
+        '/sleepmate-sleep-refresh-v5212.js',
+        '/o2ring-v532.css',
+        '/o2ring-v532.js',
+    )
+    for asset in protected_base_assets:
+        if repr(asset) not in code_items:
+            raise RuntimeError(f'proven service worker lost network-first asset: {asset}')
     for asset in (
         '/mobile-boot-diagnostics.js',
         '/sleepsync-bootstrap.js',
