@@ -236,6 +236,28 @@ def main() -> int:
     )
     ET.SubElement(product, q("Property"), {"Id": "ARPPRODUCTICON", "Value": "SleepMateIcon"})
 
+    # Windows Installer does not persist public property values such as a custom
+    # INSTALLFOLDER for later maintenance/removal. Persisting the chosen path is
+    # already handled by SleepMateRegistry below; AppSearch restores it here so
+    # repair, upgrade and uninstall target the directory that was actually used.
+    install_folder_prop = ET.SubElement(
+        product,
+        q("Property"),
+        {"Id": "INSTALLFOLDER", "Secure": "yes"},
+    )
+    ET.SubElement(
+        install_folder_prop,
+        q("RegistrySearch"),
+        {
+            "Id": "RememberSleepMateInstallFolder",
+            "Root": "HKCU",
+            "Key": r"Software\SleepMate",
+            "Name": "InstallPath",
+            "Type": "raw",
+            "Win64": "yes",
+        },
+    )
+
     target = ET.SubElement(product, q("Directory"), {"Id": "TARGETDIR", "Name": "SourceDir"})
     local_app = ET.SubElement(target, q("Directory"), {"Id": "LocalAppDataFolder"})
     local_programs = ET.SubElement(local_app, q("Directory"), {"Id": "LocalProgramsFolder", "Name": "Programs"})
@@ -437,7 +459,7 @@ def main() -> int:
     print(
         f"Generated {output} with {len(files)} payload files; "
         f"tree_sha256={tree_sha256}; product_code={product_code}; "
-        "wizard=WixUI_FeatureTree; language=hu-HU; profile-components=HKCU-keypath; cleanup=RemoveFolder"
+        "wizard=WixUI_FeatureTree; language=hu-HU; profile-components=HKCU-keypath; cleanup=RemoveFolder; install-path=remembered"
     )
     return 0
 
