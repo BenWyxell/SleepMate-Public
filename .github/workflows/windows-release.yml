@@ -206,12 +206,13 @@ jobs:
           $inventory | Set-Content -Path 'release\msi-inventory.txt' -Encoding utf8
           if (-not (Get-ChildItem $extract -File -Recurse -Filter 'SleepMate.exe' | Select-Object -First 1)) { throw 'SleepMate.exe missing from MSI payload.' }
           if (-not (Get-ChildItem $extract -File -Recurse -Filter 'SleepMateUpdater.exe' | Select-Object -First 1)) { throw 'SleepMateUpdater.exe missing from MSI payload.' }
-          if (-not (Get-ChildItem $extract -File -Recurse -Filter 'SleepMate.ico' | Select-Object -First 1)) { throw 'SleepMate.ico missing from MSI payload.' }
+          if (-not (Get-ChildItem $extrract -File -Recurse -Filter 'SleepMate.ico' | Select-Object -First 1)) { throw 'SleepMate.ico missing from MSI payload.' }
           if (-not (Get-ChildItem $extract -File -Recurse -Filter 'LICENSE' | Select-Object -First 1)) { throw 'LICENSE missing from MSI payload.' }
           if (-not (Get-ChildItem $extract -File -Recurse -Filter 'PRIVACY.md' | Select-Object -First 1)) { throw 'PRIVACY.md missing from MSI payload.' }
           if (-not (Get-ChildItem $extract -File -Recurse -Filter 'THIRD_PARTY_NOTICES.md' | Select-Object -First 1)) { throw 'THIRD_PARTY_NOTICES.md missing from MSI payload.' }
 
       - name: Upload unsigned MSI
+
         uses: actions/upload-artifact@v4
         with:
           name: SleepMate-MSI-UNSIGNED-CI
@@ -220,14 +221,14 @@ jobs:
             release/SleepMate_Setup_v*.msi.sha256
             release/msi-inventory.txt
             build/windows/msi/SleepMate.generated.wxs
-            build/windows/msi/SleepMate-Legal.rtf
+            build/windows/msi/SleepMate.Legal.rtf
             build/windows/msi/SleepMate.hu-HU.wxl
             build-msi-toolchain.txt
           if-no-files-found: error
           retention-days: 1
 
   smoke-test-msi:
-    needs:
+    needs: 
       - build-windows-x64
       - build-msi
     runs-on: windows-latest
@@ -236,7 +237,6 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
-
       - name: Download portable release inputs
         uses: actions/download-artifact@v4
         with:
@@ -269,14 +269,7 @@ jobs:
 
           $installArgs = @(
             '/i',
-            "`"$msi`"",
-            '/qn',
-            '/norestart',
-            "INSTALLFOLDER=`"$installDir`"",
-            '/L*v',
-            "`"$installLog`""
-          )
-          $installer = Start-Process -FilePath 'msiexec.exe' -ArgumentList $installArgs -Wait -PassThru
+            "`"$istallerArgs
           if ($installer.ExitCode -notin @(0, 3010)) {
             if (Test-Path $installLog) { Get-Content $installLog | Select-Object -Last 200 | Write-Host }
             throw "MSI install failed with exit code $($installer.ExitCode)."
@@ -619,9 +612,9 @@ jobs:
             exit 0
           fi
 
-          if gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" >/tmp/existing-release.json 2>/dev/null; then
-            DRAFT="$(jq -r '.draft' /tmp/existing-release.json)"
-            TARGET="$(jq -r '.target_commitish' /tmp/existing-release.json)"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish >/tmp/existing-release.json 2>/dev/null; then
+            DRAFT="$(jq -r '.isDraft' /tmp/existing-release.json)"
+            TARGET="$(jq -r '.targetCommitish' /tmp/existing-release.json)"
             if [[ "$DRAFT" == 'false' ]]; then
               echo "Published release $TAG already exists; leaving it unchanged."
               echo 'publish=false' >> "$GITHUB_OUTPUT"
@@ -726,7 +719,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t actual < <(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" --jq '.assets[].name' | sort)
+          mapfile -t actual < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
           expected=(
             SHA256SUMS.txt
             "SleepMate_Setup_v${VERSION}.msi"
@@ -747,9 +740,9 @@ jobs:
 
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
 
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${TAG}" > /tmp/published.json
-          [[ "$(jq -r '.draft' /tmp/published.json)" == 'false' ]]
-          [[ "$(jq -r '.tag_name' /tmp/published.json)" == "$TAG" ]]
-          [[ "$(jq -r '.target_commitish' /tmp/published.json)" == "$GITHUB_SHA" ]]
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,targetCommitish > /tmp/published.json
+          [[ "$(jq -r '.isDraft' /tmp/published.json)" == 'false' ]]
+          [[ "$(jq -r '.tagName' /tmp/published.json)" == "$TAG" ]]
+          [[ "$(jq -r '.targetCommitish' /tmp/published.json)" == "$GITHUB_SHA" ]]
           echo "GitHub Release $TAG published from fully verified commit $GITHUB_SHA."
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY"
