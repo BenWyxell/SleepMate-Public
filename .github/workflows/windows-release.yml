@@ -289,7 +289,12 @@ jobs:
             }
 
             $ssSettings = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/sleepsync/settings" -TimeoutSec 5
-            if (-not $ssSettings.therapy_data_dir) { throw 'Installed SleepSync settings API did not return therapy_data_dir.' }
+            if ($null -eq $ssSettings.therapy_data_dir) {
+              throw 'Installed SleepSync settings API is missing therapy_data_dir.'
+            }
+            if (([string]$ssSettings.therapy_data_dir).Length -ne 0) {
+              throw "Fresh-install SleepSync therapy_data_dir must stay empty until onboarding: $($ssSettings | ConvertTo-Json -Compress)"
+            }
 
             $drive = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/google-drive/status" -TimeoutSec 5
             if ($drive.available -ne $true -or $drive.connected -ne $false) {
