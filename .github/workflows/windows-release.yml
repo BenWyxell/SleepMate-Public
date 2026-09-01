@@ -611,8 +611,8 @@ jobs:
               echo "Tag/version mismatch: ref=$GITHUB_REF_NAME expected=$TAG" >&2
               exit 1
             fi
-          elif [[ "$GITHUB_REF" == 'refs/heads/installer-wizard' && "$VERSION" == '5.2.17' ]]; then
-            echo 'One-time 5.2.17 publication from the fully verified installer-wizard head is enabled.'
+          elif [[ "$GITHUB_REF" == 'refs/heads/installer-wizard' && "$VERSION" == '5.2.18' ]]; then
+            echo 'One-time 5.2.18 publication from the fully verified installer-wizard head is enabled.'
           else
             echo "This push is validation-only; no GitHub Release will be published from $GITHUB_REF."
             echo 'publish=false' >> "$GITHUB_OUTPUT"
