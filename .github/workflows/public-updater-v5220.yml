@@ -31,6 +31,20 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Normalize patch helper input handling
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/hotfix_public_updater_v5220.py')
+          text=p.read_text(encoding='utf-8')
+          old='return (ROOT / rel).read_bytes().decode("utf-8")'
+          new='return (ROOT / rel).read_bytes().decode("utf-8").replace("\\r\\n", "\\n")'
+          if old not in text:
+              raise SystemExit('patch helper read() marker not found')
+          p.write_text(text.replace(old,new,1),encoding='utf-8')
+          PY
+
       - name: Apply public updater and Cloudflare provenance patch
         run: python scripts/hotfix_public_updater_v5220.py
 
