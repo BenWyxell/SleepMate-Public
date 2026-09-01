@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import json
 import threading
 import urllib.parse
 from typing import Any
@@ -36,6 +37,10 @@ class O2RingService:
         self.store = OximetryStore(app_module.STATE_BASE / "private")
         self._lock = threading.RLock()
         self._known_source_names: set[str] = set()
+        # This must happen before the BLE manager is allowed to start. Deleted
+        # O2Ring sessions can still remain in ring memory; treating persisted
+        # tombstones as known at construction time closes the restart race where
+        # automatic sync could otherwise re-import already deleted health data.
         self._load_known_names()
         self.manager = O2RingBLEManager(
             known_file=self._known_file,
@@ -57,11 +62,27 @@ class O2RingService:
         )
 
     def _load_known_names(self) -> None:
+        known = {
+            str(row.get("source_name") or "").strip()
+            for row in self.store.list_recordings()
+            if str(row.get("source_name") or "").strip()
+        }
+        tombstone_path = self.store.root / "oximetry" / "deleted_sources.json"
+        if tombstone_path.is_file():
+            try:
+                payload = json.loads(tombstone_path.read_text(encoding="utf-8"))
+                if isinstance(payload, dict) and int(payload.get("schema") or 0) == 1:
+                    known.update(
+                        str(value or "").strip()
+                        for value in (payload.get("source_names") or [])
+                        if str(value or "").strip()
+                    )
+            except Exception:
+                # A malformed tombstone file must not make SleepMate fail to
+                # start. Data management can rewrite it on the next deletion.
+                pass
         with self._lock:
-            self._known_source_names = {
-                str(row.get("source_name") or "") for row in self.store.list_recordings()
-                if str(row.get("source_name") or "")
-            }
+            self._known_source_names = known
 
     def _known_file(self, name: str) -> bool:
         with self._lock:
