@@ -1,6 +1,6 @@
 """SleepMate O2Ring / oximetry domain services.
 
-This module intentionally contains no UI code.  It owns the local, reproducible
+This module intentionally contains no UI code. It owns the local, reproducible
 representation of O2Ring recordings and the CPAP-session matching rules.
 """
 from __future__ import annotations
@@ -116,10 +116,23 @@ def _valid_values(samples: Iterable[OximetrySample], attr: str) -> list[int]:
     return values
 
 
+def _nominal_interval(samples: Sequence[OximetrySample], start_ts: float, end_ts: float) -> float:
+    ordered = sorted(samples, key=lambda s: float(s.timestamp))
+    deltas = [
+        float(b.timestamp) - float(a.timestamp)
+        for a, b in zip(ordered, ordered[1:])
+        if 0 < float(b.timestamp) - float(a.timestamp) <= 60.0
+    ]
+    if deltas:
+        return float(median(deltas))
+    duration = max(0.0, float(end_ts) - float(start_ts))
+    return duration / len(ordered) if ordered and duration > 0 else 0.0
+
+
 def _odi(samples: Sequence[OximetrySample], threshold: int, duration_hours: float) -> float | None:
     if duration_hours <= 0:
         return None
-    valid = [s for s in samples if s.valid and s.spo2 is not None]
+    valid = [s for s in sorted(samples, key=lambda x: x.timestamp) if s.valid and s.spo2 is not None]
     if len(valid) < 2:
         return None
     events = 0
@@ -139,21 +152,31 @@ def _odi(samples: Sequence[OximetrySample], threshold: int, duration_hours: floa
 
 
 def summarize_samples(samples: Sequence[OximetrySample], *, start_ts: float, end_ts: float) -> OximetrySummary:
-    duration = max(0.0, end_ts - start_ts)
-    valid_samples = [s for s in samples if s.valid]
-    spo2 = _valid_values(samples, "spo2")
-    heart_rate = _valid_values(samples, "heart_rate")
-    if len(valid_samples) > 1:
-        sample_seconds = duration / max(1, len(valid_samples) - 1)
-    else:
-        sample_seconds = 0.0
-    t90_samples = sum(1 for value in spo2 if value < 90)
-    t90_seconds = t90_samples * sample_seconds
+    ordered = sorted(samples, key=lambda s: float(s.timestamp))
+    nominal_interval = _nominal_interval(ordered, start_ts, end_ts)
+    provided_duration = max(0.0, float(end_ts) - float(start_ts))
+    sampled_duration = nominal_interval * len(ordered) if nominal_interval > 0 else provided_duration
+    duration = max(provided_duration, sampled_duration)
+
+    valid_samples = [s for s in ordered if s.valid]
+    spo2 = _valid_values(ordered, "spo2")
+    heart_rate = _valid_values(ordered, "heart_rate")
+    t90_samples = sum(1 for s in ordered if s.valid and s.spo2 is not None and int(s.spo2) < 90)
+    t90_seconds = t90_samples * nominal_interval if nominal_interval > 0 else 0.0
+    valid_seconds = len(valid_samples) * nominal_interval if nominal_interval > 0 else 0.0
     duration_hours = duration / 3600.0
+
+    coverage_percent = (
+        valid_seconds / duration * 100.0
+        if duration > 0 and nominal_interval > 0
+        else ((len(valid_samples) / len(ordered) * 100.0) if ordered else 0.0)
+    )
+    coverage_percent = max(0.0, min(100.0, coverage_percent))
+
     return OximetrySummary(
-        sample_count=len(samples),
+        sample_count=len(ordered),
         valid_sample_count=len(valid_samples),
-        coverage_percent=round((len(valid_samples) / len(samples) * 100.0) if samples else 0.0, 2),
+        coverage_percent=round(coverage_percent, 2),
         spo2_average=round(sum(spo2) / len(spo2), 2) if spo2 else None,
         spo2_median=round(float(median(spo2)), 2) if spo2 else None,
         spo2_minimum=min(spo2) if spo2 else None,
@@ -163,8 +186,8 @@ def summarize_samples(samples: Sequence[OximetrySample], *, start_ts: float, end
         heart_rate_maximum=max(heart_rate) if heart_rate else None,
         t90_seconds=round(t90_seconds, 1),
         t90_percent=round((t90_seconds / duration * 100.0) if duration else 0.0, 2),
-        odi3=_odi(samples, 3, duration_hours),
-        odi4=_odi(samples, 4, duration_hours),
+        odi3=_odi(ordered, 3, duration_hours),
+        odi4=_odi(ordered, 4, duration_hours),
     )
 
 
@@ -186,6 +209,6 @@ def match_recording_to_cpap(recording: dict, cpap_start: float, cpap_end: float,
         overlap_start=overlap_start,
         overlap_end=overlap_end,
         overlap_seconds=overlap,
-        cpap_coverage_percent=round(overlap / cpap_duration * 100.0, 2),
+        cpap_coverage_percent=round(min(100.0, overlap / cpap_duration * 100.0), 2),
         clock_offset_seconds=clock_offset_seconds,
     )
