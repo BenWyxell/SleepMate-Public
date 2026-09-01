@@ -1,3 +1,31 @@
+# SleepMate 5.2.19
+
+A SleepMate 5.2.19 a Windows első-indítási varázsló görgetésének második, szerkezeti javítása. A v5.2.18-ban használt grid-alapú `minmax(0,1fr)` megoldás egyes tényleges desktop layout-helyzetekben továbbra is hagyta, hogy a panel min-content magassága az alsó navigáció alá nyúljon. A v5.2.19 ezért nem finomhangolja tovább ezt a modellt, hanem a teljes wizardot kényszerített flex-oszlopos felépítésre váltja.
+
+## Első beállítás – kényszerített globális scroll
+
+- A wizard külső shellje most `display:flex; flex-direction:column` elrendezést használ.
+- A fejléc és az alsó navigáció `flex:0 0 auto`, ezért egyik sem zsugorodik és egyikre sem tud ráfolyni a tartalom.
+- A középső `.fr-body` kapta a tényleges görgetési felelősséget: `flex:1 1 0`, `height:0`, `min-height:0`, `overflow-y:scroll!important`.
+- A teljes overlay `overflow:hidden`, így a háttéroldal vagy a shell nem veheti át véletlenül a görgetést.
+- A wizard teljes belső fája egységes `box-sizing:border-box` szabályt kapott, hogy padding vagy inputméret se növelhesse meg kiszámíthatatlanul a rendelkezésre álló magasságot/szélességet.
+- A footer háttere közel teljesen fedett, így görgetés közben a tartalom vizuálisan sem látszik át a gombsor mögött.
+- Tailscale, Cloudflare, adatforrás, SleepSync, backup, AI és összegzés továbbra is **ugyanazt az egy közös scrollterületet** használja; nincs lépésenkénti külön scroll.
+- A `first-run.js` és `first-run.css` cache-bustja `v3` lett, a csomagolt onboarding loader is `first-run.js?v=3`-at kér.
+
+## Regressziós védelem
+
+- A külön onboarding teszt már nem egyszerű `overflow:auto` jelenlétet ellenőriz, hanem a teljes flex-szerződést: fix fejléc, kényszerített középső scroll, fix footer, globális box-sizing és cache-bust.
+- A fő Windows packaging contract ugyanezt a struktúrát követeli meg a kiadható MSI-ben.
+- A release előtt továbbra is lefut a teljes publikus tesztkészlet, a PyInstaller build, a magyar WiX MSI, a valódi MSI telepítés/backend/API/uninstall smoke-test és a VERIFIED release-integritási lánc.
+
+Kiadási csatorna: **stable**.
+Release build: **5.2.19**.
+API: **19**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
+
+---
+
 # SleepMate 5.2.18
 
 A SleepMate 5.2.18 a Windows első-indítási beállítóvarázsló használhatósági javítása. A cél az volt, hogy a wizard ne csak a Tailscale / Cloudflare résznél, hanem **minden olyan lépésen belül görgethető legyen, ahol a tartalom ezt igényli**, miközben a fejléc és az alsó navigáció végig a helyén marad.
