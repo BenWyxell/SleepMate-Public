@@ -34,9 +34,9 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Candidate is not descended from public v5.2.20.'}
           python .\scripts\verify_public_source.py
           if($LASTEXITCODE -ne 0){throw 'Public source gate failed.'}
-          python -m py_compile .\app.py .\sleepmate_main.py .\cpap\o2ring_ble.py .\cpap\o2ring_integration.py .\cpap\o2ring_vld.py .\cpap\oximetry.py .\cpap\o2ring_device_config.py .\cpap\o2ring_stream.py .\cpap\o2ring_report.py .\cpap\ui_preferences_v530.py .\cpap\v530_features.py
+          python -m py_compile .\app.py .\sleepmate_main.py .\cpap\o2ring_ble.py .\cpap\o2ring_integration.py .\cpap\o2ring_data_management.py .\cpap\o2ring_vld.py .\cpap\oximetry.py .\cpap\o2ring_device_config.py .\cpap\o2ring_stream.py .\cpap\o2ring_report.py .\cpap\ui_preferences_v530.py .\cpap\v530_features.py
           if($LASTEXITCODE -ne 0){throw 'Python syntax gate failed.'}
-          foreach($js in @('.\web\app.js','.\web\app-core.js','.\web\sleepmate-v530.js','.\web\o2ring.js','.\web\o2ring-combined.js','.\web\o2ring-report-ui.js','.\web\service-worker-v508-base.js')){
+          foreach($js in @('.\web\app.js','.\web\app-core.js','.\web\sleepmate-v530.js','.\web\o2ring.js','.\web\o2ring-combined.js','.\web\o2ring-data-management.js','.\web\o2ring-report-ui.js','.\web\service-worker-v508-base.js')){
             node --check $js
             if($LASTEXITCODE -ne 0){throw "JavaScript syntax gate failed: $js"}
           }
@@ -51,7 +51,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $generated='build\windows\web-generated'
-          foreach($name in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','o2ring.js','o2ring.css','o2ring-combined.js','o2ring-report-ui.js')){
+          foreach($name in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','o2ring.js','o2ring.css','o2ring-combined.js','o2ring-data-management.js','o2ring-report-ui.js')){
             if(-not(Test-Path (Join-Path $generated $name))){throw "Generated asset missing: $name"}
           }
           $sw=Get-Content (Join-Path $generated 'service-worker.js') -Raw
@@ -70,9 +70,14 @@ jobs:
           $shell=Get-Content '.\cpap\v530_features.py' -Raw
           if($shell -notmatch 'sm-o2-master-visibility' -or $shell -notmatch 'smO2Enabled:not\(:checked\)'){throw 'O2 master-off visibility guard missing.'}
           if($shell -notmatch 'o2ring-combined\.js' -or $shell -notmatch 'sm-o2-combined-inline'){throw 'Combined CPAP/O2 inline shell contract missing.'}
+          if($shell -notmatch 'o2ring-data-management\.js' -or $shell -notmatch 'sm-o2-data-management-inline' -or $shell -notmatch 'install_o2ring_data_management'){throw 'O2 data-management shell contract missing.'}
           $combined=Get-Content '.\web\o2ring-combined.js' -Raw
           foreach($needle in @('o2rCombinedTimeline','o2rCombinedCpap','o2rCombinedSpo2','o2rCombinedHr','/api/o2ring/day','pointermove')){
             if($combined -notmatch [regex]::Escape($needle)){throw "Combined CPAP/O2 contract missing: $needle"}
+          }
+          $dataUi=Get-Content '.\web\o2ring-data-management.js' -Raw
+          foreach($needle in @('o2rDataManagement','/api/o2ring/delete-data','DELETE_OXIMETRY','SleepMateO2Ring?.refresh','SleepMateO2Combined?.refresh')){
+            if($dataUi -notmatch [regex]::Escape($needle)){throw "O2 data-management UI contract missing: $needle"}
           }
           $reportUi=Get-Content '.\web\o2ring-report-ui.js' -Raw
           if($reportUi -notmatch "dataset\.o2ringFeature='1'" -or $reportUi -notmatch 'function uninstall'){throw 'Removable O2 PDF option contract missing.'}
@@ -210,11 +215,18 @@ jobs:
             $null=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/settings" -Method Post -ContentType 'application/json' -Body (@{o2ring_enabled=$true;o2ring_ble_enabled=$false;o2ring_auto_connect=$true;o2ring_preferred_address='CI-RING-REMEMBERED'}|ConvertTo-Json -Compress) -TimeoutSec 5
             $on=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/status" -TimeoutSec 5
             if($on.feature_enabled -ne $true -or $on.ble_enabled -ne $false -or $on.settings.o2ring_preferred_address -ne 'CI-RING-REMEMBERED'){throw 'Master-on/BLE-off contract failed.'}
+
+            $deleted=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/delete-data" -Method Post -ContentType 'application/json' -Body (@{confirm='DELETE_OXIMETRY'}|ConvertTo-Json -Compress) -TimeoutSec 5
+            if($deleted.ok -ne $true -or [int]$deleted.recordings_remaining -ne 0 -or $deleted.remembered_device_preserved -ne $true){throw "O2 deletion contract failed: $($deleted|ConvertTo-Json -Compress)"}
+            $afterDelete=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/status" -TimeoutSec 5
+            if($afterDelete.settings.o2ring_preferred_address -ne 'CI-RING-REMEMBERED'){throw 'O2 deletion forgot the remembered ring.'}
+            if(-not(Get-ChildItem $stateDir -Recurse -File -Filter 'deleted_sources.json' -ErrorAction SilentlyContinue|Select-Object -First 1)){throw 'O2 deletion tombstone file was not created.'}
+
             $null=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/settings" -Method Post -ContentType 'application/json' -Body (@{o2ring_enabled=$false}|ConvertTo-Json -Compress) -TimeoutSec 5
             $off=Invoke-RestMethod "http://127.0.0.1:$port/api/o2ring/status" -TimeoutSec 5
             if($off.feature_enabled -ne $false -or $off.settings.o2ring_preferred_address -ne 'CI-RING-REMEMBERED'){throw 'Master-off preservation failed.'}
             $html=(Invoke-WebRequest "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 5).Content
-            foreach($needle in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','sm-o2-master-visibility','sm-o2-combined-inline','o2rCombinedTimeline')){if($html -notmatch [regex]::Escape($needle)){throw "Installed shell missing $needle"}}
+            foreach($needle in @('sleepmate-v530.js','sleepmate-v530.css','sleepmate-aurora.css','sm-o2-master-visibility','sm-o2-combined-inline','o2rCombinedTimeline','sm-o2-data-management-inline','o2rDataManagement')){if($html -notmatch [regex]::Escape($needle)){throw "Installed shell missing $needle"}}
             if($html -match 'data-page="oximetry"'){throw 'Base HTML hard-codes Oximetria slot.'}
             try{Invoke-RestMethod "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5|Out-Null}catch{}
             if(-not $backend.WaitForExit(10000)){Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue}
