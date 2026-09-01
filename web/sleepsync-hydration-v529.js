@@ -250,7 +250,7 @@
     const box=document.createElement('section');
     box.id='frPackagedReopen';
     box.className='fr-settings-reopen';
-    box.innerHTML='<b>Első beállítás varázsló</b><p>Újra végigvezet az adatforrás, SleepSync, távoli elérés, PWA, backup és AI alapbeállításain.</p><button type="button" class="fr-btn">Varázsló megnyitása</button>';
+    box.innerHTML='<b>Első beállítás varázsló</b><p>Újra végigvezet az adatforrás, SleepSync, távoli elérés, backup és AI alapbeállításain.</p><button type="button" class="fr-btn">Varázsló megnyitása</button>';
     box.querySelector('button').onclick=()=>window.openSleepMateFirstRun();
     settings.appendChild(box);
     return true;
@@ -279,7 +279,7 @@
     // on the integration path that is actually present in the MSI/PWA bundle.
     if(document.querySelector('script[data-sleepmate-first-run="1"]'))return;
     const script=document.createElement('script');
-    script.src='/first-run.js?v=2';
+    script.src='/first-run.js?v=3';
     script.async=false;
     script.dataset.sleepmateFirstRun='1';
     script.onload=lateBootPackagedOnboarding;
