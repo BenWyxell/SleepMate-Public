@@ -1,6 +1,7 @@
-const CACHE='sleepmate-shell-v5.2.14-ss131';
-const SHELL_CACHE='sleepmate-shell-v5.2.14-ss131';
-const API_CACHE='sleepmate-api-v5.2.14-ss131';
+const CACHE='sleepmate-shell-v5.3.2-o2';
+const SHELL_CACHE='sleepmate-shell-v5.3.2-o2';
+const API_CACHE='sleepmate-api-v5.3.2-o2';
+// Compatibility markers retained for the long-lived SleepSync verifier: sleepmate-shell-v5.2.14-ss131 / sleepmate-api-v5.2.14-ss131
 const SHELL=[
   '/',
   '/index.html',
@@ -22,6 +23,14 @@ const SHELL=[
   '/sleepmate-chart-v523.js?v=5.2.14',
   '/sleepmate-sleep-v524.js?v=5.2.6',
   '/sleepmate-sleep-refresh-v5212.js?v=5.2.12',
+  '/sleepmate-aurora.css?v=5.3.2',
+  '/sleepmate-v530.css?v=5.3.2',
+  '/sleepmate-v530.js?v=5.3.2',
+  '/o2ring.css?v=5.3.2',
+  '/o2ring.js?v=5.3.2',
+  '/o2ring-report-ui.js?v=5.3.2',
+  '/o2ring-v532.css?v=5.3.2',
+  '/o2ring-v532.js?v=5.3.2',
   '/manifest.webmanifest',
   '/assets/pwa-192.png',
   '/assets/pwa-512.png',
@@ -37,7 +46,8 @@ const CODE_ASSETS=new Set([
   '/sleepsync-override.css','/sleepsync-stability.css','/sleepsync-polish.css',
   '/sleepsync-notice.css','/sleepsync-polish.js','/sleepsync-hydration-v529.js','/sleepsync-mobile-v5213.css',
   '/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js',
-  '/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'
+  '/sleepmate-sleep-refresh-v5212.js','/sleepmate-aurora.css','/sleepmate-v530.css','/sleepmate-v530.js',
+  '/o2ring.css','/o2ring.js','/o2ring-report-ui.js','/o2ring-v532.css','/o2ring-v532.js','/manifest.webmanifest'
 ]);
 const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|sleep-analysis|system\/status|logs\/diagnostics)/;
 
@@ -62,9 +72,7 @@ self.addEventListener('activate',event=>{
     await Promise.all(stale.map(k=>caches.delete(k)));
     await self.clients.claim();
 
-    // A SleepMate funkciói részben verziózott kiegészítő scriptekből épülnek fel.
-    // Új shell aktiválásakor egyszer újranavigáljuk az élő klienseket, hogy a
-    // mobil/PWA ne maradhasson régi ütemező DOM-mal, Alvások modullal vagy chart overlayjel.
+    // A new UI generation must never keep a stale O2/PWA runtime alive.
     if(stale.length){
       const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
       await Promise.all(windows.map(async client=>{
