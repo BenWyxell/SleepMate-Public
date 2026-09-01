@@ -1,0 +1,41 @@
+name: O2Ring integration contract
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sleepmate-o2ring-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  o2ring-contract:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Validate Python and browser syntax
+        shell: powershell
+        run: |
+          python -m pip install pytest
+          python -m py_compile .\cpap\oximetry.py .\cpap\o2ring_vld.py .\cpap\o2ring_ble.py .\cpap\o2ring_integration.py .\cpap\o2ring_device_config.py .\cpap\o2ring_report.py .\sleepmate_main.py
+          node --check .\web\o2ring.js
+
+      - name: Run O2Ring regression tests
+        shell: powershell
+        run: |
+          python -m pytest -q .\tests\test_oximetry.py .\tests\test_o2ring_vld.py .\tests\test_o2ring_ble_protocol.py
