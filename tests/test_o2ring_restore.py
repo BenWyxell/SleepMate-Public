@@ -167,6 +167,103 @@ def test_rehydrate_does_not_restart_ble_when_restored_master_switch_is_off(tmp_p
     assert service.manager.preferred == "AA:BB:CC:DD:EE:FF"
 
 
+def test_restore_wrapper_orders_quiesce_before_base_restore_then_rehydrates(monkeypatch):
+    import cpap.o2ring_restore as restore_module
+
+    events = []
+
+    class Service:
+        manager = object()
+
+    service = Service()
+
+    class Log:
+        def append(self, *_args, **_kwargs):
+            events.append("log")
+
+    class Handler:
+        persistent_log = Log()
+
+        def _progress(self, *_args, **_kwargs):
+            pass
+
+        def _restore_backup_job(self, jid, uploaded):
+            events.append("base_restore")
+            return {"restored": 7}
+
+    class App:
+        pass
+
+    App.Handler = Handler
+
+    monkeypatch.setattr(restore_module, "_installed", False)
+    monkeypatch.setattr(restore_module, "get_service", lambda _app: service)
+    monkeypatch.setattr(restore_module, "_stop_and_wait", lambda manager: events.append("quiesce"))
+
+    def fake_rehydrate(_service, *, restart=True):
+        events.append("rehydrate")
+        return {
+            "recordings": 3,
+            "known_sources": 4,
+            "remembered_device": True,
+            "ble_restarted": bool(restart),
+        }
+
+    monkeypatch.setattr(restore_module, "_rehydrate_service", fake_rehydrate)
+    restore_module.install_o2ring_restore(App)
+
+    result = Handler()._restore_backup_job("job", "backup.zip")
+    assert events[:3] == ["quiesce", "base_restore", "rehydrate"]
+    assert result["restored"] == 7
+    assert result["o2ring_rehydrated"] is True
+    assert result["o2ring_recordings"] == 3
+    assert result["o2ring_ble_restarted"] is True
+
+
+def test_restore_wrapper_recovers_o2_runtime_but_preserves_original_restore_error(monkeypatch):
+    import cpap.o2ring_restore as restore_module
+
+    events = []
+
+    class Service:
+        manager = object()
+
+    service = Service()
+
+    class Log:
+        def append(self, *_args, **_kwargs):
+            events.append("log")
+
+    class Handler:
+        persistent_log = Log()
+
+        def _progress(self, *_args, **_kwargs):
+            pass
+
+        def _restore_backup_job(self, jid, uploaded):
+            events.append("base_restore")
+            raise ValueError("restore exploded")
+
+    class App:
+        pass
+
+    App.Handler = Handler
+
+    monkeypatch.setattr(restore_module, "_installed", False)
+    monkeypatch.setattr(restore_module, "get_service", lambda _app: service)
+    monkeypatch.setattr(restore_module, "_stop_and_wait", lambda manager: events.append("quiesce"))
+    monkeypatch.setattr(
+        restore_module,
+        "_rehydrate_service",
+        lambda _service, restart=True: events.append("rehydrate") or {"ble_restarted": True},
+    )
+    restore_module.install_o2ring_restore(App)
+
+    with pytest.raises(ValueError, match="restore exploded"):
+        Handler()._restore_backup_job("job", "broken.zip")
+    assert events[:3] == ["quiesce", "base_restore", "rehydrate"]
+
+
 def test_v53_shell_installs_restore_lifecycle_without_modifying_base_restore():
     shell = (ROOT / "cpap" / "v530_features.py").read_text(encoding="utf-8")
     addon = (ROOT / "cpap" / "o2ring_restore.py").read_text(encoding="utf-8")
