@@ -1,9 +1,6 @@
 name: Finalize SleepMate 5.3.1 patch release
 
 on:
-  push:
-    branches:
-      - v5.3.0-o2ring-aurora-pwa
   workflow_dispatch:
 
 permissions:
@@ -58,10 +55,12 @@ jobs:
           for js in web/o2ring-polish-core.js web/o2ring-polish-trends.js web/o2ring-polish-daily.js web/o2ring-polish-dashboard.js web/o2ring.js web/o2ring-report-ui.js; do
             node --check "$js"
           done
-          grep -Fq 'o2rDashboardSummary' web/o2ring-polish-dashboard.js
-          grep -Fq 'reportO2Average' web/o2ring-polish-dashboard.js
-          grep -Fq 'o2rBackToCharts' web/o2ring-polish-daily.js
-          grep -Fq 'o2rMixedLiveChart' web/o2ring-polish-core.js
+          grep -Fq 'smDashboardO2' web/o2ring-polish-dashboard.js
+          grep -Fq 'data-sm-o2-col' web/o2ring-polish-dashboard.js
+          grep -Fq 'o2rDailyBack' web/o2ring-polish-daily.js
+          grep -Fq 'smStackMixed' web/o2ring-polish-daily.js
+          grep -Fq 'o2rLiveCombined' web/o2ring-polish-core.js
+          grep -Fq 'smO2DeviceQuick' web/o2ring-polish-core.js
           grep -Fq 'o2rTrendSpo2V2' web/o2ring-polish-trends.js
           echo "RELEASE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
 
@@ -163,20 +162,20 @@ jobs:
         run: |
           set -euo pipefail
           cat RELEASE_NOTES_5_3_1.md > release-notes.generated.md
-          cat >> release-notes.generated.md <<EOF
-
----
-
-## Kiadás ellenőrzése
-
-A 5.3.1 kizárólag a hivatalos Windows workflow **VERIFIED** artifactjából kerül publikálásra. A kiadási kapu tartalmazza a teljes publikus tesztkészletet, PyInstaller Windows program-tree buildet, WiX 3.14.1 magyar MSI buildet és payload-ellenőrzést, valódi msiexec telepítést, telepített backend/API ellenőrzést, eltávolítást, majd a ZIP/MSI/manifeszt teljes SHA-256 integritásellenőrzését.
-
-**Aláírás:** a Windows kiadás jelenleg nincs Authenticode-dal aláírva, ezért SmartScreen vagy vírusvédelmi reputációs figyelmeztetés megjelenhet.
-
-**Hardver:** fizikai O2Ring BLE rádiós/firmware validáció nem automatizálható a CI-ben, ezért ilyen hardvertesztet a release nem állít.
-
-Verified commit: \`$RELEASE_SHA\`
-EOF
+          {
+            echo
+            echo '---'
+            echo
+            echo '## Kiadás ellenőrzése'
+            echo
+            echo 'A 5.3.1 kizárólag a hivatalos Windows workflow **VERIFIED** artifactjából kerül publikálásra. A kiadási kapu tartalmazza a teljes publikus tesztkészletet, PyInstaller Windows program-tree buildet, WiX 3.14.1 magyar MSI buildet és payload-ellenőrzést, valódi msiexec telepítést, telepített backend/API ellenőrzést, eltávolítást, majd a ZIP/MSI/manifeszt teljes SHA-256 integritásellenőrzését.'
+            echo
+            echo '**Aláírás:** a Windows kiadás jelenleg nincs Authenticode-dal aláírva, ezért SmartScreen vagy vírusvédelmi reputációs figyelmeztetés megjelenhet.'
+            echo
+            echo '**Hardver:** fizikai O2Ring BLE rádiós/firmware validáció nem automatizálható a CI-ben, ezért ilyen hardvertesztet a release nem állít.'
+            echo
+            printf 'Verified commit: `%s`\n' "$RELEASE_SHA"
+          } >> release-notes.generated.md
 
       - name: Publish SleepMate 5.3.1 from VERIFIED artifact
         if: steps.target.outputs.exists != 'true'
