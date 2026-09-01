@@ -41,13 +41,14 @@ Vadonatúj telepítésnél a SleepMate nem tekinti automatikusan érvényes adat
 ## Kiadási lánc
 
 - Az MSI a GitHub Actions Windows runnerén, rögzített **WiX Toolset 3.14.1** toolchainnel készül.
-- A CI ellenőrzi a publikus forrás tisztaságát, Python/JavaScript szintaxist, a csomagolási contractokat, a teljes Windows program-tree buildet, az MSI payloadot, a telepített backend API-kat, SleepSyncet, Google Drive státuszt, onboardingot, Web Push-t és az eltávolítást.
-- A CI továbbra sem publikál automatikusan GitHub Release-t és nem végez production aláírást; a SignPath aláírás a trusted build láncra kerül majd.
+- A CI ellenőrzi a publikus forrás tisztaságát, Python/JavaScript szintaxist, a csomagolási contractokat, a teljes publikus tesztkészletet, a Windows program-tree buildet, a ZIP/manifeszt hash- és tartalomkonzisztenciáját, az MSI payloadot, a valódi telepítést, a telepített backend API-kat, SleepSyncet, Google Drive státuszt, onboardingot, Web Push-t, a leállítást, az eltávolítást és a felhasználói állapot megőrzését.
+- A GitHub Release publikálása kizárólag a sikeres smoke-test és a külön release-integritási kapu után, az ugyanabban a workflow-ban létrehozott **VERIFIED** artifactból történhet.
+- A production Authenticode-aláírás egyelőre nincs bekapcsolva; a SignPath aláírás a trusted build láncra kerül majd. Emiatt a Windows jelenleg SmartScreen vagy vírusvédelmi reputációs figyelmeztetést jeleníthet meg.
 
 Kiadási csatorna: **stable**.
 Release build: **5.2.17**.
 API: **19**.
-Release validation: **Windows program-tree + magyar MSI + telepített EXE/backend smoke-test**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
 
 ---
 
