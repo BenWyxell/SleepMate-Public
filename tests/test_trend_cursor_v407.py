@@ -1,7 +1,7 @@
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-js = (root / 'web' / 'app.js').read_text(encoding='utf-8')
+js = (root / 'web' / 'app-core.js').read_text(encoding='utf-8')
 css = (root / 'web' / 'style.css').read_text(encoding='utf-8')
 
 assert "document.body.appendChild(ov)" in js

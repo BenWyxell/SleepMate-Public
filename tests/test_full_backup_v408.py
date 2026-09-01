@@ -27,7 +27,7 @@ with TemporaryDirectory() as td:
     assert not any(n.startswith('private/reports/') for n in names)
     assert not any(n.startswith('private/measurement/') for n in names)
 
-js=(Path(__file__).resolve().parents[1]/'web'/'app.js').read_text(encoding='utf-8')
+js=(Path(__file__).resolve().parents[1]/'web'/'app-core.js').read_text(encoding='utf-8')
 assert 'showSaveFilePicker' in js and 'createWritable' in js
 assert 'SleepMate_teljes_backup_' in js
 print('PASS: v4.0.9 full backup excludes runtime browser locks and uses Save As picker')

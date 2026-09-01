@@ -31,7 +31,7 @@ try:
     sw=(BASE/'web'/'service-worker.js').read_text(encoding='utf-8')
     assert '/api/' in sw and 'fetch' in sw
     html=(BASE/'web'/'index.html').read_text(encoding='utf-8')
-    js=(BASE/'web'/'app.js').read_text(encoding='utf-8')
+    js=(BASE/'web'/'app-core.js').read_text(encoding='utf-8')
     assert 'Távoli elérés' in html and 'Tailscale' in html and 'Cloudflare' in html
     assert 'installPwa' in js and 'loadRemoteStatus' in js
     assert 'További akciók' not in js and '>•••<' not in js
