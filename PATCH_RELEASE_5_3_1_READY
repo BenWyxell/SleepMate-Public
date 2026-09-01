@@ -1,2 +1,0 @@
-SleepMate 5.3.1 patch release candidate marker.
-The release finalizer must only publish after the official Windows VERIFIED artifact succeeds for the exact commit.
