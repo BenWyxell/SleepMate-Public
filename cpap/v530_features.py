@@ -65,6 +65,15 @@ def install_v530_features(app_module) -> None:
                 if "sleepmate-v530.js" not in text:
                     scripts.append('<script src="/sleepmate-v530.js?v=5.3.0"></script>')
 
+                # The synchronized CPAP + SpO2 + pulse timeline is embedded into
+                # the HTML shell rather than loaded as another cache-sensitive PWA
+                # resource. It stays inert until o2ring.js creates the Oximetry
+                # daily panel, so master-OFF still leaves no visible O2Ring UI.
+                combined_path = app_module.WEB / "o2ring-combined.js"
+                if combined_path.is_file() and "sm-o2-combined-inline" not in text:
+                    combined = combined_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
+                    scripts.append(f'<script id="sm-o2-combined-inline">{combined}</script>')
+
                 if scripts:
                     marker = "</body>"
                     inject = "\n" + "\n".join(scripts) + "\n"
