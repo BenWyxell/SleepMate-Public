@@ -7,6 +7,7 @@ import urllib.parse
 from typing import Any
 
 from .o2ring_ble import O2RingBLEManager
+from .o2ring_lifecycle import start_reliably, stop_and_wait
 from .o2ring_vld import parse_vld
 from .oximetry import OximetrySample, OximetryStore, match_recording_to_cpap, summarize_samples
 
@@ -149,16 +150,18 @@ class O2RingService:
         self.manager.set_preferred_device(current.get("o2ring_preferred_address"))
 
         if self._ble_should_run(current):
-            self.manager.start(sync_on_start=bool(current.get("o2ring_auto_sync", True)))
+            start_reliably(self.manager, sync_on_start=bool(current.get("o2ring_auto_sync", True)))
         else:
-            # This closes SleepMate's GATT work but deliberately keeps the
-            # remembered device address and all historical recordings.
-            self.manager.stop()
+            # Configuration OFF is complete only when the worker can no longer
+            # reconnect or write another VLD into local state.
+            stop_and_wait(self.manager)
         return self.settings()
 
     def forget_device(self) -> dict[str, Any]:
         """Explicitly forget the selected ring without deleting historical data."""
-        self.manager.stop()
+        # Wait before clearing pairing so a final callback from the old connection
+        # cannot immediately remember the address again.
+        stop_and_wait(self.manager)
         self.manager.set_preferred_device(None)
         self.app.save_config({"o2ring_preferred_address": ""})
         return self.status()
@@ -319,19 +322,28 @@ def install_o2ring_integration(app_module) -> None:
                 return self._json({"error": "Az O2Ring integráció nincs bekapcsolva."}, 409)
             if not cfg.get("o2ring_ble_enabled", True):
                 return self._json({"error": "Az O2Ring Bluetooth funkció ki van kapcsolva."}, 409)
-            service.manager.start(sync_on_start=False)
-            return self._json({"ok": True})
+            try:
+                start_reliably(service.manager, sync_on_start=False)
+                return self._json({"ok": True})
+            except Exception as exc:
+                return self._json({"error": str(exc)}, 409)
         if path == "/api/o2ring/sync":
             cfg = service.settings()
             if not cfg.get("o2ring_enabled"):
                 return self._json({"error": "Az O2Ring integráció nincs bekapcsolva."}, 409)
             if not cfg.get("o2ring_ble_enabled", True):
                 return self._json({"error": "Az O2Ring Bluetooth funkció ki van kapcsolva."}, 409)
-            service.manager.start(sync_on_start=False)
-            service.manager.request_sync()
-            return self._json({"ok": True, "message": "O2Ring szinkron kérése elindult."})
+            try:
+                start_reliably(service.manager, sync_on_start=False)
+                service.manager.request_sync()
+                return self._json({"ok": True, "message": "O2Ring szinkron kérése elindult."})
+            except Exception as exc:
+                return self._json({"error": str(exc)}, 409)
         if path == "/api/o2ring/forget-device":
-            return self._json(service.forget_device())
+            try:
+                return self._json(service.forget_device())
+            except Exception as exc:
+                return self._json({"error": str(exc)}, 409)
         return original_post(self)
 
     handler_cls.do_GET = do_GET
