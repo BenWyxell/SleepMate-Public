@@ -1,3 +1,36 @@
+# SleepMate 5.2.18
+
+A SleepMate 5.2.18 a Windows első-indítási beállítóvarázsló használhatósági javítása. A cél az volt, hogy a wizard ne csak a Tailscale / Cloudflare résznél, hanem **minden olyan lépésen belül görgethető legyen, ahol a tartalom ezt igényli**, miközben a fejléc és az alsó navigáció végig a helyén marad.
+
+## Első beállítás – globális görgetés
+
+- A teljes varázsló középső tartalmi területe közös, függőlegesen görgethető felületet kapott.
+- A scroll nem egyetlen lépéshez kötött: adatforrás, SleepSync, Tailscale, Cloudflare, backup, AI és összegzés közben is működik, ha a tartalom túlnő az ablakon.
+- A felső fejléc és az alsó `Vissza` / `Tovább` navigáció a görgethető tartalmon kívül marad.
+- Kisebb desktop ablakmagasságnál és mobil nézetben is külön magasságkezelés biztosítja, hogy a tartalom elérhető maradjon.
+- Lépésváltáskor a wizard tartalma visszaáll a tetejére.
+- A wizard megnyitásakor a mögötte lévő főoldal görgetése tiltott, így nem a háttéroldal mozdul el.
+
+## Desktop onboarding egyszerűsítés
+
+- A hibás / villogó brand-logókép kikerült a wizard fejlécéből.
+- A **PWA telepítés és Web Push / értesítési engedély** kikerült az első desktop beállításból; ezek nem részei többé a wizardnak.
+- Az 5. lépés most kizárólag az opcionális **automatikus backup és AI** beállításokat kezeli.
+- A `first-run.js` és `first-run.css` loader cache-bustja frissült, hogy a böngésző ne tartsa bent a korábbi wizard-verziót.
+
+## Regressziós védelem
+
+- Külön teszt tiltja, hogy a PWA/Web Push onboarding-elemek visszakerüljenek.
+- A fő Windows packaging contract is ellenőrzi a globális scroll-szerződést és az új cache-bustot.
+- A release előtt továbbra is lefut a teljes publikus tesztkészlet, a PyInstaller build, a magyar WiX MSI, a valódi MSI telepítés, backend/API smoke, eltávolítás, state-megőrzés, ZIP/MSI/manifeszt hash- és tartalomellenőrzés.
+
+Kiadási csatorna: **stable**.
+Release build: **5.2.18**.
+API: **19**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
+
+---
+
 # SleepMate 5.2.17
 
 A SleepMate 5.2.17 a korábbi, SignPath-kompatibilis MSI candidate helyett már valódi felhasználói Windows-telepítőt és első-indítási beállítóvarázslót ad.
