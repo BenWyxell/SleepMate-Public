@@ -199,9 +199,9 @@ force = UPDATER.index("stop_process_tree(tray_pid", gr)
 image_fallback = UPDATER.index("stop_sleepmate_image_processes(launcher_exe", gr)
 require(gr < force < image_fallback, "force-kill can run before graceful tray icon cleanup")
 
-# Release/PWA shell. No shell asset changed in 5.2.16, so the existing shell cache
+# Release/PWA shell. No shell asset changed in 5.2.17, so the existing shell cache
 # generation intentionally remains 5.2.14-ss131 while the desktop backend version advances.
-require('APP_VERSION = "5.2.16"' in VERSION, "release version is not 5.2.16")
+require('APP_VERSION = "5.2.17"' in VERSION, "release version is not 5.2.17")
 require("sleepmate-shell-v5.2.14-ss131" in SERVICE_WORKER, "live PWA shell cache is not 5.2.14-ss131")
 require("sleepmate-api-v5.2.14-ss131" in SERVICE_WORKER, "live PWA API cache is not 5.2.14-ss131")
 for asset in (
