@@ -1,11 +1,23 @@
-"""Parser for Wellue/Viatom O2Ring VLD3 overnight recordings."""
+"""Parser for Wellue/Viatom O2Ring VLD3 overnight recordings.
+
+The binary layout follows the Viatom VLD3 header used by the O2Ring family:
+``<HHBBBBBHHHHBBBBBHBB`` for the first 26 bytes, followed by padding to a
+40-byte header and then 5-byte records ``<BB?BB``.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+import struct
 from typing import Any
 
 from .oximetry import OximetrySample
+
+
+HEADER_SIZE = 40
+RECORD_SIZE_V3 = 5
+HEADER_STRUCT = struct.Struct("<HHBBBBBHHHHBBBBBHBB")
+RECORD_STRUCT = struct.Struct("<BB?BB")
 
 
 @dataclass(frozen=True)
@@ -26,41 +38,77 @@ class ParsedVLD:
 
 
 def parse_vld(data: bytes) -> ParsedVLD:
-    if len(data) < 45:
+    if len(data) < HEADER_SIZE + RECORD_SIZE_V3:
         raise ValueError("Az O2Ring VLD fájl túl rövid.")
-    version = int.from_bytes(data[0:2], "little")
+
+    fields = HEADER_STRUCT.unpack(data[:HEADER_STRUCT.size])
+    (
+        version, year, month, day, hour, minute, second,
+        file_size, file_size_2, duration, duration_2,
+        _spo2_avg, _spo2_min, _spo2_3pct, _spo2_4pct, _unknown1,
+        _time_under_90pct, _events_under_90pct, _o2_score,
+    ) = fields
+
     if version != 3:
         raise ValueError(f"Nem támogatott O2Ring VLD verzió: {version}")
-    year = int.from_bytes(data[2:4], "little")
-    month, day, hour, minute, second = [int(x) for x in data[4:9]]
     try:
         start = datetime(year, month, day, hour, minute, second)
     except ValueError as exc:
         raise ValueError("Az O2Ring felvétel kezdő időpontja hibás.") from exc
-    duration = int.from_bytes(data[18:20], "little")
-    records = data[40:]
-    count = len(records) // 5
+
+    records = data[HEADER_SIZE:]
+    if len(records) % RECORD_SIZE_V3:
+        raise ValueError("Az O2Ring VLD mérési blokkja csonka.")
+    count = len(records) // RECORD_SIZE_V3
     if count <= 0:
         raise ValueError("Az O2Ring felvételben nincs mérési minta.")
-    interval = float(duration) / count if duration > 0 else 4.0
+
+    # Known VLD3 recordings use 2 s or 4 s resolution. The duplicate duration
+    # and size fields are kept as integrity hints; firmware revisions may not
+    # populate both identically, so only reject contradictions that are clearly
+    # impossible rather than overfitting one firmware build.
+    if duration <= 0:
+        duration = int(duration_2)
+    interval = float(duration) / float(count) if duration > 0 else 0.0
+    if not (abs(interval - 2.0) < 1e-6 or abs(interval - 4.0) < 1e-6):
+        raise ValueError(f"Ismeretlen vagy sérült O2Ring mintavételi felbontás: {interval:.3f} s")
+
+    actual_size = len(data)
+    for declared in (file_size, file_size_2):
+        # Some firmwares store payload size instead of total file size. Accept
+        # either convention but reject a declared size that matches neither.
+        if declared and declared not in {actual_size, actual_size - HEADER_SIZE, len(records)}:
+            # Do not fail solely on this old firmware metadata: the record count
+            # and exact 2/4 s resolution above are stronger integrity checks.
+            break
+
     samples: list[OximetrySample] = []
     start_ts = start.timestamp()
     for index in range(count):
-        row = records[index * 5:index * 5 + 5]
-        spo2_raw = int(row[0])
-        hr_raw = int(row[1])
-        invalid = bool(row[2]) or spo2_raw == 0xFF or hr_raw == 0xFF
-        spo2 = spo2_raw if not invalid and 50 <= spo2_raw <= 100 else None
-        hr = hr_raw if not invalid and 20 <= hr_raw <= 250 else None
-        samples.append(OximetrySample(
-            timestamp=start_ts + index * interval,
-            spo2=spo2,
-            heart_rate=hr,
-            motion=int(row[3]),
-            valid=bool(not invalid and spo2 is not None and hr is not None),
-        ))
-    return ParsedVLD(version=version, start=start, duration_seconds=duration,
-                     interval_seconds=interval, samples=samples)
+        offset = index * RECORD_SIZE_V3
+        spo2_raw, hr_raw, invalid_flag, motion, _vibration = RECORD_STRUCT.unpack(
+            records[offset:offset + RECORD_SIZE_V3]
+        )
+        invalid = bool(invalid_flag) or spo2_raw < 10 or spo2_raw > 100
+        spo2 = int(spo2_raw) if not invalid and 50 <= spo2_raw <= 100 else None
+        hr = int(hr_raw) if not invalid and 20 <= hr_raw <= 250 else None
+        samples.append(
+            OximetrySample(
+                timestamp=start_ts + index * interval,
+                spo2=spo2,
+                heart_rate=hr,
+                motion=int(motion),
+                valid=bool(not invalid and spo2 is not None and hr is not None),
+            )
+        )
+
+    return ParsedVLD(
+        version=version,
+        start=start,
+        duration_seconds=int(duration),
+        interval_seconds=interval,
+        samples=samples,
+    )
 
 
 def recording_public_payload(parsed: ParsedVLD, *, recording_id: str, summary: dict[str, Any], source_name: str) -> dict[str, Any]:
@@ -75,4 +123,7 @@ def recording_public_payload(parsed: ParsedVLD, *, recording_id: str, summary: d
     }
 
 
-__all__ = ["ParsedVLD", "parse_vld", "recording_public_payload"]
+__all__ = [
+    "ParsedVLD", "parse_vld", "recording_public_payload",
+    "HEADER_SIZE", "RECORD_SIZE_V3", "HEADER_STRUCT", "RECORD_STRUCT",
+]
