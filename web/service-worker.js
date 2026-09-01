@@ -49,7 +49,7 @@ const CODE_ASSETS=new Set([
   '/sleepmate-sleep-refresh-v5212.js','/sleepmate-aurora.css','/sleepmate-v530.css','/sleepmate-v530.js',
   '/o2ring.css','/o2ring.js','/o2ring-report-ui.js','/o2ring-v532.css','/o2ring-v532.js','/manifest.webmanifest'
 ]);
-const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|sleep-analysis|system\/status|logs\/diagnostics)/;
+const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|sleep-analysis|system\/status|logs\/diagnostics|o2ring\/(?:day|day-batch|trends))/;
 
 async function precache(){
   const cache=await caches.open(SHELL_CACHE);
