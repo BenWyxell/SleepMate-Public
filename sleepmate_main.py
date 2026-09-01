@@ -173,6 +173,13 @@ def main() -> int:
         from cpap.sleep_analysis_v522 import install_sleep_analysis_v522
         from cpap.sleepsync_integration import install_sleepsync_integration
         from cpap.google_drive_integration import install_google_drive_integration
+        from cpap.o2ring_integration import install_o2ring_integration
+        from cpap.o2ring_device_config import install_o2ring_device_config
+        from cpap.o2ring_stream import install_o2ring_stream
+        from cpap.o2ring_report import install_o2ring_report
+        from cpap.ui_preferences_v530 import install_ui_preferences_v530
+        from cpap.v530_features import install_v530_features
+
         install_v511_features()
         install_v512_features()
         install_v513_diagnostics()
@@ -182,6 +189,16 @@ def main() -> int:
         install_sleepsync_integration(app)
         install_google_drive_integration(app)
         install_onboarding(app)
+
+        # v5.3 additions are layered only after the full v5.2.20 runtime is
+        # installed, so the public release remains the exact behavioral base.
+        install_o2ring_integration(app)
+        install_o2ring_device_config(app)
+        install_o2ring_stream(app)
+        install_ui_preferences_v530(app)
+        install_o2ring_report()
+        install_v530_features(app)
+
         app.main()
         return 0
 
