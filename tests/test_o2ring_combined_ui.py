@@ -34,7 +34,8 @@ def test_combined_timeline_is_embedded_in_dynamic_v53_shell_only():
     shell = (ROOT / "cpap" / "v530_features.py").read_text(encoding="utf-8")
     base_html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 
-    assert 'app_module.WEB / "o2ring-combined.js"' in shell
+    assert '("o2ring-combined.js", "sm-o2-combined-inline")' in shell
+    assert "feature_path = app_module.WEB / filename" in shell
     assert "sm-o2-combined-inline" in shell
     assert 'replace("</script", "<\\\\/script")' in shell
     assert "o2ring-combined.js" not in base_html
