@@ -1,3 +1,45 @@
+# SleepMate 5.2.20
+
+A SleepMate 5.2.20 a frissítési folyamatot végleges, felhasználóbarát publikus csatornára állítja, és egyértelművé teszi a korábban mentett Cloudflare hostname eredetét.
+
+## Hivatalos, tokenmentes frissítési csatorna
+
+- A SleepMate frissítési forrása fixen a publikus **`BenWyxell/SleepMate-Public`** GitHub repository.
+- A felhasználónak többé nem kell repository-nevet vagy GitHub tokent megadnia.
+- A Beállításokból kikerült a GitHub repository mező, a tokenmező és a mentett token törlése.
+- A kliens nem éget be közös GitHub tokent, és frissítésellenőrzéskor nem küld `Authorization` fejlécet.
+- Korábbi verzióból esetleg megmaradt updater token automatikusan törlésre kerül és nem használható fel.
+- Az automatikus ellenőrzés induláskor, majd **12 óránként** lefut; telepítés továbbra is csak kifejezett felhasználói jóváhagyással indul.
+- A kézi **Frissítés keresése** és **Frissítés telepítése** funkció megmaradt.
+- A release manifest, SHA-256 ellenőrzés, teljes frissítés előtti backup és automatikus rollback változatlanul kötelező.
+
+## Cloudflare első beállítás
+
+- Ha a Cloudflare hostname egy korábban mentett SleepMate konfigurációból kerül visszatöltésre, a wizard ezt külön **„Korábban mentett SleepMate-beállítás.”** jelöléssel mutatja.
+- A jelölés eltűnik, amint a felhasználó szerkeszteni kezdi a hostname mezőt.
+- Így egy régi domain többé nem tűnik automatikusan generált vagy a SleepMate által kitalált címnek.
+- A first-run loader új cache-generációt kapott, hogy a régi wizard JavaScript/CSS ne ragadhasson bent.
+
+## Validáció
+
+- publikus forrás hygiene gate
+- Python + JavaScript syntax/contract tesztek
+- publikus updater credential-mentességi regresszióteszt
+- Cloudflare hostname provenance regresszióteszt
+- teljes publikus pytest-készlet
+- PyInstaller Windows program-tree build
+- magyar WiX MSI build + payload ellenőrzés
+- valódi MSI install / backend API / uninstall smoke-test
+- ZIP/manifeszt/MSI SHA-256 és VERIFIED release-set
+- GitHub publikálás kizárólag minden kapu sikere után
+
+Kiadási csatorna: **stable**.
+Release build: **5.2.20**.
+API: **19**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
+
+---
+
 # SleepMate 5.2.19
 
 A SleepMate 5.2.19 a Windows első-indítási varázsló görgetésének második, szerkezeti javítása. A v5.2.18-ban használt grid-alapú `minmax(0,1fr)` megoldás egyes tényleges desktop layout-helyzetekben továbbra is hagyta, hogy a panel min-content magassága az alsó navigáció alá nyúljon. A v5.2.19 ezért nem finomhangolja tovább ezt a modellt, hanem a teljes wizardot kényszerített flex-oszlopos felépítésre váltja.

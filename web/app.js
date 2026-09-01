@@ -1,8 +1,8 @@
 (function(){
   const ENGINE='/app-engine119.js?v=130';
   const POLISH='/sleepsync-polish.js?v=130';
-  const HYDRATION='/sleepsync-hydration-v529.js?v=130';
-  const FIRST_RUN='/first-run.js?v=1';
+  const HYDRATION='/sleepsync-hydration-v529.js?v=131';
+  const FIRST_RUN='/first-run.js?v=4';
 
   function appendEngine(){
     if(window.__sleepmateStableEngine130)return;
@@ -43,11 +43,11 @@
       polish.dataset.sleepsyncPolish='130';
       document.head.appendChild(polish);
     }
-    if(!document.querySelector('script[data-sleepsync-hydration="130"]')){
+    if(!document.querySelector('script[data-sleepsync-hydration="131"]')){
       const hydration=document.createElement('script');
       hydration.src=HYDRATION;
       hydration.async=true;
-      hydration.dataset.sleepsyncHydration='130';
+      hydration.dataset.sleepsyncHydration='131';
       document.head.appendChild(hydration);
     }
   },{once:true});

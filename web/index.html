@@ -715,13 +715,11 @@
           </section>
           <div class="maintenance-grid">
             <article class="panel maintenance-card update-card">
-              <div class="panel-head"><div><h3>Frissítések</h3><span>Privát GitHub Releases forrás, SHA-256 ellenőrzéssel.</span></div><span id="updateStateBadge" class="remote-status neutral">Nincs beállítva</span></div>
-              <label class="form-field"><span>GitHub repository</span><input id="updateGithubRepo" type="text" autocomplete="off" placeholder="owner/SleepMate"></label>
-              <label class="form-field"><span>GitHub token privát repositoryhoz</span><div class="secret-input-row"><input id="updateGithubToken" type="password" autocomplete="new-password" placeholder="Csak új token megadásakor töltsd ki"><button class="secret-toggle" data-secret-target="updateGithubToken" type="button">Mutat</button></div><small id="updateGithubTokenHint">Nincs mentett token</small></label>
-              <label class="checkbox-field compact"><input id="updateGithubClearToken" type="checkbox"><span>Mentett GitHub token törlése</span></label>
-              <label class="setting-toggle"><input id="updateAutoCheck" type="checkbox" checked><span><b>Automatikus frissítésellenőrzés</b><small>Induláskor ellenőrzi a privát GitHub release-t. Telepítést nem indít el engedély nélkül.</small></span></label>
-              <div class="update-version-grid"><div><span>Telepített</span><strong id="updateCurrentVersion">5.0.0</strong></div><div><span>Legfrissebb</span><strong id="updateLatestVersion">—</strong></div><div><span>Utolsó ellenőrzés</span><strong id="updateLastCheck">—</strong></div></div>
-              <div class="settings-actions wrap"><button id="saveUpdateSettings" type="button">GitHub kapcsolat mentése</button><button id="checkForUpdates" type="button">Frissítés keresése</button><button id="installUpdate" class="primary" type="button" disabled>Frissítés telepítése</button></div>
+              <div class="panel-head"><div><h3>Frissítések</h3><span>Hivatalos SleepMate kiadások • SHA-256 ellenőrzéssel.</span></div><span id="updateStateBadge" class="remote-status ok">Ellenőrzésre kész</span></div>
+              <p>A SleepMate a hivatalos publikus kiadási csatornát használja. GitHub-fiók, repository beállítás és GitHub token nem szükséges.</p>
+              <label class="setting-toggle"><input id="updateAutoCheck" type="checkbox" checked><span><b>Automatikus frissítésellenőrzés</b><small>Induláskor, majd 12 óránként ellenőrzi az új SleepMate kiadást. Telepítést nem indít el a jóváhagyásod nélkül.</small></span></label>
+              <div class="update-version-grid"><div><span>Telepített</span><strong id="updateCurrentVersion">5.2.20</strong></div><div><span>Legfrissebb</span><strong id="updateLatestVersion">—</strong></div><div><span>Utolsó ellenőrzés</span><strong id="updateLastCheck">—</strong></div></div>
+              <div class="settings-actions wrap"><button id="saveUpdateSettings" type="button">Beállítás mentése</button><button id="checkForUpdates" type="button">Frissítés keresése</button><button id="installUpdate" class="primary" type="button" disabled>Frissítés telepítése</button></div>
               <p id="updateStatusText" class="muted"></p>
               <div class="job-progress hidden" data-progress-card="update"><div class="progress-track"><i></i></div><strong>Frissítés előkészítése…</strong><span></span></div>
               <div class="rollback-line"><span>Előző programverzió</span><button id="rollbackUpdate" type="button" disabled>Rollback</button></div>

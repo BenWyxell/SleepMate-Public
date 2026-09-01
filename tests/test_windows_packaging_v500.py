@@ -188,12 +188,12 @@ def test_first_run_onboarding_contract():
     assert "height:100dvh" in css
     assert "html.fr-open,html.fr-open body{overflow:hidden}" in css
     assert "body.scrollTop=0" in js
-    assert "/first-run.css?v=3" in js
+    assert "/first-run.css?v=4" in js
 
     hydration_text = hydration.read_text(encoding="utf-8")
     assert "loadPackagedOnboarding" in hydration_text
     assert "lateBootPackagedOnboarding" in hydration_text
-    assert "/first-run.js?v=3" in hydration_text
+    assert "/first-run.js?v=4" in hydration_text
     assert "PWA, backup és AI" not in hydration_text
 
     spec_text = spec.read_text(encoding="utf-8")

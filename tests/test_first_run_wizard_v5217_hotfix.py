@@ -29,5 +29,12 @@ def test_every_wizard_step_uses_forced_global_scrollable_body():
 
 
 def test_first_run_cache_busters_follow_scroll_hotfix():
-    assert "/first-run.css?v=3" in JS
-    assert "/first-run.js?v=3" in HYDRATION
+    assert "/first-run.css?v=4" in JS
+    assert "/first-run.js?v=4" in HYDRATION
+
+
+def test_cloudflare_prefill_is_explained_as_saved_state():
+    assert 'id="frCfHostOrigin"' in JS
+    assert 'Korábban mentett SleepMate-beállítás.' in JS
+    assert "cfOrigin.hidden=!savedCfHost" in JS
+    assert "origin.hidden=true" in JS

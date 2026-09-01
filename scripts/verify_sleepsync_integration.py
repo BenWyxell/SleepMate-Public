@@ -132,7 +132,7 @@ require("tailscale_auto_serve" in ENGINE and "tailscale_enable()" in ENGINE, "Ta
 
 require("document.readyState==='loading'" in UI and "document.write" in UI, "parser-ordered integration boot is missing")
 require("/app-engine119.js?v=130" in UI, "stable integration engine generation is not active")
-require("/sleepsync-polish.js?v=130" in UI and "/sleepsync-hydration-v529.js?v=130" in UI, "source frontend does not load current SleepSync add-ons")
+require("/sleepsync-polish.js?v=130" in UI and "/sleepsync-hydration-v529.js?v=131" in UI, "source frontend does not load current SleepSync add-ons")
 require("hardRescue" not in UI and "bootHealthy" not in UI, "old mobile boot rescue leaked back in")
 require("getRegistrations" not in UI and "unregister" not in UI, "page startup must never unregister the PWA service worker")
 require("const core=document.createElement('script')" in ARCHIVE_UI and "core.src='/app-core.js?v=5.0.8'" in ARCHIVE_UI, "frozen #119 engine no longer boots the unchanged core directly")
@@ -161,7 +161,7 @@ require('id="ssScheduleDays"' in ARCHIVE_UI and 'id="ssTimeList"' in ARCHIVE_UI,
 require("enforceScheduledOnlyUi" in UI_POLISH and "mode.value='scheduled'" in UI_POLISH, "scheduled-only UI guard is missing")
 require("auto_sync_mode:'scheduled'" in UI_POLISH, "automatic toggle can persist a non-scheduled mode")
 require("card_available" not in UI_POLISH, "removed card-available automation mode leaked back into active polish logic")
-require("ensureHydrationModule" in UI_POLISH and "script.src='/sleepsync-hydration-v529.js'" in UI_POLISH, "packaged PWA cannot self-load SleepSync hydration")
+require("ensureHydrationModule" in UI_POLISH and "script.src='/sleepsync-hydration-v529.js?v=131'" in UI_POLISH, "packaged PWA cannot self-load SleepSync hydration")
 require("window.__sleepSyncHydrateSettings=hydrate" in HYDRATION, "hydration module does not expose a packaged fallback entry point")
 require("repairScheduleIfCleared" in HYDRATION, "late PWA schedule rerender recovery is missing")
 require("ss-schedule-ready" in HYDRATION and "setSaveReady(false)" in HYDRATION and "setSaveReady(true)" in HYDRATION, "schedule saving is not hydration-gated")
@@ -187,9 +187,9 @@ force = UPDATER.index("stop_process_tree(tray_pid", gr)
 image_fallback = UPDATER.index("stop_sleepmate_image_processes(launcher_exe", gr)
 require(gr < force < image_fallback, "force-kill can run before graceful tray icon cleanup")
 
-# Release/PWA shell. The 5.2.19 patch hardens the desktop first-run wizard scroll container,
+# Release/PWA shell. The 5.2.20 patch hardens the desktop first-run wizard scroll container,
 # while the existing core PWA shell cache generation remains 5.2.14-ss131.
-require('APP_VERSION = "5.2.19"' in VERSION, "release version is not 5.2.19")
+require('APP_VERSION = "5.2.20"' in VERSION, "release version is not 5.2.20")
 require("sleepmate-shell-v5.2.14-ss131" in SERVICE_WORKER, "live PWA shell cache is not 5.2.14-ss131")
 require("sleepmate-api-v5.2.14-ss131" in SERVICE_WORKER, "live PWA API cache is not 5.2.14-ss131")
 for asset in (

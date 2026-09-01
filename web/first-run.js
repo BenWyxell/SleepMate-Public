@@ -9,7 +9,7 @@
   function addStyle(){
     if(document.querySelector('link[data-sleepmate-first-run]'))return;
     const link=document.createElement('link');
-    link.rel='stylesheet';link.href='/first-run.css?v=3';link.dataset.sleepmateFirstRun='1';
+    link.rel='stylesheet';link.href='/first-run.css?v=4';link.dataset.sleepmateFirstRun='1';
     document.head.appendChild(link);
   }
   async function request(url,options={}){
@@ -91,7 +91,7 @@
 
             <div class="fr-remote-detail" data-remote="cloudflare">
               <div class="fr-subsection"><div class="fr-subsection-head"><b>Cloudflare Tunnel</b><span id="frCfState" class="fr-status-pill">Ellenőrzés…</span></div><p class="fr-lead" style="font-size:13px;margin-bottom:8px">A cloudflared kliens telepíthető innen. A Cloudflare-fiók, domain és Zero Trust szabály a te Cloudflare környezetedben marad.</p><div class="fr-actions"><button class="fr-btn primary" id="frCfInstall" type="button" data-busy-lock>cloudflared telepítése</button><button class="fr-btn" id="frCfRefresh" type="button">Állapot frissítése</button></div>
-                <div class="fr-field"><label>Publikus hostname</label><input id="frCfHost" class="fr-input" placeholder="sleepmate.pelda.hu"></div>
+                <div class="fr-field"><label>Publikus hostname</label><input id="frCfHost" class="fr-input" placeholder="sleepmate.pelda.hu"><small id="frCfHostOrigin" class="fr-saved-origin" hidden>Korábban mentett SleepMate-beállítás.</small></div>
                 <label class="fr-check"><input id="frCfAccess" type="checkbox"><span><b>Cloudflare Access / Zero Trust védelem be van állítva</b><br><small>A SleepMate biztonsági okból enélkül nem indítja el a saját tunnel folyamatát.</small></span></label>
                 <div class="fr-field"><label>Tunnel token <small style="color:#8190a8">(csak ha a SleepMate indítja a tunnelt)</small></label><input id="frCfToken" type="password" class="fr-input" autocomplete="off" placeholder="A token titkosítva, DPAPI-val kerül mentésre"></div>
                 <label class="fr-check"><input id="frCfStart" type="checkbox"><span><b>Tunnel indítása most</b><br><small>Csak a fenti hostname és Access-visszaigazolás után.</small></span></label>
@@ -205,7 +205,7 @@
     $('#frNext',root).onclick=next;$('#frBack',root).onclick=()=>setStep(state.step-1);$('#frSkip',root).onclick=()=>finish(true);
     $('#frBrowseData',root).onclick=async()=>{try{const r=await request('/api/system/pick-folder',{method:'POST',body:{user_initiated:true,initial_dir:$('#frDataDir').value.trim()}});if(r.folder)$('#frDataDir').value=r.folder}catch(e){message(e.message,'error')}};
     $$('input[name="frRemote"]',root).forEach(x=>x.onchange=updateRemotePanels);
-    $('#frTsInstall',root).onclick=()=>installRemote('tailscale');$('#frCfInstall',root).onclick=()=>installRemote('cloudflare');$('#frRemoteRefresh',root).onclick=()=>loadRemote(true);$('#frCfRefresh',root).onclick=()=>loadRemote(true);
+    $('#frTsInstall',root).onclick=()=>installRemote('tailscale');$('#frCfInstall',root).onclick=()=>installRemote('cloudflare');$('#frRemoteRefresh',root).onclick=()=>loadRemote(true);$('#frCfRefresh',root).onclick=()=>loadRemote(true);$('#frCfHost',root).oninput=()=>{const origin=$('#frCfHostOrigin',root);if(origin)origin.hidden=true};
     $('#frTsEnable',root).onclick=async()=>{busy(true,'Bekapcsolás…');try{await request('/api/remote/tailscale',{method:'POST',body:{action:'enable'}});await loadRemote(true);message('Tailscale HTTPS elérés kész.','ok')}catch(e){message(e.message,'error')}finally{busy(false)}};
     $('#frTsOpen',root).onclick=()=>{const u=$('#frTsUrl').textContent.trim();if(u)window.open(u,'_blank','noopener')};
   }
@@ -213,7 +213,7 @@
   async function hydrate(){
     const results=await Promise.allSettled([request('/api/config'),request('/api/sleepsync/settings'),request('/api/remote/status'),request('/api/ai/config')]);
     state.config=results[0].status==='fulfilled'?results[0].value:{};state.sleepsync=results[1].status==='fulfilled'?results[1].value:{};state.remote=results[2].status==='fulfilled'?results[2].value:{};state.ai=results[3].status==='fulfilled'?results[3].value:{};
-    $('#frDataDir').value=state.config.data_dir||'';$('#frAutoScan').checked=state.config.auto_scan_enabled!==false;$('#frSleepSync').checked=!!state.sleepsync.auto_sync_enabled;$('#frBackup').checked=!!state.config.auto_backup_enabled;$('#frCfHost').value=state.config.cloudflare_hostname||'';$('#frCfAccess').checked=!!state.config.cloudflare_access_confirmed;
+    $('#frDataDir').value=state.config.data_dir||'';$('#frAutoScan').checked=state.config.auto_scan_enabled!==false;$('#frSleepSync').checked=!!state.sleepsync.auto_sync_enabled;$('#frBackup').checked=!!state.config.auto_backup_enabled;const savedCfHost=String(state.config.cloudflare_hostname||'').trim();$('#frCfHost').value=savedCfHost;const cfOrigin=$('#frCfHostOrigin');if(cfOrigin)cfOrigin.hidden=!savedCfHost;$('#frCfAccess').checked=!!state.config.cloudflare_access_confirmed;
     const old=state.status?.choices||{};state.choices={...state.choices,...old,data_source_configured:!!state.config.data_dir,sleepsync_enabled:!!state.sleepsync.auto_sync_enabled,backup_enabled:!!state.config.auto_backup_enabled,gemini_configured:!!state.ai?.providers?.gemini?.configured,groq_configured:!!state.ai?.providers?.groq?.configured};
     if(old.remote_mode&&['local','tailscale','cloudflare'].includes(old.remote_mode)){const radio=$(`input[name="frRemote"][value="${old.remote_mode}"]`);if(radio)radio.checked=true}updateRemotePanels();await loadRemote(false);
   }

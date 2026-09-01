@@ -1,5 +1,5 @@
 APP_NAME = "SleepMate"
-APP_VERSION = "5.2.19"
+APP_VERSION = "5.2.20"
 API_VERSION = 19
 BUILD_CHANNEL = "stable"
 UPDATE_MANIFEST_FORMAT = "sleepmate-update"
