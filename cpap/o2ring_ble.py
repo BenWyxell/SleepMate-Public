@@ -182,11 +182,16 @@ class O2RingBLEManager:
     def queue_device_config(self, update: dict[str, Any]):
         self._pending_config = dict(update or {})
 
-    def start(self):
+    def start(self, *, sync_on_start: bool = True):
         if self._thread and self._thread.is_alive():
+            if sync_on_start:
+                self._sync_requested.set()
             return
         self._stop.clear()
-        self._sync_requested.set()
+        if sync_on_start:
+            self._sync_requested.set()
+        else:
+            self._sync_requested.clear()
         self._thread = threading.Thread(target=self._thread_main, name="SleepMate-O2Ring", daemon=True)
         self._thread.start()
 
