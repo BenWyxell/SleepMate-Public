@@ -178,18 +178,23 @@ def test_first_run_onboarding_contract():
         assert forbidden not in js
 
     css = first_css.read_text(encoding="utf-8")
-    assert "grid-template-rows:auto minmax(0,1fr) auto" in css
-    assert ".fr-body{min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto" in css
+    assert "display:flex;flex-direction:column" in css
+    assert ".fr-top{position:relative;z-index:2;display:flex;flex:0 0 auto" in css
+    assert ".fr-body{position:relative;flex:1 1 0;height:0;max-height:100%;min-width:0;min-height:0" in css
+    assert "overflow-y:scroll!important" in css
+    assert ".fr-footer{position:relative;z-index:3;display:flex;flex:0 0 auto" in css
+    assert "#sleepmateFirstRun *,#sleepmateFirstRun *::before,#sleepmateFirstRun *::after{box-sizing:border-box}" in css
     assert "height:min(820px,calc(100dvh - 52px))" in css
     assert "height:100dvh" in css
     assert "html.fr-open,html.fr-open body{overflow:hidden}" in css
     assert "body.scrollTop=0" in js
-    assert "/first-run.css?v=2" in js
+    assert "/first-run.css?v=3" in js
 
     hydration_text = hydration.read_text(encoding="utf-8")
     assert "loadPackagedOnboarding" in hydration_text
     assert "lateBootPackagedOnboarding" in hydration_text
-    assert "/first-run.js?v=2" in hydration_text
+    assert "/first-run.js?v=3" in hydration_text
+    assert "PWA, backup és AI" not in hydration_text
 
     spec_text = spec.read_text(encoding="utf-8")
     assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec_text
