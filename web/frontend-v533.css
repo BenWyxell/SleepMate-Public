@@ -1,0 +1,52 @@
+/* SleepMate 5.3.3 frontend/PWA recovery */
+#page-settings .sm-v533-o2-settings{overflow:visible}
+#page-settings .sm-v533-o2-settings .sm-o2-master,
+#page-settings .sm-v533-o2-settings #o2rDetails{max-width:none}
+#page-settings .sm-v533-o2-settings .sm-o2-master-head{grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px}
+#page-settings .sm-v533-o2-settings .sm-o2-runtime-settings{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#page-settings .sm-v533-o2-settings .sm-o2-runtime-settings>label,
+#page-settings .sm-v533-o2-settings .o2r-settings-grid>label{min-width:0}
+#page-settings .sm-v533-o2-settings .sm-o2-quickbar{padding:10px 12px;min-height:0}
+#page-settings .sm-v533-o2-settings .sm-o2-quick-copy small,
+#page-settings .sm-v533-o2-settings .sm-o2-quick-copy span{font-size:11px}
+#page-settings .sm-v533-o2-settings .sm-o2-quick-copy b{font-size:13px}
+
+#page-settings #frSettingsReopen.sm-v533-first-run-single{margin:16px 0 0!important}
+#page-settings [data-settings-panel]:not(.active) #frSettingsReopen{display:none!important}
+#page-settings .fr-settings-reopen+ .fr-settings-reopen{display:none!important}
+
+#page-settings [data-settings-tab="pwa"],
+#settingsCategorySelect option[value="pwa"]{display:none!important}
+#smPwaSettingsPanel{margin:0 0 16px!important}
+
+#page-oximetry .sm-v533-o2-hero{padding:10px 12px!important}
+#page-oximetry .sm-v533-o2-hero .o2r-hero-head{gap:8px!important;align-items:center!important}
+#page-oximetry .sm-v533-o2-hero .o2r-title-wrap h2{font-size:18px!important;margin:0!important}
+#page-oximetry .sm-v533-o2-hero .o2r-title-wrap p{font-size:11px!important;margin:2px 0 0!important}
+#page-oximetry .sm-v533-o2-hero .o2r-status{font-size:11px!important;padding:5px 9px!important;min-height:0!important}
+#page-oximetry .sm-v533-o2-hero .o2r-hero-actions{gap:6px!important;margin-top:8px!important}
+#page-oximetry .sm-v533-o2-hero .o2r-hero-actions button,
+#page-oximetry .sm-v533-o2-hero .o2r-live-follow{min-height:32px!important;padding:6px 9px!important;font-size:11px!important}
+
+#dashboardDailyView .view-switch button{white-space:nowrap}
+#dashboardDailyView #o2rDailyBtn{display:inline-flex;align-items:center}
+#dashboardDailyView #smO2FocusSection,
+#dashboardDailyView .sm-o2-stack-v532{contain:layout paint}
+
+#trendUsage,#trendEvents{filter:none!important;box-shadow:none!important}
+.trend-bar-card canvas{filter:none!important}
+
+@media(max-width:900px){
+  #page-settings .sm-v533-o2-settings .sm-o2-runtime-settings,
+  #page-settings .sm-v533-o2-settings .o2r-settings-grid{grid-template-columns:1fr!important}
+  #page-settings .sm-v533-o2-settings .sm-o2-master-head{grid-template-columns:auto 1fr!important}
+  #page-settings .sm-v533-o2-settings .sm-switch-large{grid-column:1/-1;justify-self:start}
+  #page-oximetry .sm-v533-o2-hero .o2r-hero-head{align-items:flex-start!important}
+}
+@media(max-width:560px){
+  #page-oximetry .sm-v533-o2-hero{padding:9px!important}
+  #page-oximetry .sm-v533-o2-hero .o2r-title-wrap p{display:none}
+  #page-oximetry .sm-v533-o2-hero .o2r-hero-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
+  #page-oximetry .sm-v533-o2-hero .o2r-live-follow{grid-column:1/-1}
+  #dashboardDailyView .view-switch{overflow-x:auto;max-width:100%}
+}

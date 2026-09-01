@@ -7,10 +7,10 @@ _installed = False
 
 
 def install_v530_features(app_module) -> None:
-    """Layer the v5.3+ visual/PWA controller over the proven v5.2.20 shell.
+    """Layer the v5.3+ visual/PWA controller over the proven data core.
 
-    v5.3.2 keeps the stable launcher/data core while replacing the interval-heavy
-    post-5.3.0 O2 polish with one deterministic, idempotent runtime layer.
+    v5.3.3 adds a deterministic frontend recovery controller which owns version
+    synchronization, settings deduplication and the dashboard/O2 view state.
     """
     global _installed
     if _installed:
@@ -39,10 +39,12 @@ def install_v530_features(app_module) -> None:
                 text = index_path.read_text(encoding="utf-8")
 
                 head_assets: list[str] = []
+                if 'name="sleepmate-ui-version"' not in text:
+                    head_assets.append('<meta name="sleepmate-ui-version" content="5.3.3">')
                 if "sleepmate-aurora.css" not in text:
-                    head_assets.append('<link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.2">')
+                    head_assets.append('<link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.3">')
                 if "sleepmate-v530.css" not in text:
-                    head_assets.append('<link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.2">')
+                    head_assets.append('<link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.3">')
                 if "sm-o2-master-visibility" not in text:
                     head_assets.append(
                         '<style id="sm-o2-master-visibility">'
@@ -52,13 +54,14 @@ def install_v530_features(app_module) -> None:
                         '</style>'
                     )
 
-                # v5.3.2 is intentionally the only active post-release O2 polish.
-                # It is embedded into the no-cache HTML shell, so PWA and desktop
-                # receive the same code without waiting on stale cache entries.
-                polish_css_path = app_module.WEB / "o2ring-v532.css"
-                if polish_css_path.is_file() and "sm-o2-v532-inline-css" not in text:
-                    polish_css = polish_css_path.read_text(encoding="utf-8").replace("</style", "<\\/style")
-                    head_assets.append(f'<style id="sm-o2-v532-inline-css">{polish_css}</style>')
+                for filename, element_id in (
+                    ("o2ring-v532.css", "sm-o2-v532-inline-css"),
+                    ("frontend-v533.css", "sm-frontend-v533-inline-css"),
+                ):
+                    css_path = app_module.WEB / filename
+                    if css_path.is_file() and element_id not in text:
+                        css = css_path.read_text(encoding="utf-8").replace("</style", "<\\/style")
+                        head_assets.append(f'<style id="{element_id}">{css}</style>')
 
                 if head_assets:
                     marker = "</head>"
@@ -66,8 +69,6 @@ def install_v530_features(app_module) -> None:
                     text = text.replace(marker, inject + marker, 1) if marker in text else inject + text
 
                 scripts: list[str] = []
-                # Preserve every v5.2.20 shell extension normally injected by
-                # sleep_analysis_v522._install_shell_loader.
                 if "sleepmate-sleep.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep.js?v=5.2.6"></script>')
                 if "sleepmate-sleep-v523.js" not in text:
@@ -79,11 +80,12 @@ def install_v530_features(app_module) -> None:
                 if "sleepmate-sleep-refresh-v5212.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>')
                 if "sleepmate-v530.js" not in text:
-                    scripts.append('<script src="/sleepmate-v530.js?v=5.3.2"></script>')
+                    scripts.append('<script src="/sleepmate-v530.js?v=5.3.3"></script>')
 
                 inline_features = (
                     ("o2ring-data-management.js", "sm-o2-data-management-inline"),
                     ("o2ring-v532.js", "sm-o2-v532-inline"),
+                    ("frontend-v533.js", "sm-frontend-v533-inline"),
                 )
                 for filename, element_id in inline_features:
                     feature_path = app_module.WEB / filename
@@ -100,7 +102,9 @@ def install_v530_features(app_module) -> None:
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("X-SleepMate-UI-Version", "5.3.3")
                 self.end_headers()
                 self.wfile.write(body)
                 return
