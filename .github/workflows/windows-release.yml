@@ -65,6 +65,7 @@ jobs:
           node --check .\web\sleepsync-hydration-v529.js
           node --check .\web\service-worker-v508-base.js
           python .\scripts\verify_sleepsync_integration.py
+          if ($LASTEXITCODE -ne 0) { throw "SleepSync integration verification failed: $LASTEXITCODE" }
           python -m pytest -q .\tests\test_release_version_contract.py .\tests\test_tailscale_v401.py .\tests\test_tailscale_v402.py .\tests\test_v511_contract.py .\tests\test_windows_packaging_v500.py
 
       - name: Build SleepMate program tree and portable update ZIP
