@@ -5,7 +5,7 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_windows_release_pipeline_uses_localized_msi_and_no_active_inno_builder():
+def test_windows_release_pipeline_uses_localized_msi_and_verified_publish_contract():
     assert (ROOT / "sleepmate_main.py").is_file()
     assert (ROOT / "build/windows/SleepMate.spec").is_file()
     assert (ROOT / "build/windows/SleepMateUpdater.spec").is_file()
@@ -14,7 +14,10 @@ def test_windows_release_pipeline_uses_localized_msi_and_no_active_inno_builder(
     assert (ROOT / ".github/workflows/windows-release.yml").is_file()
 
     workflow = (ROOT / ".github/workflows/windows-release.yml").read_text(encoding="utf-8")
-    assert "Windows build + Hungarian MSI - unsigned CI only" in workflow
+    assert "Windows release + Hungarian MSI + verified publish" in workflow
+    assert "Build and fully test SleepMate Windows program tree" in workflow
+    assert ".\\build\\windows\\build_release.ps1" in workflow
+    assert ".\\build\\windows\\build_release.ps1 -SkipTests" not in workflow
     assert "choco install wixtoolset --version 3.14.1.20250415" in workflow
     assert "WIX_CANDLE" in workflow
     assert "WIX_LIGHT" in workflow
@@ -26,10 +29,19 @@ def test_windows_release_pipeline_uses_localized_msi_and_no_active_inno_builder(
     assert "msiexec.exe" in workflow
     assert "'/i'" in workflow
     assert "'/x'" in workflow
+    assert "verify-release-set:" in workflow
+    assert "needs: smoke-test-msi" in workflow
+    assert "SleepMate-Windows-x64-VERIFIED-RELEASE" in workflow
+    assert "sha256sum -c SHA256SUMS.txt" in workflow
+    assert "publish-github-release:" in workflow
+    assert "needs: verify-release-set" in workflow
+    assert "gh release create" in workflow
+    assert "--draft" in workflow
+    assert "gh release upload" in workflow
+    assert "gh release edit \"$TAG\" --repo \"$GITHUB_REPOSITORY\" --draft=false" in workflow
     assert "Install Inno Setup" not in workflow
     assert "WINDOWS_CERT_PFX_BASE64" not in workflow
     assert "WINDOWS_CERT_PASSWORD" not in workflow
-    assert "gh release create" not in workflow
     assert "publish-unsigned" not in workflow
 
     build = (ROOT / "build/windows/build_release.ps1").read_text(encoding="utf-8")
