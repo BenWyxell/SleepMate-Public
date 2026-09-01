@@ -225,11 +225,32 @@ if core_app.exists() and engine_app.exists():
     if app_entry not in sw:
         raise RuntimeError('proven service worker shell does not contain packaged app.js')
     sw = sw.replace(app_entry, extra_shell, 1)
-    old_code = "const codeAsset=['/style.css','/app.js','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'].includes(url.pathname);"
-    new_code = "const codeAsset=['/style.css','/sleepmate-aurora.css','/sleepmate-v530.css','/sleepmate-v530.js','/o2ring.css','/o2ring.js','/o2ring-report-ui.js','/app.js','/mobile-boot-diagnostics.js','/sleepsync-bootstrap.js','/sleepsync-integration.js','/sleepsync-polish.js','/sleepsync.css','/sleepsync-polish.css','/sleepsync-notice.css','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'].includes(url.pathname);"
-    if old_code not in sw:
-        raise RuntimeError('proven service worker code-asset rule changed unexpectedly')
-    sw = sw.replace(old_code, new_code, 1)
+
+    # Keep the current proven worker's code-asset contract and append only the
+    # packaging-specific diagnostics/SleepSync assets. This deliberately avoids
+    # hard-coding the complete list, because v5.3.2 adds O2Ring assets to the
+    # same network-first rule and future stable assets may extend it again.
+    code_asset_match = re.search(
+        r"const codeAsset=\[(?P<items>[^\]]*)\]\.includes\(url\.pathname\);",
+        sw,
+    )
+    if not code_asset_match:
+        raise RuntimeError('proven service worker code-asset rule is missing')
+    code_items = code_asset_match.group('items')
+    for asset in (
+        '/mobile-boot-diagnostics.js',
+        '/sleepsync-bootstrap.js',
+        '/sleepsync-integration.js',
+        '/sleepsync-polish.js',
+        '/sleepsync.css',
+        '/sleepsync-polish.css',
+        '/sleepsync-notice.css',
+    ):
+        token = repr(asset)
+        if token not in code_items:
+            code_items += (',' if code_items else '') + token
+    new_code = f"const codeAsset=[{code_items}].includes(url.pathname);"
+    sw = sw[:code_asset_match.start()] + new_code + sw[code_asset_match.end():]
     sw_path.write_text(sw, encoding='utf-8')
 
     sleepsync_css = WEB_GENERATED / 'sleepsync.css'
