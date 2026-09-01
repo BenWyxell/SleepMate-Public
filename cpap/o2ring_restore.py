@@ -8,15 +8,26 @@ base maintenance implementation.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
+import zipfile
 
 from .o2ring_ble import O2RingBLEManager
-from .o2ring_integration import get_service
+from .o2ring_integration import DEFAULTS, get_service
 from .oximetry import OximetryStore
 
 
 _installed = False
 _STOP_TIMEOUT_SECONDS = 20.0
+_BOOL_KEYS = {
+    "o2ring_enabled",
+    "o2ring_ble_enabled",
+    "o2ring_auto_connect",
+    "o2ring_auto_sync",
+    "o2ring_auto_match",
+    "o2ring_show_motion",
+}
 
 
 def _stop_and_wait(manager, timeout: float = _STOP_TIMEOUT_SECONDS) -> None:
@@ -30,6 +41,65 @@ def _stop_and_wait(manager, timeout: float = _STOP_TIMEOUT_SECONDS) -> None:
             "Az O2Ring Bluetooth háttérfolyamata nem állt le időben; "
             "a backup visszaállítása biztonsági okból megszakadt."
         )
+
+
+def _bool_value(value: Any, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"1", "true", "yes", "on"}:
+            return True
+        if text in {"0", "false", "no", "off"}:
+            return False
+    return bool(default)
+
+
+def _normalized_restore_config(saved: dict[str, Any] | None) -> dict[str, Any]:
+    """Return a complete, validated v5.3 O2 config snapshot.
+
+    Old backups predate O2Ring. Restoring one must not leave a newer machine's
+    pairing or feature state behind, so missing O2 keys intentionally fall back
+    to the v5.3 defaults (master OFF, no remembered ring).
+    """
+    source = saved if isinstance(saved, dict) else {}
+    result = dict(DEFAULTS)
+    for key, default in DEFAULTS.items():
+        if key not in source:
+            continue
+        value = source.get(key)
+        if key in _BOOL_KEYS:
+            result[key] = _bool_value(value, bool(default))
+        elif key == "o2ring_clock_offset_seconds":
+            try:
+                result[key] = max(-900.0, min(900.0, float(value or 0.0)))
+            except (TypeError, ValueError):
+                result[key] = float(default)
+        elif key in {"o2ring_spo2_reference", "o2ring_spo2_secondary_reference"}:
+            try:
+                result[key] = max(70, min(100, int(value)))
+            except (TypeError, ValueError):
+                result[key] = int(default)
+        else:
+            result[key] = str(value or "").strip()
+    return result
+
+
+def _read_backup_o2_config(uploaded: str | Path) -> dict[str, Any] | None:
+    """Read the manifest before base restore deletes the uploaded ZIP."""
+    try:
+        with zipfile.ZipFile(Path(uploaded)) as zf:
+            manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+        if not isinstance(manifest, dict):
+            return None
+        config = manifest.get("config") if isinstance(manifest.get("config"), dict) else {}
+        return _normalized_restore_config(config)
+    except Exception:
+        # The base restore remains the authority for ZIP/manifest validation and
+        # will raise its own user-facing error if the archive is invalid.
+        return None
 
 
 def _fresh_manager(service) -> O2RingBLEManager:
@@ -82,6 +152,11 @@ def install_o2ring_restore(app_module) -> None:
     original_restore = handler_cls._restore_backup_job
 
     def _restore_backup_job(self, jid: str, uploaded: str):
+        # app.py's base restore only re-applies keys present in its v5.2.20
+        # defaults. O2 settings are v5.3-owned, so capture and validate them from
+        # the full-backup manifest before the uploaded ZIP is removed.
+        restored_o2_config = _read_backup_o2_config(uploaded)
+
         old_manager = service.manager
         self._progress(jid, 3, "O2Ring leállítása", "Bluetooth háttérfolyamat biztonságos leállítása…")
         _stop_and_wait(old_manager)
@@ -104,12 +179,16 @@ def install_o2ring_restore(app_module) -> None:
                     pass
             raise
 
+        if restored_o2_config is not None:
+            app_module.save_config(restored_o2_config)
+
         self._progress(jid, 98, "O2Ring visszaállítása", "Oximetriai állapot és Bluetooth runtime újraépítése…")
         runtime = _rehydrate_service(service, restart=True)
         if isinstance(result, dict):
             result["o2ring_rehydrated"] = True
             result["o2ring_recordings"] = int(runtime.get("recordings") or 0)
             result["o2ring_ble_restarted"] = bool(runtime.get("ble_restarted"))
+            result["o2ring_config_restored"] = restored_o2_config is not None
 
         try:
             self.persistent_log.append(
@@ -119,6 +198,7 @@ def install_o2ring_restore(app_module) -> None:
                     "known_sources": int(runtime.get("known_sources") or 0),
                     "remembered_device": bool(runtime.get("remembered_device")),
                     "ble_restarted": bool(runtime.get("ble_restarted")),
+                    "config_restored": restored_o2_config is not None,
                 },
             )
         except Exception:
@@ -132,5 +212,7 @@ def install_o2ring_restore(app_module) -> None:
 __all__ = [
     "install_o2ring_restore",
     "_stop_and_wait",
+    "_normalized_restore_config",
+    "_read_backup_o2_config",
     "_rehydrate_service",
 ]
