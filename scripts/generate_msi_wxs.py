@@ -19,6 +19,7 @@ LEGACY_INNO_KEY = (
     r"Software\Microsoft\Windows\CurrentVersion\Uninstall"
     r"\{7E655DC3-62BC-4A9D-8EC2-B0CC579126E1}_is1"
 )
+COMPONENT_REGISTRY_KEY = r"Software\SleepMate\Installer\Components"
 
 
 def q(name: str) -> str:
@@ -36,29 +37,28 @@ def guid_for(kind: str, value: str) -> str:
 
 def version_tuple(value: str) -> tuple[int, int, int]:
     parts = value.split(".")
-    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+    if len(parts) != 3 or not all(part.isdigit() for part in parts):
         raise ValueError(f"MSI version must be numeric x.y.z, got {value!r}")
-    major, minor, build = (int(p) for p in parts)
+    major, minor, build = (int(part) for part in parts)
     if not (0 <= major <= 255 and 0 <= minor <= 255 and 0 <= build <= 65535):
         raise ValueError("MSI ProductVersion fields are outside Windows Installer limits")
     return major, minor, build
 
 
 def content_hash(source_dir: Path) -> str:
-    h = hashlib.sha256()
+    digest = hashlib.sha256()
     for path in sorted(p for p in source_dir.rglob("*") if p.is_file()):
         rel = path.relative_to(source_dir).as_posix()
-        h.update(rel.encode("utf-8"))
-        h.update(b"\0")
-        with path.open("rb") as f:
-            for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                h.update(chunk)
-        h.update(b"\0")
-    return h.hexdigest()
+        digest.update(rel.encode("utf-8"))
+        digest.update(b"\0")
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _rtf_escape(text: str) -> str:
-    """Escape Unicode text for a deterministic ANSI RTF stream."""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     out: list[str] = []
     for char in text:
@@ -78,7 +78,6 @@ def _rtf_escape(text: str) -> str:
                 signed = code if code <= 32767 else code - 65536
                 out.append(f"\\u{signed}?")
             else:
-                # Encode supplementary characters as UTF-16 surrogate pairs.
                 value = code - 0x10000
                 high = 0xD800 + (value >> 10)
                 low = 0xDC00 + (value & 0x3FF)
@@ -87,7 +86,6 @@ def _rtf_escape(text: str) -> str:
 
 
 def write_legal_rtf(output_dir: Path) -> Path:
-    """Create the single scrollable legal document accepted by the MSI wizard."""
     repo_root = Path(__file__).resolve().parents[1]
     license_text = (repo_root / "LICENSE").read_text(encoding="utf-8", errors="replace")
     privacy_text = (repo_root / "PRIVACY.md").read_text(encoding="utf-8", errors="replace")
@@ -117,14 +115,30 @@ def write_legal_rtf(output_dir: Path) -> Path:
     return target
 
 
+def add_registry_keypath(component: ET.Element, component_id: str, version: str) -> None:
+    """Give profile-directory components an HKCU key path as required by ICE38."""
+    ET.SubElement(
+        component,
+        q("RegistryValue"),
+        {
+            "Root": "HKCU",
+            "Key": COMPONENT_REGISTRY_KEY,
+            "Name": component_id,
+            "Type": "string",
+            "Value": version,
+            "KeyPath": "yes",
+        },
+    )
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description="Generate deterministic WiX v3 WXS for the SleepMate Windows installer."
     )
-    ap.add_argument("--source-dir", required=True)
-    ap.add_argument("--output", required=True)
-    ap.add_argument("--version", required=True)
-    args = ap.parse_args()
+    parser.add_argument("--source-dir", required=True)
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--version", required=True)
+    args = parser.parse_args()
 
     source_dir = Path(args.source_dir).resolve()
     output = Path(args.output).resolve()
@@ -212,58 +226,45 @@ def main() -> int:
     ).text = "Installed OR NOT LEGACY_INNO_UNINSTALL"
 
     ET.SubElement(product, q("Property"), {"Id": "ARPNOREPAIR", "Value": "1"})
-    ET.SubElement(
-        product, q("Property"), {"Id": "ARPURLINFOABOUT", "Value": "https://mysleepmate.hu"}
-    )
-    ET.SubElement(
-        product, q("Property"), {"Id": "ARPHELPLINK", "Value": "https://mysleepmate.hu/segitseg"}
-    )
-    ET.SubElement(
-        product, q("Property"), {"Id": "SLEEPMATE_TREE_SHA256", "Value": tree_sha256}
-    )
-
+    ET.SubElement(product, q("Property"), {"Id": "ARPURLINFOABOUT", "Value": "https://mysleepmate.hu"})
+    ET.SubElement(product, q("Property"), {"Id": "ARPHELPLINK", "Value": "https://mysleepmate.hu/segitseg"})
+    ET.SubElement(product, q("Property"), {"Id": "SLEEPMATE_TREE_SHA256", "Value": tree_sha256})
     ET.SubElement(
         product,
         q("Icon"),
-        {
-            "Id": "SleepMateIcon",
-            "SourceFile": (source_dir / "SleepMate.ico").as_posix(),
-        },
+        {"Id": "SleepMateIcon", "SourceFile": (source_dir / "SleepMate.ico").as_posix()},
     )
     ET.SubElement(product, q("Property"), {"Id": "ARPPRODUCTICON", "Value": "SleepMateIcon"})
 
     target = ET.SubElement(product, q("Directory"), {"Id": "TARGETDIR", "Name": "SourceDir"})
     local_app = ET.SubElement(target, q("Directory"), {"Id": "LocalAppDataFolder"})
-    programs = ET.SubElement(local_app, q("Directory"), {"Id": "LocalProgramsFolder", "Name": "Programs"})
-    install = ET.SubElement(programs, q("Directory"), {"Id": "INSTALLFOLDER", "Name": "SleepMate"})
+    local_programs = ET.SubElement(local_app, q("Directory"), {"Id": "LocalProgramsFolder", "Name": "Programs"})
+    install = ET.SubElement(local_programs, q("Directory"), {"Id": "INSTALLFOLDER", "Name": "SleepMate"})
 
     program_menu = ET.SubElement(target, q("Directory"), {"Id": "ProgramMenuFolder"})
-    app_menu = ET.SubElement(
-        program_menu, q("Directory"), {"Id": "ApplicationProgramsFolder", "Name": "SleepMate"}
-    )
+    app_menu = ET.SubElement(program_menu, q("Directory"), {"Id": "ApplicationProgramsFolder", "Name": "SleepMate"})
     desktop = ET.SubElement(target, q("Directory"), {"Id": "DesktopFolder"})
 
-    dir_elements: dict[str, ET.Element] = {"": install}
+    directory_elements: dict[str, ET.Element] = {"": install}
+    directory_ids: dict[str, str] = {"": "INSTALLFOLDER"}
 
     def ensure_dir(rel_dir: Path) -> ET.Element:
         key = rel_dir.as_posix()
         if key == ".":
             key = ""
-        if key in dir_elements:
-            return dir_elements[key]
-        parent_rel = rel_dir.parent
-        parent_key = "" if parent_rel.as_posix() == "." else parent_rel.as_posix()
-        parent_el = ensure_dir(Path(parent_key)) if parent_key else install
-        el = ET.SubElement(
-            parent_el,
-            q("Directory"),
-            {"Id": stable_id("Dir", key), "Name": rel_dir.name},
-        )
-        dir_elements[key] = el
-        return el
+        if key in directory_elements:
+            return directory_elements[key]
+        parent_key = "" if rel_dir.parent.as_posix() == "." else rel_dir.parent.as_posix()
+        parent = ensure_dir(Path(parent_key)) if parent_key else install
+        directory_id = stable_id("Dir", key)
+        element = ET.SubElement(parent, q("Directory"), {"Id": directory_id, "Name": rel_dir.name})
+        directory_elements[key] = element
+        directory_ids[key] = directory_id
+        return element
 
     core_component_ids: list[str] = []
     main_exe_file_id = ""
+
     for path in files:
         rel = path.relative_to(source_dir)
         rel_posix = rel.as_posix()
@@ -276,15 +277,13 @@ def main() -> int:
             q("Component"),
             {"Id": component_id, "Guid": guid_for("file", rel_posix), "Win64": "yes"},
         )
+        # Files under LocalAppDataFolder are profile resources. ICE38 requires
+        # the component key path to be an HKCU registry value, not the file.
+        add_registry_keypath(component, component_id, version)
         ET.SubElement(
             component,
             q("File"),
-            {
-                "Id": file_id,
-                "Name": path.name,
-                "Source": path.as_posix(),
-                "KeyPath": "yes",
-            },
+            {"Id": file_id, "Name": path.name, "Source": path.as_posix()},
         )
         if rel_posix == "SleepMate.exe":
             main_exe_file_id = file_id
@@ -313,26 +312,37 @@ def main() -> int:
     ET.SubElement(
         registry_component,
         q("RegistryValue"),
-        {
-            "Root": "HKCU",
-            "Key": r"Software\SleepMate",
-            "Name": "StatePath",
-            "Type": "string",
-            "Value": "[LocalAppDataFolder]SleepMate",
-        },
+        {"Root": "HKCU", "Key": r"Software\SleepMate", "Name": "StatePath", "Type": "string", "Value": "[LocalAppDataFolder]SleepMate"},
     )
     ET.SubElement(
         registry_component,
         q("RegistryValue"),
-        {
-            "Root": "HKCU",
-            "Key": r"Software\SleepMate",
-            "Name": "Version",
-            "Type": "string",
-            "Value": version,
-        },
+        {"Root": "HKCU", "Key": r"Software\SleepMate", "Name": "Version", "Type": "string", "Value": version},
     )
     core_component_ids.append("SleepMateRegistry")
+
+    # ICE64 requires every authored directory below a user-profile directory to
+    # appear in the RemoveFile table. RemoveFolder only deletes an empty folder,
+    # so LocalProgramsFolder is safe even when other per-user applications live there.
+    cleanup_component = ET.SubElement(
+        install,
+        q("Component"),
+        {"Id": "SleepMateDirectoryCleanup", "Guid": guid_for("component", "directory-cleanup"), "Win64": "yes"},
+    )
+    add_registry_keypath(cleanup_component, "SleepMateDirectoryCleanup", version)
+    for key, directory_id in sorted(directory_ids.items(), key=lambda item: (item[0].count("/"), item[0]), reverse=True):
+        suffix = key or "install-root"
+        ET.SubElement(
+            cleanup_component,
+            q("RemoveFolder"),
+            {"Id": stable_id("RmDir", suffix), "Directory": directory_id, "On": "uninstall"},
+        )
+    ET.SubElement(
+        cleanup_component,
+        q("RemoveFolder"),
+        {"Id": "RemoveLocalProgramsFolderIfEmpty", "Directory": "LocalProgramsFolder", "On": "uninstall"},
+    )
+    core_component_ids.append("SleepMateDirectoryCleanup")
 
     menu_component = ET.SubElement(
         app_menu,
@@ -342,45 +352,19 @@ def main() -> int:
     ET.SubElement(
         menu_component,
         q("RegistryValue"),
-        {
-            "Root": "HKCU",
-            "Key": r"Software\SleepMate\Installer",
-            "Name": "StartMenuShortcut",
-            "Type": "integer",
-            "Value": "1",
-            "KeyPath": "yes",
-        },
+        {"Root": "HKCU", "Key": r"Software\SleepMate\Installer", "Name": "StartMenuShortcut", "Type": "integer", "Value": "1", "KeyPath": "yes"},
     )
     ET.SubElement(
         menu_component,
         q("Shortcut"),
-        {
-            "Id": "SleepMateStartMenuShortcut",
-            "Name": "SleepMate",
-            "Description": "SleepMate PAP/CPAP terápiás társalkalmazás",
-            "Target": "[INSTALLFOLDER]SleepMate.exe",
-            "WorkingDirectory": "INSTALLFOLDER",
-            "Icon": "SleepMateIcon",
-            "Advertise": "no",
-        },
+        {"Id": "SleepMateStartMenuShortcut", "Name": "SleepMate", "Description": "SleepMate PAP/CPAP terápiás társalkalmazás", "Target": "[INSTALLFOLDER]SleepMate.exe", "WorkingDirectory": "INSTALLFOLDER", "Icon": "SleepMateIcon", "Advertise": "no"},
     )
     ET.SubElement(
         menu_component,
         q("Shortcut"),
-        {
-            "Id": "SleepMateUninstallShortcut",
-            "Name": "SleepMate eltávolítása",
-            "Description": "SleepMate eltávolítása a Windows Installerrel",
-            "Target": "[SystemFolder]msiexec.exe",
-            "Arguments": "/x [ProductCode]",
-            "Advertise": "no",
-        },
+        {"Id": "SleepMateUninstallShortcut", "Name": "SleepMate eltávolítása", "Description": "SleepMate eltávolítása a Windows Installerrel", "Target": "[SystemFolder]msiexec.exe", "Arguments": "/x [ProductCode]", "Advertise": "no"},
     )
-    ET.SubElement(
-        menu_component,
-        q("RemoveFolder"),
-        {"Id": "RemoveSleepMateStartMenuFolder", "On": "uninstall"},
-    )
+    ET.SubElement(menu_component, q("RemoveFolder"), {"Id": "RemoveSleepMateStartMenuFolder", "On": "uninstall"})
 
     desktop_component = ET.SubElement(
         desktop,
@@ -390,27 +374,12 @@ def main() -> int:
     ET.SubElement(
         desktop_component,
         q("RegistryValue"),
-        {
-            "Root": "HKCU",
-            "Key": r"Software\SleepMate\Installer",
-            "Name": "DesktopShortcut",
-            "Type": "integer",
-            "Value": "1",
-            "KeyPath": "yes",
-        },
+        {"Root": "HKCU", "Key": r"Software\SleepMate\Installer", "Name": "DesktopShortcut", "Type": "integer", "Value": "1", "KeyPath": "yes"},
     )
     ET.SubElement(
         desktop_component,
         q("Shortcut"),
-        {
-            "Id": "SleepMateDesktopShortcutLink",
-            "Name": "SleepMate",
-            "Description": "SleepMate PAP/CPAP terápiás társalkalmazás",
-            "Target": "[INSTALLFOLDER]SleepMate.exe",
-            "WorkingDirectory": "INSTALLFOLDER",
-            "Icon": "SleepMateIcon",
-            "Advertise": "no",
-        },
+        {"Id": "SleepMateDesktopShortcutLink", "Name": "SleepMate", "Description": "SleepMate PAP/CPAP terápiás társalkalmazás", "Target": "[INSTALLFOLDER]SleepMate.exe", "WorkingDirectory": "INSTALLFOLDER", "Icon": "SleepMateIcon", "Advertise": "no"},
     )
 
     startup_component = ET.SubElement(
@@ -421,73 +390,26 @@ def main() -> int:
     ET.SubElement(
         startup_component,
         q("RegistryValue"),
-        {
-            "Root": "HKCU",
-            "Key": r"Software\Microsoft\Windows\CurrentVersion\Run",
-            "Name": "SleepMate",
-            "Type": "string",
-            "Value": '"[INSTALLFOLDER]SleepMate.exe"',
-            "KeyPath": "yes",
-        },
+        {"Root": "HKCU", "Key": r"Software\Microsoft\Windows\CurrentVersion\Run", "Name": "SleepMate", "Type": "string", "Value": '\"[INSTALLFOLDER]SleepMate.exe\"', "KeyPath": "yes"},
     )
 
     feature = ET.SubElement(
         product,
         q("Feature"),
-        {
-            "Id": "SleepMateFeature",
-            "Title": "SleepMate",
-            "Description": "A SleepMate alkalmazás és a szükséges programfájlok.",
-            "Level": "1",
-            "Display": "expand",
-            "AllowAdvertise": "no",
-            "Absent": "disallow",
-        },
+        {"Id": "SleepMateFeature", "Title": "SleepMate", "Description": "A SleepMate alkalmazás és a szükséges programfájlok.", "Level": "1", "Display": "expand", "AllowAdvertise": "no", "Absent": "disallow"},
     )
     for component_id in core_component_ids:
         ET.SubElement(feature, q("ComponentRef"), {"Id": component_id})
 
-    start_feature = ET.SubElement(
-        feature,
-        q("Feature"),
-        {
-            "Id": "StartMenuFeature",
-            "Title": "Start menü parancsikon",
-            "Description": "SleepMate parancsikon és eltávolítási parancs a Start menüben.",
-            "Level": "1",
-            "AllowAdvertise": "no",
-        },
-    )
+    start_feature = ET.SubElement(feature, q("Feature"), {"Id": "StartMenuFeature", "Title": "Start menü parancsikon", "Description": "SleepMate parancsikon és eltávolítási parancs a Start menüben.", "Level": "1", "AllowAdvertise": "no"})
     ET.SubElement(start_feature, q("ComponentRef"), {"Id": "SleepMateStartMenu"})
 
-    desktop_feature = ET.SubElement(
-        feature,
-        q("Feature"),
-        {
-            "Id": "DesktopShortcutFeature",
-            "Title": "Asztali parancsikon",
-            "Description": "SleepMate parancsikon létrehozása az Asztalon.",
-            "Level": "1",
-            "AllowAdvertise": "no",
-        },
-    )
+    desktop_feature = ET.SubElement(feature, q("Feature"), {"Id": "DesktopShortcutFeature", "Title": "Asztali parancsikon", "Description": "SleepMate parancsikon létrehozása az Asztalon.", "Level": "1", "AllowAdvertise": "no"})
     ET.SubElement(desktop_feature, q("ComponentRef"), {"Id": "SleepMateDesktopShortcut"})
 
-    startup_feature = ET.SubElement(
-        feature,
-        q("Feature"),
-        {
-            "Id": "StartupFeature",
-            "Title": "Automatikus indítás a Windowszal",
-            "Description": "A SleepMate automatikusan elindul a felhasználói bejelentkezés után.",
-            "Level": "2",
-            "AllowAdvertise": "no",
-        },
-    )
+    startup_feature = ET.SubElement(feature, q("Feature"), {"Id": "StartupFeature", "Title": "Automatikus indítás a Windowszal", "Description": "A SleepMate automatikusan elindul a felhasználói bejelentkezés után.", "Level": "2", "AllowAdvertise": "no"})
     ET.SubElement(startup_feature, q("ComponentRef"), {"Id": "SleepMateStartup"})
 
-    # A WixUI_FeatureTree valódi telepítővarázslót ad: jogi elfogadás,
-    # komponensválasztás, telepítési mappa, lemezterület és összegzés.
     ET.SubElement(product, q("Property"), {"Id": "WIXUI_INSTALLDIR", "Value": "INSTALLFOLDER"})
     ET.SubElement(product, q("Property"), {"Id": "WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT", "Value": "SleepMate indítása"})
     ET.SubElement(product, q("Property"), {"Id": "WIXUI_EXITDIALOGOPTIONALCHECKBOX", "Value": "1"})
@@ -498,26 +420,13 @@ def main() -> int:
     ET.SubElement(
         product,
         q("CustomAction"),
-        {
-            "Id": "LaunchSleepMate",
-            "FileKey": main_exe_file_id,
-            "ExeCommand": "",
-            "Execute": "immediate",
-            "Return": "asyncNoWait",
-            "Impersonate": "yes",
-        },
+        {"Id": "LaunchSleepMate", "FileKey": main_exe_file_id, "ExeCommand": "", "Execute": "immediate", "Return": "asyncNoWait", "Impersonate": "yes"},
     )
     ui = ET.SubElement(product, q("UI"))
     publish = ET.SubElement(
         ui,
         q("Publish"),
-        {
-            "Dialog": "ExitDialog",
-            "Control": "Finish",
-            "Event": "DoAction",
-            "Value": "LaunchSleepMate",
-            "Order": "1",
-        },
+        {"Dialog": "ExitDialog", "Control": "Finish", "Event": "DoAction", "Value": "LaunchSleepMate", "Order": "1"},
     )
     publish.text = "WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed"
 
@@ -527,7 +436,8 @@ def main() -> int:
 
     print(
         f"Generated {output} with {len(files)} payload files; "
-        f"tree_sha256={tree_sha256}; product_code={product_code}; wizard=WixUI_FeatureTree; language=hu-HU"
+        f"tree_sha256={tree_sha256}; product_code={product_code}; "
+        "wizard=WixUI_FeatureTree; language=hu-HU; profile-components=HKCU-keypath; cleanup=RemoveFolder"
     )
     return 0
 
