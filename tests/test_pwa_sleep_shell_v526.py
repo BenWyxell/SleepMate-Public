@@ -8,6 +8,16 @@ SLEEP_ASSETS = (
     "/sleepmate-sleep-v524.js?v=5.2.6",
 )
 REFRESH_ASSET = "/sleepmate-sleep-refresh-v5212.js?v=5.2.12"
+O2_CODE_ASSETS = (
+    "/sleepmate-aurora.css",
+    "/sleepmate-v530.css",
+    "/sleepmate-v530.js",
+    "/o2ring.css",
+    "/o2ring.js",
+    "/o2ring-report-ui.js",
+    "/o2ring-v532.css",
+    "/o2ring-v532.js",
+)
 
 
 def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
@@ -25,6 +35,9 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
     assert "'/sleepmate-sleep-v524.js'" in sw
     assert "'/sleepmate-sleep-refresh-v5212.js'" in sw
     assert "|sleep-analysis|" in sw
+    for asset in O2_CODE_ASSETS:
+        assert asset in sw
+    assert "CODE_ASSETS.has(url.pathname)" in sw
 
 
 def test_packaged_service_worker_base_precaches_same_sleep_feature():
@@ -36,7 +49,18 @@ def test_packaged_service_worker_base_precaches_same_sleep_feature():
         assert asset in sw
     assert REFRESH_ASSET in sw
     assert "sleep-analysis" in sw
-    assert "const codeAsset=['/style.css','/app.js','/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js','/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js','/manifest.webmanifest'].includes(url.pathname);" in sw
+    assert "const codeAsset=[" in sw and ".includes(url.pathname);" in sw
+    for asset in (
+        "/style.css",
+        "/app.js",
+        "/sleepmate-sleep.js",
+        "/sleepmate-sleep-v523.js",
+        "/sleepmate-chart-v523.js",
+        "/sleepmate-sleep-v524.js",
+        "/sleepmate-sleep-refresh-v5212.js",
+        "/manifest.webmanifest",
+    ) + O2_CODE_ASSETS:
+        assert repr(asset) in sw
 
 
 def test_new_service_worker_reloads_live_pwa_after_stale_cache_cleanup():
