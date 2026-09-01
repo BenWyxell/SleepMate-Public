@@ -3,10 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import threading
+import zipfile
 
 import pytest
 
-from cpap.o2ring_restore import _rehydrate_service, _stop_and_wait
+from cpap.o2ring_restore import (
+    _normalized_restore_config,
+    _read_backup_o2_config,
+    _rehydrate_service,
+    _stop_and_wait,
+)
 from cpap.oximetry import OximetrySample, OximetryStore
 
 
@@ -50,6 +56,61 @@ def test_stop_and_wait_blocks_restore_when_ble_worker_will_not_exit():
     with pytest.raises(RuntimeError, match="biztonsági okból megszakadt"):
         _stop_and_wait(manager, timeout=0.1)
     assert manager.stop_called is True
+
+
+def test_restore_config_is_whitelisted_clamped_and_complete():
+    restored = _normalized_restore_config({
+        "o2ring_enabled": "true",
+        "o2ring_ble_enabled": 1,
+        "o2ring_auto_connect": True,
+        "o2ring_auto_sync": False,
+        "o2ring_auto_match": "off",
+        "o2ring_show_motion": "yes",
+        "o2ring_preferred_address": "  AA:BB:CC:DD:EE:FF  ",
+        "o2ring_clock_offset_seconds": 5000,
+        "o2ring_spo2_reference": 150,
+        "o2ring_spo2_secondary_reference": 20,
+        "malicious_extra_key": "must-not-pass",
+    })
+    assert restored["o2ring_enabled"] is True
+    assert restored["o2ring_ble_enabled"] is True
+    assert restored["o2ring_auto_sync"] is False
+    assert restored["o2ring_auto_match"] is False
+    assert restored["o2ring_show_motion"] is True
+    assert restored["o2ring_preferred_address"] == "AA:BB:CC:DD:EE:FF"
+    assert restored["o2ring_clock_offset_seconds"] == 900.0
+    assert restored["o2ring_spo2_reference"] == 100
+    assert restored["o2ring_spo2_secondary_reference"] == 70
+    assert "malicious_extra_key" not in restored
+
+
+def test_old_pre_o2_backup_resets_to_safe_v53_defaults():
+    restored = _normalized_restore_config({"data_dir": "ignored"})
+    assert restored["o2ring_enabled"] is False
+    assert restored["o2ring_ble_enabled"] is True
+    assert restored["o2ring_auto_connect"] is True
+    assert restored["o2ring_auto_sync"] is True
+    assert restored["o2ring_preferred_address"] == ""
+    assert restored["o2ring_clock_offset_seconds"] == 0.0
+
+
+def test_backup_o2_config_is_read_from_manifest_before_uploaded_zip_disappears(tmp_path):
+    archive = tmp_path / "full-backup.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "format": "cpap-elemzo-full-backup",
+            "version": 2,
+            "config": {
+                "o2ring_enabled": True,
+                "o2ring_preferred_address": "11:22:33:44:55:66",
+                "o2ring_clock_offset_seconds": -12.5,
+            },
+        }))
+    restored = _read_backup_o2_config(archive)
+    assert restored is not None
+    assert restored["o2ring_enabled"] is True
+    assert restored["o2ring_preferred_address"] == "11:22:33:44:55:66"
+    assert restored["o2ring_clock_offset_seconds"] == -12.5
 
 
 class FreshManager:
@@ -167,7 +228,7 @@ def test_rehydrate_does_not_restart_ble_when_restored_master_switch_is_off(tmp_p
     assert service.manager.preferred == "AA:BB:CC:DD:EE:FF"
 
 
-def test_restore_wrapper_orders_quiesce_before_base_restore_then_rehydrates(monkeypatch):
+def test_restore_wrapper_orders_quiesce_restore_config_then_rehydrates(monkeypatch):
     import cpap.o2ring_restore as restore_module
 
     events = []
@@ -192,13 +253,25 @@ def test_restore_wrapper_orders_quiesce_before_base_restore_then_rehydrates(monk
             return {"restored": 7}
 
     class App:
-        pass
+        @staticmethod
+        def save_config(config):
+            events.append("save_config")
+            assert config["o2ring_enabled"] is True
+            assert config["o2ring_preferred_address"] == "RESTORED-RING"
 
     App.Handler = Handler
 
     monkeypatch.setattr(restore_module, "_installed", False)
     monkeypatch.setattr(restore_module, "get_service", lambda _app: service)
     monkeypatch.setattr(restore_module, "_stop_and_wait", lambda manager: events.append("quiesce"))
+    monkeypatch.setattr(
+        restore_module,
+        "_read_backup_o2_config",
+        lambda _uploaded: _normalized_restore_config({
+            "o2ring_enabled": True,
+            "o2ring_preferred_address": "RESTORED-RING",
+        }),
+    )
 
     def fake_rehydrate(_service, *, restart=True):
         events.append("rehydrate")
@@ -213,11 +286,12 @@ def test_restore_wrapper_orders_quiesce_before_base_restore_then_rehydrates(monk
     restore_module.install_o2ring_restore(App)
 
     result = Handler()._restore_backup_job("job", "backup.zip")
-    assert events[:3] == ["quiesce", "base_restore", "rehydrate"]
+    assert events[:4] == ["quiesce", "base_restore", "save_config", "rehydrate"]
     assert result["restored"] == 7
     assert result["o2ring_rehydrated"] is True
     assert result["o2ring_recordings"] == 3
     assert result["o2ring_ble_restarted"] is True
+    assert result["o2ring_config_restored"] is True
 
 
 def test_restore_wrapper_recovers_o2_runtime_but_preserves_original_restore_error(monkeypatch):
@@ -245,13 +319,20 @@ def test_restore_wrapper_recovers_o2_runtime_but_preserves_original_restore_erro
             raise ValueError("restore exploded")
 
     class App:
-        pass
+        @staticmethod
+        def save_config(_config):
+            events.append("save_config")
 
     App.Handler = Handler
 
     monkeypatch.setattr(restore_module, "_installed", False)
     monkeypatch.setattr(restore_module, "get_service", lambda _app: service)
     monkeypatch.setattr(restore_module, "_stop_and_wait", lambda manager: events.append("quiesce"))
+    monkeypatch.setattr(
+        restore_module,
+        "_read_backup_o2_config",
+        lambda _uploaded: _normalized_restore_config({"o2ring_enabled": True}),
+    )
     monkeypatch.setattr(
         restore_module,
         "_rehydrate_service",
@@ -262,6 +343,7 @@ def test_restore_wrapper_recovers_o2_runtime_but_preserves_original_restore_erro
     with pytest.raises(ValueError, match="restore exploded"):
         Handler()._restore_backup_job("job", "broken.zip")
     assert events[:3] == ["quiesce", "base_restore", "rehydrate"]
+    assert "save_config" not in events
 
 
 def test_v53_shell_installs_restore_lifecycle_without_modifying_base_restore():
@@ -273,6 +355,8 @@ def test_v53_shell_installs_restore_lifecycle_without_modifying_base_restore():
     assert "install_o2ring_restore(app_module)" in shell
     assert "original_restore = handler_cls._restore_backup_job" in addon
     assert "_stop_and_wait(old_manager)" in addon
+    assert "_read_backup_o2_config(uploaded)" in addon
+    assert "app_module.save_config(restored_o2_config)" in addon
     assert "sync_on_start=False" in addon
     assert "o2ring_rehydrated" in addon
     assert "o2ring_rehydrated" not in base
