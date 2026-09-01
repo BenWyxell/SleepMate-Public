@@ -2,7 +2,6 @@
   const ENGINE='/app-engine119.js?v=130';
   const POLISH='/sleepsync-polish.js?v=130';
   const HYDRATION='/sleepsync-hydration-v529.js?v=130';
-  const O2RING='/o2ring.js?v=5.3.0';
 
   function appendEngine(){
     if(window.__sleepmateStableEngine130)return;
@@ -34,13 +33,6 @@
       hydration.async=true;
       hydration.dataset.sleepsyncHydration='130';
       document.head.appendChild(hydration);
-    }
-    if(!document.querySelector('script[data-o2ring="530"]')){
-      const o2=document.createElement('script');
-      o2.src=O2RING;
-      o2.async=true;
-      o2.dataset.o2ring='530';
-      document.head.appendChild(o2);
     }
   },{once:true});
 })();
