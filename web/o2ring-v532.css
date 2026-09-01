@@ -1,0 +1,123 @@
+/* SleepMate 5.3.2 — O2Ring stability + responsive UI layer. */
+:root{
+  --sm-o2-cyan:#55d8ff;
+  --sm-o2-teal:#48e1b9;
+  --sm-o2-violet:#9a7cff;
+  --sm-o2-blue:#6e8dff;
+  --sm-o2-rose:#ef86c8;
+  --sm-o2-edge:rgba(91,190,228,.25);
+  --sm-o2-panel:rgba(8,18,31,.78);
+}
+
+/* Settings: the old Display panel is now the dedicated O2Ring panel. */
+#page-settings [data-settings-panel="display"].sm-o2-settings-panel{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:12px;
+  align-content:start;
+  overflow:visible!important;
+}
+#page-settings [data-settings-panel="display"].sm-o2-settings-panel.active{display:grid!important}
+.sm-o2-settings-panel .sm-o2-master,
+.sm-o2-settings-panel .sm-o2-details,
+.sm-o2-settings-panel .sm-o2-quickbar{min-width:0;max-width:100%;box-sizing:border-box}
+.sm-o2-settings-panel .sm-o2-master{margin:0!important;padding:14px!important}
+.sm-o2-settings-panel .sm-o2-master-head{grid-template-columns:42px minmax(0,1fr) auto!important;gap:10px!important;align-items:center!important}
+.sm-o2-settings-panel .sm-o2-master-head h3{margin:0 0 3px;font-size:16px}
+.sm-o2-settings-panel .sm-o2-master-head p{margin:0;font-size:11px;line-height:1.45;color:#93a9ba}
+.sm-o2-settings-panel .sm-o2-runtime-settings{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px!important;margin-top:11px!important}
+.sm-o2-settings-panel .sm-o2-runtime-settings.hidden{display:none!important}
+.sm-o2-settings-panel .sm-o2-runtime-settings>label,
+.sm-o2-settings-panel .sm-o2-remembered{min-width:0;padding:10px!important;border-radius:13px!important;background:rgba(7,15,27,.52)!important;border:1px solid rgba(91,177,215,.15)!important}
+.sm-o2-settings-panel .sm-o2-remembered{grid-column:1/-1}
+.sm-o2-settings-panel.sm-saving{opacity:.86;pointer-events:none}
+
+.sm-o2-quickbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 12px;border:1px solid var(--sm-o2-edge);border-radius:15px;
+  background:linear-gradient(110deg,rgba(85,216,255,.055),rgba(8,18,31,.66),rgba(154,124,255,.05));
+}
+.sm-o2-quick-copy{display:flex;align-items:center;min-width:0;gap:9px}.sm-o2-quick-copy>i{width:9px;height:9px;border-radius:50%;flex:0 0 auto;background:#687f93;box-shadow:0 0 0 4px rgba(104,127,147,.08)}
+.sm-o2-quick-copy small,.sm-o2-quick-copy b,.sm-o2-quick-copy span{display:block}.sm-o2-quick-copy small{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:#8fa7b9}.sm-o2-quick-copy b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sm-o2-quick-copy span{font-size:10px;color:#9db0c0;margin-top:1px}
+.sm-o2-quick-actions{display:flex;gap:6px;flex:0 0 auto}.sm-o2-quick-actions button{min-height:32px;padding:6px 10px!important}.sm-o2-quick-actions .hidden{display:none!important}
+.sm-o2-settings-panel .sm-o2-details{margin:0!important;padding:13px!important}.sm-o2-settings-panel .o2r-settings-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}.sm-o2-settings-panel .o2r-setting-actions{display:flex;flex-wrap:wrap;gap:7px}.sm-o2-settings-panel .o2r-setting-actions button{min-height:34px;padding:7px 10px!important}
+
+/* Oximetry page: compact connection header and live chips. */
+#page-oximetry .o2r-hero.sm-o2-hero-v532{padding:9px 11px!important;border-radius:16px!important;margin-bottom:9px!important}
+#page-oximetry .sm-o2-hero-v532 .o2r-hero-head{display:flex!important;align-items:center!important;gap:10px!important}
+#page-oximetry .sm-o2-hero-v532 .o2r-ring-mark{width:34px!important;height:34px!important;border-radius:11px!important}
+#page-oximetry .sm-o2-hero-v532 .o2r-title-wrap{gap:8px!important}.sm-o2-hero-v532 .o2r-title-wrap h2{font-size:18px!important}.sm-o2-hero-v532 .o2r-title-wrap p{font-size:10px!important;margin:1px 0 0!important}
+#page-oximetry .sm-o2-hero-v532 .o2r-hero-actions{display:flex!important;align-items:center!important;gap:6px!important;margin-top:7px!important;flex-wrap:wrap!important}
+#page-oximetry .sm-o2-hero-v532 .o2r-hero-actions button{min-height:30px!important;padding:5px 9px!important;font-size:11px!important}
+#page-oximetry .sm-o2-hero-v532 #o2rConnectNow.hidden{display:none!important}
+.sm-o2-status-compact{padding:5px 8px!important;border-radius:999px!important;font-size:10px!important;white-space:nowrap!important}
+.sm-o2-live-chips{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:7px!important;margin-bottom:9px!important}
+.sm-o2-live-chips .o2r-live-card{min-height:0!important;padding:8px 9px!important;border-radius:13px!important}.sm-o2-live-chips .o2r-live-card label{font-size:9px!important}.sm-o2-live-chips .o2r-live-card strong{font-size:20px!important;line-height:1.05!important}.sm-o2-live-chips .o2r-live-card small{font-size:9px!important}
+.sm-o2-dashboard-link{margin-right:auto}
+
+/* Combined charts: one shared x-axis, clearly separated y scales. */
+.sm-o2-combined-card,.sm-o2-day-combined,.sm-o2-rec-dual{position:relative;padding:12px!important;border:1px solid rgba(91,184,224,.19);border-radius:16px;background:rgba(7,16,28,.50);overflow:hidden}
+.sm-o2-combined-card{margin:0 0 10px}.sm-o2-combined-card canvas,.sm-o2-day-combined canvas,.sm-o2-rec-dual canvas{display:block;width:100%;height:270px;touch-action:pan-y pinch-zoom}
+.sm-o2-combined-card canvas.sm-o2-zooming,.sm-o2-day-combined canvas.sm-o2-zooming,.sm-o2-rec-dual canvas.sm-o2-zooming{cursor:ew-resize!important}
+.sm-o2-legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:10px;color:#9eb2c2}.sm-o2-legend span:before{content:"";display:inline-block;width:14px;height:3px;border-radius:99px;margin-right:5px;vertical-align:middle}.sm-o2-legend .spo2:before{background:var(--sm-o2-cyan)}.sm-o2-legend .hr:before{background:var(--sm-o2-violet)}
+.sm-o2-chart-hint{font-size:9px;color:#768fa4;margin-top:4px;text-align:right}.sm-o2-reset{margin-left:auto!important;min-height:26px!important;padding:3px 7px!important;font-size:9px!important}
+#page-oximetry .sm-o2-secondary-live{display:grid;grid-template-columns:1fr 1fr;gap:9px}.sm-o2-secondary-live .o2r-chart{padding:10px!important}.sm-o2-secondary-live canvas{height:190px!important}
+
+/* Daily dashboard: three peer modes, no back-button semantics. */
+#o2rDailyBack{display:none!important}
+#dashboardDailyView .view-switch{display:flex;align-items:center;gap:2px;white-space:nowrap}
+#dashboardDailyView #o2rDailyBtn{display:inline-flex!important}
+#dashboardDailyView .sm-o2-focus-section{margin-top:12px}.sm-o2-focus-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.sm-o2-focus-grid article{padding:10px;border:1px solid rgba(91,178,219,.16);border-radius:14px;background:rgba(6,14,25,.39);min-width:0}.sm-o2-focus-grid article.wide{grid-column:1/-1}.sm-o2-focus-grid header{display:flex;align-items:center;justify-content:space-between;color:#a8bac8;font-size:11px}.sm-o2-focus-grid canvas{display:block;width:100%;height:190px;touch-action:pan-y pinch-zoom}.sm-o2-focus-grid .wide canvas{height:235px}
+.sm-o2-stack-v532 .stack-head i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}.sm-o2-stack-v532 .stack-head i.spo2{background:var(--sm-o2-cyan)}.sm-o2-stack-v532 .stack-head i.hr{background:var(--sm-o2-violet)}.sm-o2-stack-v532 .stack-head i.dual{background:linear-gradient(90deg,var(--sm-o2-cyan),var(--sm-o2-violet))}.sm-o2-stack-v532 canvas{height:175px!important;touch-action:pan-y pinch-zoom}
+.o2r-daily-panel .o2r-two-chart canvas{touch-action:pan-y pinch-zoom}
+
+/* Optional O2 overlay selector in selected CPAP graphs. */
+.sm-o2-overlay-control{display:inline-flex;align-items:center;gap:5px;min-width:0;padding:3px 5px;border:1px solid rgba(91,178,219,.16);border-radius:9px;background:rgba(7,15,27,.45);font-size:9px;color:#93a8ba}.sm-o2-overlay-control.hidden{display:none!important}.sm-o2-overlay-control select{height:27px!important;min-height:27px!important;padding:2px 22px 2px 6px!important;font-size:10px!important;width:auto!important}.sm-o2-hero-overlay{z-index:3!important}
+
+/* Proper O2 summary card in Night evaluation. */
+.sm-night-o2-card{margin:10px 0 0;padding:11px 12px;border-radius:14px;border:1px solid rgba(85,216,255,.20);background:linear-gradient(120deg,rgba(85,216,255,.055),rgba(7,16,28,.66),rgba(154,124,255,.055));display:flex;align-items:center;justify-content:space-between;gap:12px}.sm-night-o2-title{display:flex;align-items:center;gap:9px}.sm-night-o2-title>span{display:grid;place-items:center;width:31px;height:31px;border-radius:10px;border:1px solid rgba(85,216,255,.22);color:var(--sm-o2-cyan);font-weight:800}.sm-night-o2-title small,.sm-night-o2-title b{display:block}.sm-night-o2-title small{font-size:9px;color:#8fa7b9;text-transform:uppercase;letter-spacing:.06em}.sm-night-o2-title b{font-size:12px;margin-top:2px}.sm-night-o2-values{display:flex;gap:12px;flex-wrap:wrap;justify-content:flex-end;font-size:10px;color:#90a8bb}.sm-night-o2-values b{color:#edf9ff}
+
+/* Dashboard overview O2 summary. */
+.sm-dashboard-o2-v532{margin:12px 0;padding:13px!important}.sm-dashboard-o2-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:9px 0}.sm-dashboard-o2-cards>div{padding:9px 10px;border-radius:12px;border:1px solid rgba(91,178,219,.15);background:rgba(7,15,27,.40)}.sm-dashboard-o2-cards span,.sm-dashboard-o2-cards b{display:block}.sm-dashboard-o2-cards span{font-size:9px;color:#8fa8ba;text-transform:uppercase;letter-spacing:.05em}.sm-dashboard-o2-cards b{font-size:17px;margin-top:3px}.sm-dashboard-o2-mini{display:grid;grid-template-columns:1fr 1fr;gap:8px}.sm-dashboard-o2-mini article{padding:8px;border:1px solid rgba(91,178,219,.13);border-radius:12px;background:rgba(6,14,25,.32)}.sm-dashboard-o2-mini header{font-size:10px;color:#9cb0c1;display:flex;justify-content:space-between}.sm-dashboard-o2-mini canvas{display:block;width:100%;height:120px}
+
+/* Trends V3: readable instead of decorative-only lines. */
+#smO2TrendV3{display:grid;gap:10px}.sm-o2-trend-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.sm-o2-trend-summary>div{padding:9px 10px;border:1px solid rgba(91,178,219,.15);border-radius:12px;background:rgba(7,15,27,.40)}.sm-o2-trend-summary span,.sm-o2-trend-summary b{display:block}.sm-o2-trend-summary span{font-size:9px;color:#8fa8ba;text-transform:uppercase}.sm-o2-trend-summary b{font-size:17px;margin-top:3px}.sm-o2-trend-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.sm-o2-trend-grid article{padding:10px;border:1px solid rgba(91,178,219,.15);border-radius:14px;background:rgba(6,14,25,.42);min-width:0}.sm-o2-trend-grid header{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#a9bbc9}.sm-o2-trend-grid header small{font-size:9px;color:#7f98ac}.sm-o2-trend-grid canvas{display:block;width:100%;height:190px}.sm-o2-empty-msg{padding:10px;border:1px dashed rgba(91,178,219,.20);border-radius:12px;text-align:center;color:#90a6b9;font-size:11px}.sm-o2-empty-msg.hidden{display:none!important}
+
+/* Reports: O2 columns stay readable and horizontally scrollable on narrow screens. */
+.sm-report-o2-v532{min-width:1250px!important}.sm-report-o2-v532 th[data-sm-o2-col],.sm-report-o2-v532 td[data-sm-o2-cell]{white-space:nowrap}.sm-report-o2-v532 th[data-sm-o2-col]{color:#b9efff;background:rgba(85,216,255,.03)}.sm-report-o2-v532 td[data-sm-o2-cell]{background:rgba(85,216,255,.012)}
+
+/* Bar charts are intentionally crisp: no bloom, no blur. */
+#trendUsage,#trendEvents{filter:none!important}.trend-bar-card{box-shadow:0 14px 38px rgba(0,4,13,.20),inset 0 1px 0 rgba(255,255,255,.02)!important}
+
+/* PWA: compact and deterministic rather than stacking huge controls. */
+#page-settings [data-settings-panel="push"] #smPwaSettingsPanel{margin:0 0 12px!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}.sm-pwa-nav-editor{grid-template-columns:repeat(auto-fit,minmax(205px,1fr))!important;gap:8px!important}.sm-pwa-choice{padding:9px!important;border-radius:13px!important}.sm-pwa-preview-wrap{padding:10px!important;margin-top:11px!important}
+
+@media(max-width:1100px){
+  .sm-o2-settings-panel .sm-o2-runtime-settings,.sm-o2-settings-panel .o2r-settings-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .sm-o2-live-chips{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .sm-dashboard-o2-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:900px){
+  #page-settings [data-settings-panel="display"].sm-o2-settings-panel{gap:9px}
+  .sm-o2-quickbar{align-items:flex-start;flex-direction:column}.sm-o2-quick-actions{width:100%}.sm-o2-quick-actions button{flex:1}
+  .sm-o2-settings-panel .sm-o2-runtime-settings,.sm-o2-settings-panel .o2r-settings-grid{grid-template-columns:1fr!important}
+  .sm-o2-settings-panel .sm-o2-remembered{grid-column:auto}
+  .sm-o2-focus-grid,.sm-o2-trend-grid,.sm-dashboard-o2-mini{grid-template-columns:1fr}
+  .sm-o2-focus-grid article.wide{grid-column:auto}
+  .sm-night-o2-card{align-items:flex-start;flex-direction:column}.sm-night-o2-values{justify-content:flex-start}
+  .sm-o2-combined-card canvas,.sm-o2-day-combined canvas,.sm-o2-rec-dual canvas{height:230px}
+}
+@media(max-width:620px){
+  #page-oximetry .sm-o2-hero-v532 .o2r-hero-head{align-items:flex-start!important}.sm-o2-status-compact{margin-left:auto}
+  .sm-o2-live-chips{grid-template-columns:repeat(2,minmax(0,1fr))!important}.sm-o2-live-chips .o2r-live-card:last-child{grid-column:1/-1}
+  #page-oximetry .sm-o2-hero-v532 .o2r-hero-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));width:100%}.sm-o2-dashboard-link{margin:0!important}.o2r-live-follow{grid-column:1/-1}
+  #page-oximetry .sm-o2-secondary-live{grid-template-columns:1fr}.sm-o2-secondary-live canvas{height:175px!important}
+  .sm-dashboard-o2-cards,.sm-o2-trend-summary{grid-template-columns:1fr 1fr}
+  #dashboardDailyView .toolbar{gap:5px!important;flex-wrap:wrap!important}#dashboardDailyView .view-switch{order:1;width:100%;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))}#dashboardDailyView .view-switch button{padding:6px 4px!important;font-size:10px!important}#cursorInfo{order:2}.sm-o2-overlay-control{order:3}#resetZoom{order:4}
+  .sm-o2-overlay-control span{display:none}.sm-o2-overlay-control select{max-width:110px}
+  .sm-pwa-choice{grid-template-columns:38px minmax(0,1fr) auto!important}.sm-pwa-choice-icon{width:36px!important;height:36px!important}.sm-pwa-choice-icon svg{width:20px!important;height:20px!important}
+}
+@media(max-width:390px){
+  .sm-o2-live-chips{grid-template-columns:1fr 1fr!important}.sm-dashboard-o2-cards,.sm-o2-trend-summary{grid-template-columns:1fr 1fr}
+  .sm-o2-combined-card,.sm-o2-day-combined,.sm-o2-rec-dual{padding:8px!important}.sm-o2-combined-card canvas,.sm-o2-day-combined canvas,.sm-o2-rec-dual canvas{height:205px}
+}
