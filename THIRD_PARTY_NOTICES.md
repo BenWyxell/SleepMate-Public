@@ -1,16 +1,14 @@
 # SleepMate third-party notices
 
-This document records the open-source third-party Python runtime components and the principal build tools used for the SleepMate **5.3.0 O2Ring Windows pre-release candidate**.
+This document records the open-source third-party Python runtime components and the principal build tools used for the SleepMate **5.3.0 Windows release**.
 
-Reference candidate: `v5.3.0-o2ring-aurora-pwa`  
-Reference build run: `33541019309`  
-Reference runtime-defining source commit: `bc0670b30236d92c7651660fbd7491f3325bdfb3`  
+Reference release: `v5.3.0`  
 Runtime lock: `build/windows/requirements-runtime.lock`  
 Build lock: `build/windows/requirements-build.lock`
 
 SleepMate itself is licensed under `AGPL-3.0-only`. Third-party components are **not relicensed** under the SleepMate license; each remains subject to its own upstream license and copyright notices.
 
-The table below reflects the exact Python runtime environment resolved by the successful GitHub-hosted Windows build referenced above. Exact source distributions/wheels and upstream metadata can be obtained from the linked PyPI release pages.
+The table below reflects the exact locked Python runtime environment used by the v5.3.0 Windows release pipeline. Exact source distributions/wheels and upstream metadata can be obtained from the linked PyPI release pages.
 
 ## Runtime components shipped with the Windows application
 
@@ -79,9 +77,9 @@ The table below reflects the exact Python runtime environment resolved by the su
 
 ## Build/test tools not shipped as SleepMate-owned application components
 
-The following tools participate in producing or testing the Windows candidate but are not relicensed as SleepMate code:
+The following tools participate in producing or testing the Windows release but are not relicensed as SleepMate code:
 
-| Tool | Version used for the v5.3.0 candidate | License / role |
+| Tool | Version used for the v5.3.0 release | License / role |
 |---|---:|---|
 | CPython | 3.13.15 x64 | Python Software Foundation license; build/runtime interpreter packaged by PyInstaller |
 | PyInstaller | 6.22.2 | GPL-2.0 with the official PyInstaller bootloader exception; selected upstream files are Apache-2.0. PyInstaller explicitly permits distribution of bundles generated from application source, subject to dependency licenses. |
@@ -89,7 +87,7 @@ The following tools participate in producing or testing the Windows candidate bu
 | pytest | 9.1.1 | MIT; test-only |
 | WiX Toolset | 3.14.1.20250415 | Microsoft Reciprocal License (MS-RL); GitHub-hosted Windows build tool used to generate and inspect the Hungarian MSI. WiX is not shipped as a SleepMate-owned runtime component. |
 
-The reference pre-release workflow pins WiX Toolset 3.14 and records the exact Python environment from the runtime/build lock files. Build tools remain subject to their upstream licenses and notices.
+The release workflow pins WiX Toolset 3.14 and records the exact Python environment from the runtime/build lock files. Build tools remain subject to their upstream licenses and notices.
 
 ## System libraries
 
@@ -109,4 +107,4 @@ Third-party names and trademarks belong to their respective owners. Inclusion in
 
 ## Audit status
 
-The v5.3.0 Windows runtime set above was reviewed against the exact dependency environment from reference build run `33541019309`. Bleak and the Windows PyWinRT projection packages are now explicitly included in the notice. No proprietary Python runtime dependency is intentionally included in the locked Windows build environment. This notice must be regenerated and reviewed whenever the dependency locks change.
+The v5.3.0 Windows runtime set above was reviewed against the exact locked dependency environment used by the release pipeline. Bleak and the Windows PyWinRT projection packages are explicitly included in the notice. No proprietary Python runtime dependency is intentionally included in the locked Windows build environment. This notice must be regenerated and reviewed whenever the dependency locks change.
