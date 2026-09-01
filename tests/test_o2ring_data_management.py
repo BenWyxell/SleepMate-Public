@@ -9,6 +9,7 @@ from cpap.o2ring_data_management import (
     _delete_local_oximetry,
     _load_tombstones,
 )
+from cpap.o2ring_integration import O2RingService
 from cpap.oximetry import OximetrySample, OximetryStore
 
 
@@ -110,10 +111,62 @@ def test_tombstones_survive_restart_and_are_applied_as_known_files(tmp_path):
     assert _load_tombstones(restarted) == {"old-ring-session.vld"}
 
 
+def test_real_o2ring_service_loads_tombstones_before_ble_manager_can_start(tmp_path, monkeypatch):
+    state = tmp_path / "state"
+    ox_dir = state / "private" / "oximetry"
+    ox_dir.mkdir(parents=True)
+    (ox_dir / "deleted_sources.json").write_text(
+        json.dumps({"schema": 1, "source_names": ["deleted-before-restart.vld"]}),
+        encoding="utf-8",
+    )
+
+    events = []
+
+    class BootManager:
+        def __init__(self, **kwargs):
+            events.append(("manager_init", kwargs["known_file"]("deleted-before-restart.vld")))
+
+        def set_preferred_device(self, value):
+            events.append(("preferred", value))
+
+        def add_listener(self, callback):
+            events.append(("listener", callable(callback)))
+
+        def start(self, *, sync_on_start=False):
+            events.append(("start", bool(sync_on_start)))
+
+    monkeypatch.setattr("cpap.o2ring_integration.O2RingBLEManager", BootManager)
+
+    class App:
+        STATE_BASE = state
+        Handler = type("Handler", (), {"persistent_log": None})
+
+        @staticmethod
+        def load_config():
+            return {
+                "o2ring_enabled": True,
+                "o2ring_ble_enabled": True,
+                "o2ring_auto_connect": True,
+                "o2ring_auto_sync": True,
+                "o2ring_preferred_address": "REMEMBERED-RING",
+            }
+
+        @staticmethod
+        def save_config(update):
+            return update
+
+    service = O2RingService(App)
+
+    assert "deleted-before-restart.vld" in service._known_source_names
+    assert events[0] == ("manager_init", True)
+    assert events[-1] == ("start", True)
+
+
 def test_delete_confirmation_and_settings_ui_contract_are_explicit():
     backend = (ROOT / "cpap" / "o2ring_data_management.py").read_text(encoding="utf-8")
     ui = (ROOT / "web" / "o2ring-data-management.js").read_text(encoding="utf-8")
     shell = (ROOT / "cpap" / "v530_features.py").read_text(encoding="utf-8")
+    integration = (ROOT / "cpap" / "o2ring_integration.py").read_text(encoding="utf-8")
 
     assert '_CONFIRM_TOKEN = "DELETE_OXIMETRY"' in backend
     assert 'path == "/api/o2ring/delete-data"' in backend
@@ -129,4 +182,7 @@ def test_delete_confirmation_and_settings_ui_contract_are_explicit():
     assert "SleepMateO2Combined?.refresh" in ui
 
     assert "install_o2ring_data_management(app_module)" in shell
-    assert '"o2ring-data-management.js", "sm-o2-data-management-inline"' in shell
+    assert '("o2ring-data-management.js", "sm-o2-data-management-inline")' in shell
+    assert "self._load_known_names()" in integration
+    assert 'self.manager = O2RingBLEManager(' in integration
+    assert integration.index("self._load_known_names()") < integration.index("self.manager = O2RingBLEManager(")
