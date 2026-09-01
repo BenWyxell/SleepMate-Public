@@ -32,6 +32,18 @@ def install_v530_features(app_module) -> None:
                     head_assets.append('<link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.0">')
                 if "sleepmate-v530.css" not in text:
                     head_assets.append('<link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.0">')
+                # v5.2.20 already contained preparatory SpO2/HR controls inside
+                # the Display panel. With the v5.3 master switch OFF those must
+                # disappear too, otherwise O2Ring is still visibly present. The
+                # master block itself remains visible so the feature can be enabled.
+                if "sm-o2-master-visibility" not in text:
+                    head_assets.append(
+                        '<style id="sm-o2-master-visibility">'
+                        '#page-settings [data-settings-panel="display"]:has(#smO2Enabled:not(:checked))>'
+                        ':not(#smO2Master){display:none!important}'
+                        'body:has(#smO2Enabled:not(:checked)) .o2ring-report-option{display:none!important}'
+                        '</style>'
+                    )
                 if head_assets:
                     marker = "</head>"
                     inject = "\n  " + "\n  ".join(head_assets) + "\n"
