@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys, tempfile
 root=Path(__file__).resolve().parents[1]
-js=(root/'web'/'app.js').read_text(encoding='utf-8')
+js=(root/'web'/'app-core.js').read_text(encoding='utf-8')
 html=(root/'web'/'index.html').read_text(encoding='utf-8')
 sys.path.insert(0,str(root))
 from cpap.resmed import ResMedDataset

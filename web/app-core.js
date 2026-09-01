@@ -444,7 +444,6 @@ async function loadConfig(){
     if($('#autoBackupLastFile'))$('#autoBackupLastFile').textContent=state.settings.auto_backup_last_file||'Még nincs mentés';
     if($('#cloudflareHostname'))$('#cloudflareHostname').value=state.settings.cloudflare_hostname||'';
     if($('#cloudflareAccessConfirmed'))$('#cloudflareAccessConfirmed').checked=state.settings.cloudflare_access_confirmed;
-    if($('#updateGithubRepo'))$('#updateGithubRepo').value=state.settings.update_github_repo||'';
     if($('#updateAutoCheck'))$('#updateAutoCheck').checked=state.settings.update_auto_check!==false;
     if($('#remoteBackendUrl'))$('#remoteBackendUrl').textContent=`http://127.0.0.1:${c.port}`;
     if(document.querySelector('[data-settings-panel="remote"]')) loadRemoteStatus();
@@ -858,23 +857,21 @@ function setSettingsTab(name){
 
 function updateLevelClass(level='neutral'){const l=String(level||'').toLowerCase();return l==='ok'?'ok':l==='warn'?'warn':l==='error'?'error':'neutral'}
 function renderUpdateStatus(r={}){
-  const badge=$('#updateStateBadge');if(badge){badge.className=`remote-status ${r.update_available?'warn':r.configured?'ok':'neutral'}`;badge.textContent=r.update_available?'Frissítés elérhető':r.configured?'Kapcsolódás kész':'Nincs beállítva'}
-  if($('#updateCurrentVersion'))$('#updateCurrentVersion').textContent=r.current_version||'5.0.0';
+  const badge=$('#updateStateBadge');if(badge){const failed=!!r.last_error;badge.className=`remote-status ${r.update_available?'warn':failed?'neutral':'ok'}`;badge.textContent=r.update_available?'Frissítés elérhető':failed?'Ellenőrzési hiba':'Naprakész'}
+  if($('#updateCurrentVersion'))$('#updateCurrentVersion').textContent=r.current_version||'—';
   if($('#updateLatestVersion'))$('#updateLatestVersion').textContent=r.latest_version||'—';
   if($('#updateLastCheck'))$('#updateLastCheck').textContent=r.last_check?humanDateTime(r.last_check):'—';
-  if($('#updateGithubRepo')&&!$('#updateGithubRepo').matches(':focus'))$('#updateGithubRepo').value=r.github_repo||state.settings.update_github_repo||'';
   if($('#updateAutoCheck'))$('#updateAutoCheck').checked=r.auto_check!==false;
-  if($('#updateGithubTokenHint'))$('#updateGithubTokenHint').textContent=r.token?.configured?`Mentett token: ${r.token.token_hint||'••••••••'} • ${r.token.protection||'védett'}`:'Nincs mentett token';
   if($('#installUpdate'))$('#installUpdate').disabled=!r.update_available;
   if($('#rollbackUpdate'))$('#rollbackUpdate').disabled=!r.rollback_available;
-  const status=$('#updateStatusText');if(status){status.textContent=r.last_error?`Hiba: ${r.last_error}`:r.update_available?`SleepMate ${r.latest_version} telepíthető. Telepítés előtt teljes backup és rollback-pont készül.`:r.configured?'A frissítési kapcsolat készen áll.':'Add meg a privát GitHub repositoryt és szükség esetén a tokent.'}
+  const status=$('#updateStatusText');if(status){status.textContent=r.last_error?`Hiba: ${r.last_error}`:r.update_available?`SleepMate ${r.latest_version} telepíthető. Telepítés előtt teljes backup és rollback-pont készül.`:'A SleepMate a hivatalos publikus kiadási csatornát használja.'}
 }
 async function loadMaintenanceStatus(){
   try{const [u,c]=await Promise.all([api('/api/update/status'),api('/api/self-check')]);renderUpdateStatus(u);renderSelfCheck(c)}catch(e){addLog('WARN',`Rendszerkarbantartási állapot nem tölthető be: ${e.message}`)}
 }
 async function saveUpdateSettings(){
   const btn=$('#saveUpdateSettings');if(!btn)return;btn.disabled=true;
-  try{const payload={update_github_repo:$('#updateGithubRepo').value.trim(),update_channel:'stable',update_auto_check:$('#updateAutoCheck').checked};const token=$('#updateGithubToken').value.trim();if(token)payload.github_token=token;if($('#updateGithubClearToken').checked)payload.clear_github_token=true;const r=await apiWrite('/api/update/config','POST',payload);$('#updateGithubToken').value='';$('#updateGithubClearToken').checked=false;state.settings.update_github_repo=r.github_repo||payload.update_github_repo;state.settings.update_auto_check=r.auto_check!==false;renderUpdateStatus(r);addLog('INFO','GitHub frissítési kapcsolat mentve.')}catch(e){showError(e)}finally{btn.disabled=false}
+  try{const payload={update_channel:'stable',update_auto_check:$('#updateAutoCheck').checked};const r=await apiWrite('/api/update/config','POST',payload);state.settings.update_auto_check=r.auto_check!==false;renderUpdateStatus(r);addLog('INFO','Frissítési beállítás mentve.')}catch(e){showError(e)}finally{btn.disabled=false}
 }
 async function checkForUpdates(){
   const btn=$('#checkForUpdates');if(!btn)return;btn.disabled=true;const text=$('#updateStatusText');if(text)text.textContent='GitHub release ellenőrzése…';

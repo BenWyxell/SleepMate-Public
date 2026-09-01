@@ -17,10 +17,11 @@ from update_worker import wait_for_exit
 
 def test_worker_stops_all_sleepmate_images_before_program_replacement():
     text = WORKER.read_text(encoding="utf-8")
-    stop = text.index('if tray_pid > 0 and not stop_process_tree(tray_pid')
-    sweep = text.index('stop_sleepmate_image_processes(launcher_exe', stop)
+    graceful = text.index('graceful = request_graceful_tray_exit(tray_pid')
+    force = text.index('stop_process_tree(tray_pid', graceful)
+    sweep = text.index('stop_sleepmate_image_processes(launcher_exe', force)
     replace = text.index('replace_program(package_dir, app_dir, launcher_exe', sweep)
-    assert stop < sweep < replace
+    assert graceful < force < sweep < replace
     assert '["taskkill", "/IM", image_name, "/T", "/F"]' in text
     assert 'SleepMateUpdater.exe' in text
     assert 'terminate_spawned(new_backend' in text
@@ -65,16 +66,11 @@ def test_windows_orphan_companion_sleepmate_exe_is_stopped_before_replace():
             d.mkdir(parents=True, exist_ok=True)
 
         locked_exe = app / "SleepMate.exe"
-        # A copied native cmd.exe renamed to SleepMate.exe behaves like a normal
-        # Windows executable image and keeps SleepMate.exe locked while running.
         cmd_source = Path(os.environ.get("COMSPEC") or r"C:\Windows\System32\cmd.exe")
         shutil.copy2(cmd_source, locked_exe)
         hold_command = "ping -n 60 127.0.0.1 >nul"
         flags = 0x08000000
 
-        # tray_pid represents the known tray. companion is deliberately not
-        # present in the update plan, reproducing the stale/native companion that
-        # caused the real 5.0.4 -> 5.0.5 WinError 5 on SleepMate.exe.
         tray = subprocess.Popen([str(locked_exe), "/d", "/c", hold_command], creationflags=flags)
         companion = subprocess.Popen([str(locked_exe), "/d", "/c", hold_command], creationflags=flags)
         try:
@@ -132,10 +128,10 @@ def test_windows_orphan_companion_sleepmate_exe_is_stopped_before_replace():
             assert (app / "unins000.dat").read_bytes() == b"installer-owned-dat"
             assert "update_boot_ok" in (pkg / "app.py").read_text(encoding="utf-8")
             assert "update_boot_ok" in (app / "app.py").read_text(encoding="utf-8")
-            assert "minden SleepMate.exe folyamat leállítási kérése elküldve" in details
 
             health = json.loads(marker.read_text(encoding="utf-8"))
             assert wait_for_exit(int(health.get("pid") or 0), 5), "simulated updated backend did not exit"
+            assert "minden megmaradt SleepMate.exe folyamat leállítási kérése elküldve" in details
         finally:
             for proc in (tray, companion):
                 if proc.poll() is None:

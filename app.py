@@ -140,7 +140,7 @@ def load_config() -> dict:
         "cloudflare_hostname": "",
         "cloudflare_access_confirmed": False,
         "tailscale_auto_serve": False,
-        "update_github_repo": "",
+        "update_github_repo": "BenWyxell/SleepMate-Public",
         "update_channel": "stable",
         "update_auto_check": True,
         "update_last_check": None,
@@ -151,6 +151,8 @@ def load_config() -> dict:
             loaded = json.loads(p.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 defaults.update(loaded)
+                # v5.2.20+: the update origin is product-owned, not a user setting.
+                defaults["update_github_repo"] = "BenWyxell/SleepMate-Public"
                 # v3.5+: the web backend stays local-only; remote access is via
                 # Tailscale Serve or Cloudflare Tunnel reverse proxy.
                 if str(defaults.get("host") or "") in {"0.0.0.0", "::"}:
@@ -1305,20 +1307,17 @@ class Handler(BaseHTTPRequestHandler):
                 data = self._read_json_body(max_bytes=100_000)
                 if not self.update_manager:
                     raise RuntimeError("A frissítési modul nem érhető el.")
-                allowed = {}
-                if "update_github_repo" in data:
-                    allowed["update_github_repo"] = self.update_manager.normalize_repo(str(data.get("update_github_repo") or ""))
+                allowed = {"update_github_repo": "BenWyxell/SleepMate-Public", "update_channel": "stable"}
                 if "update_channel" in data:
                     channel = str(data.get("update_channel") or "stable").strip().lower()
                     if channel not in {"stable"}:
                         raise ValueError("Jelenleg csak a stable frissítési csatorna támogatott.")
-                    allowed["update_channel"] = channel
                 if "update_auto_check" in data:
                     allowed["update_auto_check"] = bool(data.get("update_auto_check"))
-                if "github_token" in data or data.get("clear_github_token"):
-                    self.update_manager.configure_token(str(data.get("github_token") or ""), bool(data.get("clear_github_token")))
-                if allowed:
-                    save_config(allowed)
+                # Compatibility cleanup only: old clients may still send token fields,
+                # but v5.2.20 never stores or uses a GitHub credential.
+                self.update_manager.configure_token(clear=True)
+                save_config(allowed)
                 return self._json({"ok": True, **self._update_status_payload()})
             if path == "/api/update/check":
                 if not self.update_manager:
@@ -1749,17 +1748,18 @@ def main():
     Handler.backup_scheduler = AutoBackupScheduler(load_config, save_config, auto_backup, Handler.persistent_log)
     Handler.backup_scheduler.start()
     Handler.persistent_log.append("INFO", "startup", f"SleepMate v{APP_VERSION} elindult.", {"data_dir": str(data_root), "app_root": str(APP_BASE), "state_root": str(STATE_BASE), "state_migration": migration})
-    if bool(load_config().get("update_auto_check", True)) and str(load_config().get("update_github_repo") or "").strip():
-        def _startup_update_check():
-            # Never auto-install unsigned/not-yet-user-approved code. v4.2.0 only
-            # checks GitHub automatically; installation is explicit and then uses
-            # full backup + hash verification + automatic rollback.
+    def _background_update_check():
+        # Check immediately after startup and then twice per day. Installation is
+        # always explicit; this thread only reads the public release metadata.
+        while True:
             try:
-                if Handler.update_manager:
-                    Handler.update_manager.check(load_config())
+                cfg = load_config()
+                if bool(cfg.get("update_auto_check", True)) and Handler.update_manager:
+                    Handler.update_manager.check(cfg)
             except Exception:
                 pass
-        threading.Thread(target=_startup_update_check, name="sleepmate-update-check", daemon=True).start()
+            time.sleep(12 * 60 * 60)
+    threading.Thread(target=_background_update_check, name="sleepmate-update-check", daemon=True).start()
     try:
         server = ThreadingHTTPServer((args.host, args.port), Handler)
         Handler.server_instance = server

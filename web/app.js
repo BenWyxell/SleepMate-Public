@@ -1,7 +1,8 @@
 (function(){
   const ENGINE='/app-engine119.js?v=130';
   const POLISH='/sleepsync-polish.js?v=130';
-  const HYDRATION='/sleepsync-hydration-v529.js?v=130';
+  const HYDRATION='/sleepsync-hydration-v529.js?v=131';
+  const FIRST_RUN='/first-run.js?v=4';
 
   function appendEngine(){
     if(window.__sleepmateStableEngine130)return;
@@ -20,6 +21,16 @@
     appendEngine();
   }
 
+  // Register the first-run module before window.load. It stays completely silent
+  // on already-configured installations and can later be reopened from Settings.
+  if(!document.querySelector('script[data-sleepmate-first-run="1"]')){
+    const firstRun=document.createElement('script');
+    firstRun.src=FIRST_RUN;
+    firstRun.async=false;
+    firstRun.dataset.sleepmateFirstRun='1';
+    document.head.appendChild(firstRun);
+  }
+
   // SleepSync presentation and settings hydration are non-critical add-ons.
   // They start after the main document, but hydration blocks settings/schedule
   // saving until the already-persisted backend configuration is actually in the
@@ -32,11 +43,11 @@
       polish.dataset.sleepsyncPolish='130';
       document.head.appendChild(polish);
     }
-    if(!document.querySelector('script[data-sleepsync-hydration="130"]')){
+    if(!document.querySelector('script[data-sleepsync-hydration="131"]')){
       const hydration=document.createElement('script');
       hydration.src=HYDRATION;
       hydration.async=true;
-      hydration.dataset.sleepsyncHydration='130';
+      hydration.dataset.sleepsyncHydration='131';
       document.head.appendChild(hydration);
     }
   },{once:true});

@@ -1,3 +1,160 @@
+# SleepMate 5.2.20
+
+A SleepMate 5.2.20 a frissítési folyamatot végleges, felhasználóbarát publikus csatornára állítja, és egyértelművé teszi a korábban mentett Cloudflare hostname eredetét.
+
+## Hivatalos, tokenmentes frissítési csatorna
+
+- A SleepMate frissítési forrása fixen a publikus **`BenWyxell/SleepMate-Public`** GitHub repository.
+- A felhasználónak többé nem kell repository-nevet vagy GitHub tokent megadnia.
+- A Beállításokból kikerült a GitHub repository mező, a tokenmező és a mentett token törlése.
+- A kliens nem éget be közös GitHub tokent, és frissítésellenőrzéskor nem küld `Authorization` fejlécet.
+- Korábbi verzióból esetleg megmaradt updater token automatikusan törlésre kerül és nem használható fel.
+- Az automatikus ellenőrzés induláskor, majd **12 óránként** lefut; telepítés továbbra is csak kifejezett felhasználói jóváhagyással indul.
+- A kézi **Frissítés keresése** és **Frissítés telepítése** funkció megmaradt.
+- A release manifest, SHA-256 ellenőrzés, teljes frissítés előtti backup és automatikus rollback változatlanul kötelező.
+
+## Cloudflare első beállítás
+
+- Ha a Cloudflare hostname egy korábban mentett SleepMate konfigurációból kerül visszatöltésre, a wizard ezt külön **„Korábban mentett SleepMate-beállítás.”** jelöléssel mutatja.
+- A jelölés eltűnik, amint a felhasználó szerkeszteni kezdi a hostname mezőt.
+- Így egy régi domain többé nem tűnik automatikusan generált vagy a SleepMate által kitalált címnek.
+- A first-run loader új cache-generációt kapott, hogy a régi wizard JavaScript/CSS ne ragadhasson bent.
+
+## Validáció
+
+- publikus forrás hygiene gate
+- Python + JavaScript syntax/contract tesztek
+- publikus updater credential-mentességi regresszióteszt
+- Cloudflare hostname provenance regresszióteszt
+- teljes publikus pytest-készlet
+- PyInstaller Windows program-tree build
+- magyar WiX MSI build + payload ellenőrzés
+- valódi MSI install / backend API / uninstall smoke-test
+- ZIP/manifeszt/MSI SHA-256 és VERIFIED release-set
+- GitHub publikálás kizárólag minden kapu sikere után
+
+Kiadási csatorna: **stable**.
+Release build: **5.2.20**.
+API: **19**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
+
+---
+
+# SleepMate 5.2.19
+
+A SleepMate 5.2.19 a Windows első-indítási varázsló görgetésének második, szerkezeti javítása. A v5.2.18-ban használt grid-alapú `minmax(0,1fr)` megoldás egyes tényleges desktop layout-helyzetekben továbbra is hagyta, hogy a panel min-content magassága az alsó navigáció alá nyúljon. A v5.2.19 ezért nem finomhangolja tovább ezt a modellt, hanem a teljes wizardot kényszerített flex-oszlopos felépítésre váltja.
+
+## Első beállítás – kényszerített globális scroll
+
+- A wizard külső shellje most `display:flex; flex-direction:column` elrendezést használ.
+- A fejléc és az alsó navigáció `flex:0 0 auto`, ezért egyik sem zsugorodik és egyikre sem tud ráfolyni a tartalom.
+- A középső `.fr-body` kapta a tényleges görgetési felelősséget: `flex:1 1 0`, `height:0`, `min-height:0`, `overflow-y:scroll!important`.
+- A teljes overlay `overflow:hidden`, így a háttéroldal vagy a shell nem veheti át véletlenül a görgetést.
+- A wizard teljes belső fája egységes `box-sizing:border-box` szabályt kapott, hogy padding vagy inputméret se növelhesse meg kiszámíthatatlanul a rendelkezésre álló magasságot/szélességet.
+- A footer háttere közel teljesen fedett, így görgetés közben a tartalom vizuálisan sem látszik át a gombsor mögött.
+- Tailscale, Cloudflare, adatforrás, SleepSync, backup, AI és összegzés továbbra is **ugyanazt az egy közös scrollterületet** használja; nincs lépésenkénti külön scroll.
+- A `first-run.js` és `first-run.css` cache-bustja `v3` lett, a csomagolt onboarding loader is `first-run.js?v=3`-at kér.
+
+## Regressziós védelem
+
+- A külön onboarding teszt már nem egyszerű `overflow:auto` jelenlétet ellenőriz, hanem a teljes flex-szerződést: fix fejléc, kényszerített középső scroll, fix footer, globális box-sizing és cache-bust.
+- A fő Windows packaging contract ugyanezt a struktúrát követeli meg a kiadható MSI-ben.
+- A release előtt továbbra is lefut a teljes publikus tesztkészlet, a PyInstaller build, a magyar WiX MSI, a valódi MSI telepítés/backend/API/uninstall smoke-test és a VERIFIED release-integritási lánc.
+
+Kiadási csatorna: **stable**.
+Release build: **5.2.19**.
+API: **19**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
+
+---
+
+# SleepMate 5.2.18
+
+A SleepMate 5.2.18 a Windows első-indítási beállítóvarázsló használhatósági javítása. A cél az volt, hogy a wizard ne csak a Tailscale / Cloudflare résznél, hanem **minden olyan lépésen belül görgethető legyen, ahol a tartalom ezt igényli**, miközben a fejléc és az alsó navigáció végig a helyén marad.
+
+## Első beállítás – globális görgetés
+
+- A teljes varázsló középső tartalmi területe közös, függőlegesen görgethető felületet kapott.
+- A scroll nem egyetlen lépéshez kötött: adatforrás, SleepSync, Tailscale, Cloudflare, backup, AI és összegzés közben is működik, ha a tartalom túlnő az ablakon.
+- A felső fejléc és az alsó `Vissza` / `Tovább` navigáció a görgethető tartalmon kívül marad.
+- Kisebb desktop ablakmagasságnál és mobil nézetben is külön magasságkezelés biztosítja, hogy a tartalom elérhető maradjon.
+- Lépésváltáskor a wizard tartalma visszaáll a tetejére.
+- A wizard megnyitásakor a mögötte lévő főoldal görgetése tiltott, így nem a háttéroldal mozdul el.
+
+## Desktop onboarding egyszerűsítés
+
+- A hibás / villogó brand-logókép kikerült a wizard fejlécéből.
+- A **PWA telepítés és Web Push / értesítési engedély** kikerült az első desktop beállításból; ezek nem részei többé a wizardnak.
+- Az 5. lépés most kizárólag az opcionális **automatikus backup és AI** beállításokat kezeli.
+- A `first-run.js` és `first-run.css` loader cache-bustja frissült, hogy a böngésző ne tartsa bent a korábbi wizard-verziót.
+
+## Regressziós védelem
+
+- Külön teszt tiltja, hogy a PWA/Web Push onboarding-elemek visszakerüljenek.
+- A fő Windows packaging contract is ellenőrzi a globális scroll-szerződést és az új cache-bustot.
+- A release előtt továbbra is lefut a teljes publikus tesztkészlet, a PyInstaller build, a magyar WiX MSI, a valódi MSI telepítés, backend/API smoke, eltávolítás, state-megőrzés, ZIP/MSI/manifeszt hash- és tartalomellenőrzés.
+
+Kiadási csatorna: **stable**.
+Release build: **5.2.18**.
+API: **19**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
+
+---
+
+# SleepMate 5.2.17
+
+A SleepMate 5.2.17 a korábbi, SignPath-kompatibilis MSI candidate helyett már valódi felhasználói Windows-telepítőt és első-indítási beállítóvarázslót ad.
+
+## Magyar Windows MSI telepítő
+
+- A telepítő nyelve **magyar (`hu-HU`, Windows Installer Language 1038)**.
+- Valódi WiX telepítővarázsló kezeli a telepítési helyet, a komponensválasztást és a telepítés összegzését.
+- A Start menü integráció a SleepMate alaptelepítés része.
+- Az **asztali parancsikon** választható Windows-integrációs komponens.
+- Az **automatikus Windows-indítás** külön opcionális komponens; friss telepítésnél a SleepMate átveszi ezt a választást, frissítésnél nem írja felül a meglévő beállítást.
+- A telepítés végén a **SleepMate indítása** opcióval az alkalmazás azonnal elindítható.
+
+## Licencfeltételek és adatvédelem
+
+- A telepítő egy közös, görgethető **„Licencfeltételek és adatvédelem”** oldalon jeleníti meg a repository `LICENSE` és `PRIVACY.md` dokumentumának tartalmát.
+- A két forrásdokumentum továbbra is külön fájl marad; csak az MSI-ben jelennek meg egy közös elfogadó oldalon.
+- A telepítés csak a licencfeltételek és az Adatvédelmi tájékoztató együttes elfogadása után folytatható.
+
+## SleepMate első beállítása
+
+Az első indításkor hatlépéses, újra megnyitható setup wizard indul:
+
+1. üdvözlés és helyi adatkezelési alapelv;
+2. CPAP / ResMed adatforrás és automatikus változásellenőrzés;
+3. SleepSync automatikus ez Share szinkron;
+4. helyi használat, Tailscale vagy Cloudflare Tunnel;
+5. PWA, Web Push, automatikus backup, opcionális Gemini és Groq API;
+6. összegzés és befejezés.
+
+Vadonatúj telepítésnél a SleepMate nem tekinti automatikusan érvényes adatforrásnak a `Documents\CPAP_mentes` útvonalat: a felhasználó választja ki a tényleges forrást. Meglévő telepítés frissítésekor az addigi adatforrás és beállítások megmaradnak.
+
+## Távoli elérés és opcionális szolgáltatások
+
+- A Tailscale és a cloudflared telepítése a SleepMate meglévő backendjén keresztül, a hivatalos winget csomagokkal történik.
+- A SleepMate backend továbbra is helyi (`127.0.0.1`); Tailscale és Cloudflare reverse proxyval biztosít távoli HTTPS-elérést.
+- Cloudflare Tunnel indításához a SleepMate megköveteli a Cloudflare Access / Zero Trust védelem felhasználói visszaigazolását.
+- A Cloudflare token és a Gemini/Groq API-kulcsok a meglévő Windows DPAPI-védett helyi titoktárolókba kerülnek; az onboarding állapotfájl nem tárol credentialt.
+- A PWA telepítése és a böngészős értesítési engedély biztonsági okból továbbra is kifejezett felhasználói művelet; a wizard ezeket közvetlen gombokkal indítja.
+
+## Kiadási lánc
+
+- Az MSI a GitHub Actions Windows runnerén, rögzített **WiX Toolset 3.14.1** toolchainnel készül.
+- A CI ellenőrzi a publikus forrás tisztaságát, Python/JavaScript szintaxist, a csomagolási contractokat, a teljes publikus tesztkészletet, a Windows program-tree buildet, a ZIP/manifeszt hash- és tartalomkonzisztenciáját, az MSI payloadot, a valódi telepítést, a telepített backend API-kat, SleepSyncet, Google Drive státuszt, onboardingot, Web Push-t, a leállítást, az eltávolítást és a felhasználói állapot megőrzését.
+- A GitHub Release publikálása kizárólag a sikeres smoke-test és a külön release-integritási kapu után, az ugyanabban a workflow-ban létrehozott **VERIFIED** artifactból történhet.
+- A production Authenticode-aláírás egyelőre nincs bekapcsolva; a SignPath aláírás a trusted build láncra kerül majd. Emiatt a Windows jelenleg SmartScreen vagy vírusvédelmi reputációs figyelmeztetést jeleníthet meg.
+
+Kiadási csatorna: **stable**.
+Release build: **5.2.17**.
+API: **19**.
+Release validation: **teljes publikus tesztkészlet + Windows program-tree + magyar MSI + valódi install/runtime/API/uninstall smoke-test + release hash/manifeszt/integritás gate + verified GitHub publication**.
+
+---
+
 # SleepMate 5.2.16
 
 A SleepMate 5.2.16 az ez Share időszakosan eltűnő Wi-Fi-jét kezeli kulturáltabban. A 2026-08-29-i terepi logban a kártya 85–87%-os jelerősséggel sikeresen csatlakozott, majd a webfelülete nem válaszolt, végül maga az `ez Share` SSID is eltűnt, miközben más Wi-Fi hálózatok továbbra is láthatók maradtak. Ilyenkor nincs értelme újra és újra a Windows WLAN-t resetelni vagy ugyanarra a nem sugárzó hálózatra connect parancsot küldeni.

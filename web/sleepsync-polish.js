@@ -16,7 +16,7 @@
     if(typeof window.__sleepSyncHydrateSettings==='function')return;
     if(document.querySelector('script[src*="sleepsync-hydration-v529.js"]'))return;
     const script=document.createElement('script');
-    script.src='/sleepsync-hydration-v529.js';
+    script.src='/sleepsync-hydration-v529.js?v=131';
     script.async=false;
     script.dataset.sleepsyncHydrationFallback='5213';
     script.onload=()=>{try{window.__sleepSyncHydrateSettings?.(false)}catch{}};

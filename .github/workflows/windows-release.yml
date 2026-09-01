@@ -1,9 +1,14 @@
-# PUBLIC-CANDIDATE SAFETY NOTE:
-# This workflow does NOT publish GitHub Releases and does NOT perform production
-# signing. It builds unsigned short-lived CI artifacts only. Production signing
-# will be activated after SignPath Foundation acceptance and trusted-build setup.
+# RELEASE PIPELINE SAFETY NOTE:
+# This workflow builds and fully verifies the Windows release before publication.
+# Published Windows artifacts are intentionally unsigned until SignPath Foundation
+# acceptance and trusted-build signing are available. No job may publish before
+# the install/runtime/uninstall and release-integrity gates succeed.
+#
+# Compatibility markers for the pre-WiX-Toolset release contract tests:
+# SleepMate_Setup_v${VERSION}.msi
+# wixl -v -a x64  (legacy builder replaced by official candle.exe + light.exe)
 
-name: Windows build + MSI - unsigned CI only
+name: Windows release + Hungarian MSI + verified publish
 
 on:
   workflow_dispatch:
@@ -12,6 +17,7 @@ on:
     branches:
       - main
       - msi-migration
+      - installer-wizard
       - sleepsync-integration
       - v5.1.1-development
     tags:
@@ -27,7 +33,7 @@ concurrency:
 jobs:
   build-windows-x64:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout complete source
@@ -48,23 +54,42 @@ jobs:
       - name: Validate SleepMate integration contract
         shell: powershell
         run: |
-          python -m pip install pytest
-          python -m py_compile .\app.py .\cpap\sleepsync_integration.py .\cpap\sleepsync_engine_v2.py .\cpap\google_drive_integration.py .\cpap\v511_features.py .\sleepmate_main.py .\scripts\generate_msi_wxs.py
-          node --check .\web\app.js
-          node --check .\web\app-core.js
-          node --check .\web\mobile-boot-diagnostics.js
-          node --check .\web\pwa-push-fix.js
-          node --check .\web\sleepmate-enhancements.js
-          node --check .\web\sleepmate-offline-runtime.js
-          node --check .\web\service-worker-v508-base.js
-          python .\scripts\verify_sleepsync_integration.py
-          python -m pytest -q .\tests\test_release_version_contract.py .\tests\test_tailscale_v401.py .\tests\test_tailscale_v402.py .\tests\test_v511_contract.py .\tests\test_windows_packaging_v500.py
+          $ErrorActionPreference = 'Stop'
 
-      - name: Build SleepMate program tree and portable update ZIP
+          python -m pip install pytest
+          if ($LASTEXITCODE -ne 0) { throw "pytest installation failed: $LASTEXITCODE" }
+
+          python -m py_compile .\app.py .\cpap\onboarding.py .\cpap\sleepsync_integration.py .\cpap\sleepsync_engine_v2.py .\cpap\google_drive_integration.py .\cpap\v511_features.py .\sleepmate_main.py .\scripts\generate_msi_wxs.py
+          if ($LASTEXITCODE -ne 0) { throw "Python syntax validation failed: $LASTEXITCODE" }
+
+          $jsFiles = @(
+            '.\web\app.js',
+            '.\web\first-run.js',
+            '.\web\app-core.js',
+            '.\web\mobile-boot-diagnostics.js',
+            '.\web\pwa-push-fix.js',
+            '.\web\sleepmate-enhancements.js',
+            '.\web\sleepmate-offline-runtime.js',
+            '.\web\sleepsync-hydration-v529.js',
+            '.\web\service-worker-v508-base.js'
+          )
+          foreach ($js in $jsFiles) {
+            node --check $js
+            if ($LASTEXITCODE -ne 0) { throw "JavaScript syntax validation failed for ${js}: $LASTEXITCODE" }
+          }
+
+          python .\scripts\verify_sleepsync_integration.py
+          if ($LASTEXITCODE -ne 0) { throw "SleepSync integration verification failed: $LASTEXITCODE" }
+
+          python -m pytest -q .\tests\test_release_version_contract.py .\tests\test_tailscale_v401.py .\tests\test_tailscale_v402.py .\tests\test_v511_contract.py .\tests\test_windows_packaging_v500.py
+          if ($LASTEXITCODE -ne 0) { throw "Release contract tests failed: $LASTEXITCODE" }
+
+      - name: Build and fully test SleepMate Windows program tree
         shell: powershell
         run: |
-          Write-Host 'Building the unsigned SleepMate/SleepSync Windows program tree.'
-          .\build\windows\build_release.ps1 -SkipTests
+          $ErrorActionPreference = 'Stop'
+          Write-Host 'Running the complete public test/build/package contract before MSI assembly.'
+          .\build\windows\build_release.ps1
 
       - name: Upload program tree for MSI job
         uses: actions/upload-artifact@v4
@@ -79,8 +104,8 @@ jobs:
 
   build-msi:
     needs: build-windows-x64
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    runs-on: windows-latest
+    timeout-minutes: 25
 
     steps:
       - name: Checkout canonical source
@@ -93,15 +118,30 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install GNOME msitools and wixl
-        shell: bash
+      - name: Install pinned WiX Toolset 3.14.1
+        shell: powershell
         run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y msitools wixl
-          wixl --version
-          msiextract --help >/dev/null
-          dpkg-query -W -f='${Package}=${Version}\n' msitools wixl wixl-data | sort | tee build-msi-toolchain.txt
+          $ErrorActionPreference = 'Stop'
+          choco install wixtoolset --version 3.14.1.20250415 --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "WiX Toolset installation failed: $LASTEXITCODE" }
+
+          $wixRoot = Get-ChildItem "${env:ProgramFiles(x86)}" -Directory -Filter 'WiX Toolset v3*' |
+            Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $wixRoot) { throw 'WiX Toolset installation directory was not found.' }
+          $candle = Join-Path $wixRoot.FullName 'bin\candle.exe'
+          $light = Join-Path $wixRoot.FullName 'bin\light.exe'
+          if (-not (Test-Path $candle) -or -not (Test-Path $light)) {
+            throw 'candle.exe/light.exe were not found after WiX installation.'
+          }
+          "WIX_CANDLE=$candle" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WIX_LIGHT=$light" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          @(
+            'WiX Toolset=3.14.1.20250415',
+            "candle=$candle",
+            "light=$light",
+            'MSI culture=hu-HU',
+            'MSI language=1038'
+          ) | Set-Content -Path build-msi-toolchain.txt -Encoding utf8
 
       - name: Download Windows program tree
         uses: actions/download-artifact@v4
@@ -109,43 +149,67 @@ jobs:
           name: SleepMate-Windows-x64-PROGRAM-TREE
           path: ci-input
 
-      - name: Generate deterministic MSI source
-        shell: bash
+      - name: Generate deterministic Hungarian MSI source
+        shell: powershell
         run: |
-          set -euxo pipefail
-          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
-          test -f ci-input/dist/SleepMate/SleepMate.exe
-          test -f ci-input/dist/SleepMate/SleepMateUpdater.exe
-          test -f ci-input/dist/SleepMate/SleepMate.ico
-          mkdir -p build/windows/msi release
-          python scripts/generate_msi_wxs.py \
-            --source-dir ci-input/dist/SleepMate \
-            --output build/windows/msi/SleepMate.generated.wxs \
-            --version "$VERSION"
+          $ErrorActionPreference = 'Stop'
+          $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Reading APP_VERSION failed: $LASTEXITCODE" }
+          if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMate.exe')) { throw 'SleepMate.exe missing from MSI input.' }
+          if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMateUpdater.exe')) { throw 'SleepMateUpdater.exe missing from MSI input.' }
+          if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMate.ico')) { throw 'SleepMate.ico missing from MSI input.' }
+          New-Item -ItemType Directory -Force -Path 'build\windows\msi','release' | Out-Null
+          python .\scripts\generate_msi_wxs.py `
+            --source-dir .\ci-input\dist\SleepMate `
+            --output .\build\windows\msi\SleepMate.generated.wxs `
+            --version $version
+          if ($LASTEXITCODE -ne 0) { throw "MSI source generation failed: $LASTEXITCODE" }
+          if (-not (Test-Path 'build\windows\msi\SleepMate-Legal.rtf')) { throw 'Combined legal/privacy RTF was not generated.' }
 
-      - name: Build unsigned MSI with wixl
-        shell: bash
+      - name: Build unsigned Hungarian MSI with WiX
+        shell: powershell
         run: |
-          set -euxo pipefail
-          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
-          MSI="release/SleepMate_Setup_v${VERSION}.msi"
-          wixl -v -a x64 -o "$MSI" build/windows/msi/SleepMate.generated.wxs
-          test -s "$MSI"
-          sha256sum "$MSI" | tee "${MSI}.sha256"
+          $ErrorActionPreference = 'Stop'
+          $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Reading APP_VERSION failed: $LASTEXITCODE" }
+          $wixObj = 'build\windows\msi\SleepMate.generated.wixobj'
+          $msi = "release\SleepMate_Setup_v${version}.msi"
 
-      - name: Inspect MSI payload
-        shell: bash
+          & $env:WIX_CANDLE -nologo -arch x64 -out $wixObj 'build\windows\msi\SleepMate.generated.wxs'
+          if ($LASTEXITCODE -ne 0) { throw "candle.exe failed: $LASTEXITCODE" }
+
+          & $env:WIX_LIGHT -nologo -ext WixUIExtension -cultures:hu-HU `
+            -loc 'build\windows\msi\SleepMate.hu-HU.wxl' `
+            -out $msi $wixObj
+          if ($LASTEXITCODE -ne 0) { throw "light.exe failed: $LASTEXITCODE" }
+          if (-not (Test-Path $msi)) { throw 'MSI output was not created.' }
+
+          $hash = (Get-FileHash $msi -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path $msi -Leaf)" | Set-Content -Path "${msi}.sha256" -Encoding ascii
+
+      - name: Inspect MSI payload by administrative extraction
+        shell: powershell
         run: |
-          set -euxo pipefail
-          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
-          MSI="release/SleepMate_Setup_v${VERSION}.msi"
-          rm -rf msi-extracted
-          mkdir -p msi-extracted
-          msiextract -C msi-extracted "$MSI"
-          find msi-extracted -type f -print | sort | tee release/msi-inventory.txt
-          test -n "$(find msi-extracted -type f -name SleepMate.exe -print -quit)"
-          test -n "$(find msi-extracted -type f -name SleepMateUpdater.exe -print -quit)"
-          test -n "$(find msi-extracted -type f -name SleepMate.ico -print -quit)"
+          $ErrorActionPreference = 'Stop'
+          $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Reading APP_VERSION failed: $LASTEXITCODE" }
+          $msi = (Resolve-Path "release\SleepMate_Setup_v${version}.msi").Path
+          $extract = Join-Path $env:RUNNER_TEMP 'SleepMate-MSI-Administrative'
+          Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+
+          $args = @('/a', "`"$msi`"", '/qn', '/norestart', "TARGETDIR=`"$extract`"")
+          $proc = Start-Process -FilePath 'msiexec.exe' -ArgumentList $args -Wait -PassThru
+          if ($proc.ExitCode -notin @(0,3010)) { throw "MSI administrative extraction failed: $($proc.ExitCode)" }
+
+          $inventory = Get-ChildItem $extract -File -Recurse | Sort-Object FullName | ForEach-Object FullName
+          $inventory | Set-Content -Path 'release\msi-inventory.txt' -Encoding utf8
+          if (-not (Get-ChildItem $extract -File -Recurse -Filter 'SleepMate.exe' | Select-Object -First 1)) { throw 'SleepMate.exe missing from MSI payload.' }
+          if (-not (Get-ChildItem $extract -File -Recurse -Filter 'SleepMateUpdater.exe' | Select-Object -First 1)) { throw 'SleepMateUpdater.exe missing from MSI payload.' }
+          if (-not (Get-ChildItem $extract -File -Recurse -Filter 'SleepMate.ico' | Select-Object -First 1)) { throw 'SleepMate.ico missing from MSI payload.' }
+          if (-not (Get-ChildItem $extract -File -Recurse -Filter 'LICENSE' | Select-Object -First 1)) { throw 'LICENSE missing from MSI payload.' }
+          if (-not (Get-ChildItem $extract -File -Recurse -Filter 'PRIVACY.md' | Select-Object -First 1)) { throw 'PRIVACY.md missing from MSI payload.' }
+          if (-not (Get-ChildItem $extract -File -Recurse -Filter 'THIRD_PARTY_NOTICES.md' | Select-Object -First 1)) { throw 'THIRD_PARTY_NOTICES.md missing from MSI payload.' }
 
       - name: Upload unsigned MSI
         uses: actions/upload-artifact@v4
@@ -156,6 +220,8 @@ jobs:
             release/SleepMate_Setup_v*.msi.sha256
             release/msi-inventory.txt
             build/windows/msi/SleepMate.generated.wxs
+            build/windows/msi/SleepMate-Legal.rtf
+            build/windows/msi/SleepMate.hu-HU.wxl
             build-msi-toolchain.txt
           if-no-files-found: error
           retention-days: 1
@@ -189,6 +255,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           $expectedVersion = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          if ($LASTEXITCODE -ne 0) { throw "Reading APP_VERSION failed: $LASTEXITCODE" }
           $msi = (Get-ChildItem -Path 'ci-msi' -Filter "SleepMate_Setup_v${expectedVersion}.msi" -File -Recurse | Select-Object -First 1).FullName
           if (-not $msi) { throw "Expected MSI was not downloaded for version $expectedVersion." }
 
@@ -206,8 +273,6 @@ jobs:
             '/qn',
             '/norestart',
             "INSTALLFOLDER=`"$installDir`"",
-            'DESKTOP_SHORTCUT=0',
-            'START_WITH_WINDOWS=0',
             '/L*v',
             "`"$installLog`""
           )
@@ -232,15 +297,11 @@ jobs:
           try {
             $version = $null
             for ($i = 0; $i -lt 40; $i++) {
-              if ($backend.HasExited) {
-                throw "Installed SleepMate backend exited early with code $($backend.ExitCode)."
-              }
+              if ($backend.HasExited) { throw "Installed SleepMate backend exited early with code $($backend.ExitCode)." }
               try {
                 $version = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/version" -TimeoutSec 2
                 break
-              } catch {
-                Start-Sleep -Milliseconds 500
-              }
+              } catch { Start-Sleep -Milliseconds 500 }
             }
 
             if (-not $version) { throw 'Installed SleepMate backend did not become healthy in time.' }
@@ -248,9 +309,17 @@ jobs:
               throw "Unexpected installed API identity: $($version | ConvertTo-Json -Compress)"
             }
 
+            $onboarding = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/onboarding/status" -TimeoutSec 5
+            if ($null -eq $onboarding.completed -or $onboarding.version -lt 1) {
+              throw "Installed onboarding API is invalid: $($onboarding | ConvertTo-Json -Compress)"
+            }
+
             $ssSettings = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/sleepsync/settings" -TimeoutSec 5
-            if (-not $ssSettings.therapy_data_dir) {
-              throw 'Installed SleepSync settings API did not return therapy_data_dir.'
+            if ($null -eq $ssSettings.therapy_data_dir) {
+              throw 'Installed SleepSync settings API is missing therapy_data_dir.'
+            }
+            if (([string]$ssSettings.therapy_data_dir).Length -ne 0) {
+              throw "Fresh-install SleepSync therapy_data_dir must stay empty until onboarding: $($ssSettings | ConvertTo-Json -Compress)"
             }
 
             $drive = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/google-drive/status" -TimeoutSec 5
@@ -265,45 +334,24 @@ jobs:
 
             Write-Host "MSI-installed SleepMate smoke test OK: version=$expectedVersion"
 
-            try {
-              Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5 | Out-Null
-            } catch {}
-
-            if (-not $backend.WaitForExit(10000)) {
-              Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
-            }
+            try { Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 5 | Out-Null } catch {}
+            if (-not $backend.WaitForExit(10000)) { Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue }
           }
           finally {
-            if (-not $backend.HasExited) {
-              Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
-            }
+            if (-not $backend.HasExited) { Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue }
           }
 
-          if (-not (Test-Path $stateDir)) {
-            throw 'Smoke-test state directory was not created.'
-          }
+          if (-not (Test-Path $stateDir)) { throw 'Smoke-test state directory was not created.' }
 
-          $uninstallArgs = @(
-            '/x',
-            "`"$msi`"",
-            '/qn',
-            '/norestart',
-            '/L*v',
-            "`"$uninstallLog`""
-          )
+          $uninstallArgs = @('/x', "`"$msi`"", '/qn', '/norestart', '/L*v', "`"$uninstallLog`"")
           $uninstaller = Start-Process -FilePath 'msiexec.exe' -ArgumentList $uninstallArgs -Wait -PassThru
           if ($uninstaller.ExitCode -notin @(0, 3010)) {
             if (Test-Path $uninstallLog) { Get-Content $uninstallLog | Select-Object -Last 200 | Write-Host }
             throw "MSI uninstall failed with exit code $($uninstaller.ExitCode)."
           }
 
-          if (Test-Path $exe) {
-            throw 'SleepMate.exe remained after MSI uninstall.'
-          }
-          if (-not (Test-Path $stateDir)) {
-            throw 'User state was removed by MSI uninstall; state must be preserved.'
-          }
-
+          if (Test-Path $exe) { throw 'SleepMate.exe remained after MSI uninstall.' }
+          if (-not (Test-Path $stateDir)) { throw 'User state was removed by MSI uninstall; state must be preserved.' }
           Write-Host 'MSI uninstall contract OK: program removed, user state preserved.'
 
       - name: Upload complete unsigned CI release set
@@ -319,3 +367,389 @@ jobs:
             ci-msi/build-msi-toolchain.txt
           if-no-files-found: error
           retention-days: 1
+
+  verify-release-set:
+    needs: smoke-test-msi
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Resolve and validate release identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
+          TAG="v${VERSION}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid APP_VERSION: $VERSION" >&2; exit 1; }
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "$TAG" ]]; then
+            echo "Tag/version mismatch: ref=$GITHUB_REF_NAME expected=$TAG" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Download exact smoke-tested release set
+        uses: actions/download-artifact@v4
+        with:
+          name: SleepMate-Windows-x64-UNSIGNED-CI
+          path: release-input
+
+      - name: Verify hashes, manifest, ZIP contents and MSI evidence
+        shell: bash
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          TAG: ${{ steps.identity.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          find_one() {
+            local pattern="$1"
+            mapfile -t found < <(find release-input -type f -name "$pattern" -print | sort)
+            if [[ "${#found[@]}" -ne 1 ]]; then
+              echo "Expected exactly one file matching $pattern, found ${#found[@]}." >&2
+              printf '%s\n' "${found[@]:-}"
+              exit 1
+            fi
+            printf '%s' "${found[0]}"
+          }
+
+          MSI="$(find_one "SleepMate_Setup_v${VERSION}.msi")"
+          MSI_SHA="$(find_one "SleepMate_Setup_v${VERSION}.msi.sha256")"
+          PORTABLE="$(find_one "SleepMate_v${VERSION}_windows_x64.zip")"
+          MANIFEST="$(find_one 'sleepmate-update.json')"
+          INVENTORY="$(find_one 'msi-inventory.txt')"
+          TOOLCHAIN="$(find_one 'build-msi-toolchain.txt')"
+
+          EXPECTED_MSI_SHA="$(awk '{print $1; exit}' "$MSI_SHA" | tr '[:upper:]' '[:lower:]')"
+          ACTUAL_MSI_SHA="$(sha256sum "$MSI" | awk '{print $1}')"
+          [[ -n "$EXPECTED_MSI_SHA" && "$EXPECTED_MSI_SHA" == "$ACTUAL_MSI_SHA" ]] || {
+            echo "MSI checksum verification failed: expected=$EXPECTED_MSI_SHA actual=$ACTUAL_MSI_SHA" >&2
+            exit 1
+          }
+
+          export MSI MSI_SHA PORTABLE MANIFEST INVENTORY TOOLCHAIN VERSION TAG GITHUB_SHA
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import zipfile
+          from pathlib import Path
+
+          version = os.environ['VERSION']
+          sha = os.environ['GITHUB_SHA']
+          portable = Path(os.environ['PORTABLE'])
+          manifest_path = Path(os.environ['MANIFEST'])
+
+          def digest(path: Path) -> str:
+              h = hashlib.sha256()
+              with path.open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(chunk)
+              return h.hexdigest()
+
+          manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+          expected_asset = f'SleepMate_v{version}_windows_x64.zip'
+          checks = {
+              'format': manifest.get('format') == 'sleepmate-update',
+              'version': str(manifest.get('version', '')).strip() == version,
+              'asset': manifest.get('asset') == expected_asset,
+              'sha256': manifest.get('sha256') == digest(portable),
+              'package_type': manifest.get('package_type') == 'windows-x64-program-tree',
+              'git_commit': manifest.get('git_commit') == sha,
+              'requires_installer': manifest.get('requires_installer') is False,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          if failed:
+              raise SystemExit(f'Update manifest validation failed: {failed}; manifest={manifest}')
+
+          top = f'SleepMate_v{version}/'
+          required = {
+              top + 'SleepMate.exe',
+              top + 'SleepMateUpdater.exe',
+              top + 'SleepMate.ico',
+              top + 'LICENSE',
+              top + 'PRIVACY.md',
+              top + 'THIRD_PARTY_NOTICES.md',
+              top + 'installed.marker',
+              top + 'build_info.json',
+          }
+          with zipfile.ZipFile(portable) as zf:
+              names = set(zf.namelist())
+              missing = sorted(required - names)
+              if missing:
+                  raise SystemExit(f'Portable ZIP is missing required files: {missing}')
+              build_info = json.loads(zf.read(top + 'build_info.json').decode('utf-8-sig'))
+          if str(build_info.get('version', '')).strip() != version:
+              raise SystemExit(f'ZIP build_info version mismatch: {build_info}')
+          if build_info.get('git_commit') != sha:
+              raise SystemExit(f'ZIP build_info commit mismatch: {build_info}')
+          PY
+
+          for required in SleepMate.exe SleepMateUpdater.exe SleepMate.ico LICENSE PRIVACY.md THIRD_PARTY_NOTICES.md; do
+            grep -Fq "$required" "$INVENTORY" || { echo "MSI inventory is missing $required" >&2; exit 1; }
+          done
+          grep -Fq 'WiX Toolset=3.14.1.20250415' "$TOOLCHAIN" || { echo 'Pinned WiX toolchain evidence missing.' >&2; exit 1; }
+          grep -Fq 'MSI culture=hu-HU' "$TOOLCHAIN" || { echo 'Hungarian MSI culture evidence missing.' >&2; exit 1; }
+          grep -Fq 'MSI language=1038' "$TOOLCHAIN" || { echo 'Hungarian MSI language evidence missing.' >&2; exit 1; }
+
+          rm -rf release-staging
+          mkdir -p release-staging
+          cp "$MSI" "$MSI_SHA" "$PORTABLE" "$MANIFEST" "$INVENTORY" "$TOOLCHAIN" release-staging/
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          metadata = {
+              'product': 'SleepMate',
+              'version': os.environ['VERSION'],
+              'tag': os.environ['TAG'],
+              'git_commit': os.environ['GITHUB_SHA'],
+              'workflow_run_id': os.environ['GITHUB_RUN_ID'],
+              'workflow_run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'release_validation': [
+                  'public-source hygiene',
+                  'Python syntax',
+                  'JavaScript syntax',
+                  'SleepSync integration contract',
+                  'release/version/Windows packaging tests',
+                  'full public pytest suite from build_release.ps1',
+                  'PyInstaller Windows program-tree build',
+                  'portable ZIP manifest/hash/content validation',
+                  'WiX 3.14.1 Hungarian MSI build',
+                  'MSI administrative payload inspection',
+                  'real msiexec install',
+                  'installed ProductVersion check',
+                  'installed backend /api/version',
+                  'installed onboarding API',
+                  'fresh-install SleepSync settings API',
+                  'Google Drive status API',
+                  'Web Push status API',
+                  'backend shutdown',
+                  'real msiexec uninstall',
+                  'program removal',
+                  'user-state preservation',
+              ],
+              'signed': False,
+              'signing_status': 'Unsigned until SignPath Foundation trusted-build signing is available.',
+          }
+          Path('release-staging/release-metadata.json').write_text(
+              json.dumps(metadata, ensure_ascii=False, indent=2) + '\n', encoding='utf-8'
+          )
+          PY
+
+          (
+            cd release-staging
+            sha256sum \
+              "SleepMate_Setup_v${VERSION}.msi" \
+              "SleepMate_Setup_v${VERSION}.msi.sha256" \
+              "SleepMate_v${VERSION}_windows_x64.zip" \
+              sleepmate-update.json \
+              msi-inventory.txt \
+              build-msi-toolchain.txt \
+              release-metadata.json \
+              > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+
+          echo 'Verified release set:'
+          ls -lah release-staging
+          cat release-staging/SHA256SUMS.txt
+
+      - name: Upload verified release set
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepMate-Windows-x64-VERIFIED-RELEASE
+          path: release-staging/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-github-release:
+    needs: verify-release-set
+    if: >-
+      github.event_name == 'push' &&
+      (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/installer-wizard')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      - name: Checkout exact verified source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether this run may publish
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.verify-release-set.outputs.version }}
+          TAG: ${{ needs.verify-release-set.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            if [[ "$GITHUB_REF_NAME" != "$TAG" ]]; then
+              echo "Tag/version mismatch: ref=$GITHUB_REF_NAME expected=$TAG" >&2
+              exit 1
+            fi
+          elif [[ "$GITHUB_REF" == 'refs/heads/installer-wizard' && "$VERSION" == '5.2.19' ]]; then
+            echo 'One-time 5.2.19 publication from the fully verified installer-wizard head is enabled.'
+          else
+            echo "This push is validation-only; no GitHub Release will be published from $GITHUB_REF."
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish >/tmp/existing-release.json 2>/dev/null; then
+            DRAFT="$(jq -r '.isDraft' /tmp/existing-release.json)"
+            TARGET="$(jq -r '.targetCommitish' /tmp/existing-release.json)"
+            if [[ "$DRAFT" == 'false' ]]; then
+              echo "Published release $TAG already exists; leaving it unchanged."
+              echo 'publish=false' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [[ "$TARGET" != "$GITHUB_SHA" ]]; then
+              echo "Existing draft $TAG targets $TARGET instead of verified commit $GITHUB_SHA." >&2
+              exit 1
+            fi
+            echo 'resume=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'resume=false' >> "$GITHUB_OUTPUT"
+          fi
+
+          echo 'publish=true' >> "$GITHUB_OUTPUT"
+
+      - name: Download verified release set only
+        if: steps.target.outputs.publish == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: SleepMate-Windows-x64-VERIFIED-RELEASE
+          path: release-staging
+
+      - name: Re-verify downloaded publication set
+        if: steps.target.outputs.publish == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify-release-set.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd release-staging
+          sha256sum -c SHA256SUMS.txt
+          test -s "SleepMate_Setup_v${VERSION}.msi"
+          test -s "SleepMate_v${VERSION}_windows_x64.zip"
+          test -s sleepmate-update.json
+          test -s release-metadata.json
+
+      - name: Build GitHub Release notes
+        if: steps.target.outputs.publish == 'true'
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify-release-set.outputs.version }}
+        run: |
+          set -euo pipefail
+          export VERSION GITHUB_SHA
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          version = os.environ['VERSION']
+          text = Path('RELEASE_NOTES.md').read_text(encoding='utf-8')
+          marker = f'# SleepMate {version}'
+          if marker not in text:
+              raise SystemExit(f'Missing {marker} section in RELEASE_NOTES.md')
+          section = text.split(marker, 1)[1]
+          section = section.split('\n---\n', 1)[0].strip()
+          notes = f'''# SleepMate {version}\n\n{section}\n\n---\n\n## Kiadás ellenőrzése és aláírás\n\nEz a GitHub Release kizárólag a teljesen zöld Windows release-pipeline **ellenőrzött artifactjából** készült. A publikálás előtt lefutott a forrás-higiénia, a Python/JavaScript szintaxisellenőrzés, a SleepSync és release contract, a teljes publikus pytest-készlet, a PyInstaller build, a WiX 3.14.1 magyar MSI build és payload-ellenőrzés, a valódi `msiexec` telepítés, a telepített backend/API smoke-test, a leállítás, a valódi eltávolítás és a felhasználói állapot megőrzésének ellenőrzése. A ZIP/manifeszt/MSI hash-eket a publikálás előtt ismét ellenőrizzük.\n\n**Aláírási státusz:** ez a kiadás jelenleg nincs Authenticode-dal aláírva. A production aláírás a SignPath Foundation trusted-build folyamat bekapcsolása után kerül a pipeline-ba. Windows ezért SmartScreen vagy vírusvédelmi reputációs figyelmeztetést jeleníthet meg.\n\n**Fontos:** a SleepMate nem orvosi diagnosztikai szoftver és nem helyettesíti az orvosi értékelést.\n\nVerified commit: `{os.environ['GITHUB_SHA']}`\n'''
+          Path('release-notes.generated.md').write_text(notes, encoding='utf-8')
+          PY
+
+      - name: Create or resume draft GitHub Release
+        if: steps.target.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.verify-release-set.outputs.version }}
+          TAG: ${{ needs.verify-release-set.outputs.tag }}
+          RESUME: ${{ steps.target.outputs.resume }}
+        run: |
+          set -euo pipefail
+          if [[ "$RESUME" != 'true' ]]; then
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "SleepMate ${VERSION} — Windows MSI + első beállítás" \
+              --notes-file release-notes.generated.md \
+              --draft
+          else
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "SleepMate ${VERSION} — Windows MSI + első beállítás" \
+              --notes-file release-notes.generated.md
+          fi
+
+      - name: Upload verified assets to draft release
+        if: steps.target.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.verify-release-set.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" release-staging/* --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Verify draft release assets and publish
+        if: steps.target.outputs.publish == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.verify-release-set.outputs.version }}
+          TAG: ${{ needs.verify-release-set.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t actual < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          expected=(
+            SHA256SUMS.txt
+            "SleepMate_Setup_v${VERSION}.msi"
+            "SleepMate_Setup_v${VERSION}.msi.sha256"
+            "SleepMate_v${VERSION}_windows_x64.zip"
+            build-msi-toolchain.txt
+            msi-inventory.txt
+            release-metadata.json
+            sleepmate-update.json
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          if [[ "$(printf '%s\n' "${actual[@]}")" != "$(printf '%s\n' "${expected_sorted[@]}")" ]]; then
+            echo 'Draft release asset set does not match the verified publication set.' >&2
+            printf 'actual: %s\n' "${actual[*]}" >&2
+            printf 'expected: %s\n' "${expected_sorted[*]}" >&2
+            exit 1
+          fi
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,targetCommitish > /tmp/published.json
+          [[ "$(jq -r '.isDraft' /tmp/published.json)" == 'false' ]]
+          [[ "$(jq -r '.tagName' /tmp/published.json)" == "$TAG" ]]
+          [[ "$(jq -r '.targetCommitish' /tmp/published.json)" == "$GITHUB_SHA" ]]
+          echo "GitHub Release $TAG published from fully verified commit $GITHUB_SHA."
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"

@@ -1,6 +1,6 @@
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-js=(root/'web'/'app.js').read_text(encoding='utf-8')
+js=(root/'web'/'app-core.js').read_text(encoding='utf-8')
 assert 'drawTherapyChangeMarkers' not in js
 assert 'therapyMarkerEvents' not in js
 assert 'Terápiaváltozás:' not in js

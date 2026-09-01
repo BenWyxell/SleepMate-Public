@@ -209,7 +209,7 @@ def test_v5213_packaged_pwa_scheduler_always_hydrates_and_is_mobile_ready():
     live = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
 
     assert "ensureHydrationModule" in polish
-    assert "script.src='/sleepsync-hydration-v529.js'" in polish
+    assert "script.src='/sleepsync-hydration-v529.js?v=131'" in polish
     assert "requestHydration(false)" in polish
     assert "window.__sleepSyncHydrateSettings=hydrate" in hydration
 

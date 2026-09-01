@@ -8,6 +8,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+from cpap.onboarding import install_onboarding
 from cpap.runtime import app_root, config_path, migrate_from_path, state_root
 from cpap.version import APP_VERSION
 
@@ -84,8 +85,8 @@ def _recover_stuck_tray() -> bool:
     """Recover only a genuinely stale tray, never a healthy tray still starting.
 
     A second SleepMate launch can happen while the first tray already owns the
-    singleton mutex but its backend has not finished binding yet.  The old logic
-    treated a *fresh* heartbeat as permission to taskkill that tray. Repeated
+    singleton mutex but its backend has not finished binding yet. The old logic
+    treated a fresh heartbeat as permission to taskkill that tray. Repeated
     launches could therefore create several short-lived tray icons that Windows
     kept as notification-area ghosts until Explorer refreshed them.
 
@@ -114,8 +115,6 @@ def _recover_stuck_tray() -> bool:
     except Exception:
         return False
 
-    # Give a stale tray one final chance to recover its backend before killing
-    # it. This path is intentionally unavailable to a freshly-starting tray.
     end = time.time() + 3.5
     while time.time() < end:
         if _sleepmate_port() is not None:
@@ -182,6 +181,7 @@ def main() -> int:
         install_sleep_analysis_v522(app)
         install_sleepsync_integration(app)
         install_google_drive_integration(app)
+        install_onboarding(app)
         app.main()
         return 0
 

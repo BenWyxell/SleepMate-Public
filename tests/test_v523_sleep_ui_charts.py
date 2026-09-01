@@ -23,14 +23,7 @@ def test_sleep_defaults_to_full_history_everywhere():
 
 def test_sleep_period_order_and_two_level_view_contract():
     text = SLEEP_JS.read_text(encoding="utf-8")
-    labels = [
-        "Utolsó 7 nap",
-        "Utolsó 30 nap",
-        "Teljes időszak",
-        "Egyedi időszak",
-        "Előző 7 nap",
-        "Előző 30 nap",
-    ]
+    labels = ["Utolsó 7 nap", "Utolsó 30 nap", "Teljes időszak", "Egyedi időszak", "Előző 7 nap", "Előző 30 nap"]
     positions = [text.index(label) for label in labels]
     assert positions == sorted(positions)
     assert "Egyszerű nézet" in text
@@ -58,7 +51,6 @@ def test_rolling_previous_periods_stay_relative_to_latest_sleep_day():
 
 def test_chart_curve_interpolates_through_markers_and_tooltips_are_above_touch():
     text = CHART_JS.read_text(encoding="utf-8")
-    # Cubic segments end at p2, therefore each source point lies on the line.
     assert "ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,p2.x,p2.y)" in text
     assert "top=cy-tip.offsetHeight-gap" in text
     assert "by=y-height-gap" in text
@@ -67,7 +59,7 @@ def test_chart_curve_interpolates_through_markers_and_tooltips_are_above_touch()
 
 
 def test_shell_loads_only_current_sleep_and_chart_patches():
-    text = SHELL.read_text(encoding="utf-8")
-    assert "sleepmate-sleep-v523.js?v=5.2.3" in text
-    assert "sleepmate-chart-v523.js?v=5.2.3" in text
-    assert "sleepmate-sleep-v522.js" not in text
+    worker = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
+    assert "sleepmate-sleep-v523.js?v=5.2.6" in worker
+    assert "sleepmate-chart-v523.js?v=5.2.14" in worker
+    assert "sleepmate-sleep-v522.js" not in worker

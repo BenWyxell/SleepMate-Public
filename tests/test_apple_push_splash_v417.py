@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 HTML=(ROOT/'web'/'index.html').read_text(encoding='utf-8')
-JS=(ROOT/'web'/'app.js').read_text(encoding='utf-8')
+JS=(ROOT/'web'/'app-core.js').read_text(encoding='utf-8')
 CSS=(ROOT/'web'/'style.css').read_text(encoding='utf-8')
 PUSH=(ROOT/'cpap'/'push_service.py').read_text(encoding='utf-8')
 BASE_SW=(ROOT/'web'/'service-worker-v508-base.js').read_text(encoding='utf-8')

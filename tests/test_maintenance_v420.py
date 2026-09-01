@@ -9,7 +9,7 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 
-from cpap.maintenance import GitHubUpdateManager, SelfCheckService, SupportBundleService, version_newer
+from cpap.maintenance import GitHubUpdateManager, SelfCheckService, SupportBundleService, OFFICIAL_GITHUB_REPO, version_newer
 from cpap.services import PersistentLog
 from cpap.version import APP_VERSION
 
@@ -38,11 +38,13 @@ with tempfile.TemporaryDirectory() as td:
     log = PersistentLog(base)
     mgr = GitHubUpdateManager(base, log)
     sample_value = 'unit-test-value-1234567890'
-    mgr.configure_token(sample_value)
-    raw = (base/'private'/'update_secrets.bin').read_bytes()
-    assert sample_value.encode() not in raw
+    token_status = mgr.configure_token(sample_value)
+    assert token_status['configured'] is False and token_status['required'] is False
+    assert not (base/'private'/'update_secrets.bin').exists()
     st = mgr.status({'update_github_repo':'owner/private-repo','update_auto_check':True})
-    assert st['token']['configured'] and sample_value not in json.dumps(st)
+    assert st['github_repo'] == OFFICIAL_GITHUB_REPO
+    assert st['configured'] is True and st['authentication'] == 'public-anonymous'
+    assert 'token' not in st and sample_value not in json.dumps(st)
 
     # Build a fake next-version release package + manifest and feed them through
     # the real staging/backup/rollback preparation code without network access.
@@ -71,7 +73,7 @@ with tempfile.TemporaryDirectory() as td:
         destination.parent.mkdir(parents=True, exist_ok=True); destination.write_bytes(src.read_bytes())
     mgr.check = fake_check
     mgr._download_asset = fake_download
-    result = mgr.prepare_install({'update_github_repo':'owner/private-repo'}, base/'private'/'measurement', 8895)
+    result = mgr.prepare_install({'update_github_repo':'ignored/legacy-value'}, base/'private'/'measurement', 8895)
     assert result['target_version']==NEXT_VERSION
     assert Path(result['backup']).is_file()
     assert Path(result['rollback']).is_dir()
@@ -96,4 +98,4 @@ with tempfile.TemporaryDirectory() as td:
         for secret in (b'PLAIN_MUST_NOT_LEAK',b'SECRET_REMOTE',b'SECRET_ENDPOINT',b'SECRET_LOG_TOKEN',sample_value.encode()):
             assert secret not in blob
 
-print(f'PASS: SleepMate {APP_VERSION} GitHub updater staging + encrypted token + pre-update backup + rollback point + self-check + secret-free support bundle')
+print(f'PASS: SleepMate {APP_VERSION} public GitHub updater staging + pre-update backup + rollback point + self-check + secret-free support bundle')

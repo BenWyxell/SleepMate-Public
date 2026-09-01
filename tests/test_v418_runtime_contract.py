@@ -1,7 +1,7 @@
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 app = (ROOT/'app.py').read_text(encoding='utf-8')
-js = (ROOT/'web'/'app.js').read_text(encoding='utf-8')
+js = (ROOT/'web'/'app-core.js').read_text(encoding='utf-8')
 sw = (ROOT/'web'/'service-worker.js').read_text(encoding='utf-8')
 
 assert 'f"SleepMate v{APP_VERSION}' in app
@@ -16,5 +16,5 @@ assert 'result = import_resmed_tree(tmp, self.dataset.root, copy_cb)' in app
 assert 'user_initiated' in app and 'initialdir=initial' in app
 assert "{user_initiated:true,initial_dir:current}" in js
 assert 'os.startfile(' not in app and 'explorer.exe' not in app.lower()
-assert 'v5.0.0' in sw
-print('PASS: v5.0.0 runtime routes primary refresh through protected mirror; imports remain additive; no automatic Temp/Explorer opening')
+assert 'sleepmate-shell-v5.2.14-ss131' in sw
+print('PASS: current runtime routes primary refresh through protected mirror; imports remain additive; no automatic Temp/Explorer opening')

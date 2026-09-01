@@ -23,6 +23,8 @@ from .patient_store import LocalProtector
 from .services import create_full_backup, restore_full_backup, safe_extract_zip
 from .version import APP_NAME, APP_VERSION, API_VERSION, BUILD_CHANNEL, UPDATE_MANIFEST_FORMAT, SUPPORT_BUNDLE_FORMAT
 
+OFFICIAL_GITHUB_REPO = "BenWyxell/SleepMate-Public"
+
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
@@ -121,6 +123,14 @@ class GitHubUpdateManager:
         self.runtime.mkdir(parents=True, exist_ok=True)
         self.state_path = self.runtime / "state.json"
         self.secrets = UpdateSecretStore(self.state_base)
+        # v5.2.20+: official SleepMate releases are public. Any credential saved
+        # by an older build is obsolete and must never be reused or sent.
+        try:
+            self.secrets.path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
         self.log = log
         self._lock = threading.RLock()
 
@@ -164,8 +174,14 @@ class GitHubUpdateManager:
         return f"{parts[0]}/{parts[1]}"
 
     def configure_token(self, token: str = "", clear: bool = False) -> dict[str, Any]:
-        self.secrets.save_github_token(token, clear)
-        return self.secrets.status()
+        """Compatibility no-op: the public updater never accepts credentials."""
+        try:
+            self.secrets.path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+        return {"configured": False, "required": False, "protection": "none"}
 
     def _request(self, url: str, *, accept: str = "application/vnd.github+json", timeout: float = 30) -> bytes:
         headers = {
@@ -173,9 +189,7 @@ class GitHubUpdateManager:
             "User-Agent": f"{APP_NAME}/{APP_VERSION}",
             "X-GitHub-Api-Version": "2022-11-28",
         }
-        token = self.secrets.github_token()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        # Official SleepMate releases are public; never attach a shared or user GitHub credential.
         req = urllib.request.Request(url, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as response:
@@ -187,7 +201,7 @@ class GitHubUpdateManager:
             except Exception:
                 pass
             if exc.code in (401, 403, 404):
-                raise RuntimeError(f"GitHub elérés sikertelen (HTTP {exc.code}). Ellenőrizd a privát repo nevét és a GitHub tokent. {detail}".strip()) from exc
+                raise RuntimeError(f"A hivatalos SleepMate GitHub-kiadás jelenleg nem érhető el (HTTP {exc.code}). {detail}".strip()) from exc
             raise RuntimeError(f"GitHub frissítésellenőrzési hiba: HTTP {exc.code}. {detail}".strip()) from exc
         except Exception as exc:
             raise RuntimeError(f"A GitHub nem érhető el: {exc}") from exc
@@ -200,7 +214,7 @@ class GitHubUpdateManager:
 
     def status(self, config: dict[str, Any] | None = None) -> dict[str, Any]:
         cfg = config or {}
-        repo = str(cfg.get("update_github_repo") or "").strip()
+        repo = OFFICIAL_GITHUB_REPO
         state = self._load_state()
         rollback_root = self.runtime / "rollback"
         rollbacks = []
@@ -223,9 +237,9 @@ class GitHubUpdateManager:
             "git_commit": build.get("git_commit"),
             "channel": str(cfg.get("update_channel") or BUILD_CHANNEL),
             "github_repo": repo,
-            "configured": bool(repo),
+            "configured": True,
             "auto_check": bool(cfg.get("update_auto_check", True)),
-            "token": self.secrets.status(),
+            "authentication": "public-anonymous",
             "last_check": state.get("last_check"),
             "latest_version": state.get("latest_version"),
             "update_available": bool(state.get("update_available")),
@@ -239,10 +253,7 @@ class GitHubUpdateManager:
 
     def check(self, config: dict[str, Any], force: bool = False) -> dict[str, Any]:
         with self._lock:
-            repo = self.normalize_repo(str(config.get("update_github_repo") or ""))
-            if not repo:
-                result = self._save_state(last_check=_now(), update_available=False, latest_version=None, release=None, last_error="A GitHub frissítési repository még nincs beállítva.")
-                return {"ok": False, "configured": False, **self.status(config), "message": result["last_error"]}
+            repo = OFFICIAL_GITHUB_REPO
             url = f"https://api.github.com/repos/{repo}/releases/latest"
             try:
                 release = self._json_request(url)
@@ -686,10 +697,10 @@ class SelfCheckService:
 
         if update_status:
             if update_status.get("configured"):
-                msg = "Új verzió érhető el." if update_status.get("update_available") else "A GitHub frissítési kapcsolat be van állítva."
+                msg = "Új verzió érhető el." if update_status.get("update_available") else "A hivatalos SleepMate frissítési forrás elérhető."
                 level = "WARN" if update_status.get("update_available") else "OK"
             else:
-                msg = "A GitHub frissítési repository még nincs beállítva."
+                msg = "A hivatalos SleepMate frissítési forrás nem érhető el."
                 level = "WARN"
             rows.append(self._row("updater", level, "Frissítési rendszer", msg, {"repo": update_status.get("github_repo"), "latest": update_status.get("latest_version")}))
 

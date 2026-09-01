@@ -19,7 +19,11 @@ def test_v524_marks_dashboard_usage_as_resmed_therapy_day():
 
 
 def test_v524_shell_loads_cache_busted_fix():
-    py = (ROOT / "cpap" / "sleep_analysis_v522.py").read_text(encoding="utf-8")
-    assert 'sleepmate-sleep-v524.js?v=5.2.4' in py
-    assert 'sleepmate-sleep-v523.js?v=5.2.4' in py
-    assert 'sleepmate-chart-v523.js?v=5.2.4' in py
+    worker = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
+    spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
+    assert 'sleepmate-sleep-v524.js?v=5.2.6' in worker
+    assert 'sleepmate-sleep-v523.js?v=5.2.6' in worker
+    assert 'sleepmate-chart-v523.js?v=5.2.14' in worker
+    assert "'/sleepmate-sleep-v524.js'" in spec
+    assert "'/sleepmate-sleep-v523.js'" in spec
+    assert "'/sleepmate-chart-v523.js'" in spec

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
-APP=(ROOT/'web/app.js').read_text(encoding='utf-8')
+APP=(ROOT/'web/app-core.js').read_text(encoding='utf-8')
 HTML=(ROOT/'web/index.html').read_text(encoding='utf-8')
 CSS=(ROOT/'web/style.css').read_text(encoding='utf-8')
 SW=(ROOT/'web/service-worker.js').read_text(encoding='utf-8')
@@ -23,5 +23,5 @@ assert 'endpoint=endpoint' in BACKEND
 assert 'con.close()' in PUSH
 assert 'def maintenance(self)' in PUSH
 assert "_looks_like_sqlite" in SERVICES and "push.sqlite3" in SERVICES
-assert 'sleepmate-shell-v5.0.0' in SW
+assert 'sleepmate-shell-v5.2.14-ss131' in SW
 print('PASS: compact settings/AI UI, gesture arbitration, targeted push test and push backup fix present')
