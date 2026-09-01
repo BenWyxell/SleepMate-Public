@@ -1,16 +1,16 @@
 # SleepMate third-party notices
 
-This document records the open-source third-party Python runtime components and the principal build tools used for the public SleepMate **5.2.16** Windows MSI candidate.
+This document records the open-source third-party Python runtime components and the principal build tools used for the SleepMate **5.3.0 O2Ring Windows pre-release candidate**.
 
-Reference release: `v5.2.16`  
-Reference build run: `33438926540`  
-Reference source commit: `8eb01de781262f326649a4d9b17fc8698024b80f`  
+Reference candidate: `v5.3.0-o2ring-aurora-pwa`  
+Reference build run: `33541019309`  
+Reference runtime-defining source commit: `bc0670b30236d92c7651660fbd7491f3325bdfb3`  
 Runtime lock: `build/windows/requirements-runtime.lock`  
 Build lock: `build/windows/requirements-build.lock`
 
 SleepMate itself is licensed under `AGPL-3.0-only`. Third-party components are **not relicensed** under the SleepMate license; each remains subject to its own upstream license and copyright notices.
 
-The table below reflects the exact Python runtime environment resolved by the successful GitHub-hosted Windows build that produced the first public MSI-form release. Exact source distributions/wheels and upstream metadata can be obtained from the linked PyPI release pages.
+The table below reflects the exact Python runtime environment resolved by the successful GitHub-hosted Windows build referenced above. Exact source distributions/wheels and upstream metadata can be obtained from the linked PyPI release pages.
 
 ## Runtime components shipped with the Windows application
 
@@ -22,6 +22,7 @@ The table below reflects the exact Python runtime environment resolved by the su
 | annotated-types | 0.8.0 | MIT | https://pypi.org/project/annotated-types/0.8.0/ |
 | anyio | 4.14.2 | MIT | https://pypi.org/project/anyio/4.14.2/ |
 | attrs | 26.1.0 | MIT | https://pypi.org/project/attrs/26.1.0/ |
+| bleak | 3.0.2 | MIT | https://pypi.org/project/bleak/3.0.2/ |
 | certifi | 2026.7.22 | MPL-2.0 | https://pypi.org/project/certifi/2026.7.22/ |
 | cffi | 2.1.1 | MIT-0 | https://pypi.org/project/cffi/2.1.1/ |
 | charset-normalizer | 3.5.1 | MIT | https://pypi.org/project/charset-normalizer/3.5.1/ |
@@ -52,7 +53,22 @@ The table below reflects the exact Python runtime environment resolved by the su
 | typing-extensions | 4.16.0 | PSF-2.0 | https://pypi.org/project/typing-extensions/4.16.0/ |
 | typing-inspection | 0.4.4 | MIT | https://pypi.org/project/typing-inspection/0.4.4/ |
 | urllib3 | 2.7.0 | MIT | https://pypi.org/project/urllib3/2.7.0/ |
+| winrt-runtime | 3.2.1 | MIT | https://pypi.org/project/winrt-runtime/3.2.1/ |
+| winrt-Windows.Devices.Bluetooth | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Devices.Bluetooth/3.2.1/ |
+| winrt-Windows.Devices.Bluetooth.Advertisement | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Devices.Bluetooth.Advertisement/3.2.1/ |
+| winrt-Windows.Devices.Bluetooth.GenericAttributeProfile | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Devices.Bluetooth.GenericAttributeProfile/3.2.1/ |
+| winrt-Windows.Devices.Enumeration | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Devices.Enumeration/3.2.1/ |
+| winrt-Windows.Devices.Radios | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Devices.Radios/3.2.1/ |
+| winrt-Windows.Foundation | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Foundation/3.2.1/ |
+| winrt-Windows.Foundation.Collections | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Foundation.Collections/3.2.1/ |
+| winrt-Windows.Storage.Streams | 3.2.1 | MIT | https://pypi.org/project/winrt-Windows.Storage.Streams/3.2.1/ |
 | yarl | 1.24.5 | Apache-2.0 | https://pypi.org/project/yarl/1.24.5/ |
+
+### O2Ring / Windows BLE runtime notes
+
+- **Bleak 3.0.2** is the cross-platform Python BLE client used by SleepMate's O2Ring integration. Upstream declares the `MIT` license.
+- On Windows, Bleak resolves the required **PyWinRT 3.2.1** runtime and Windows namespace projection packages listed above. Those PyWinRT packages declare the `MIT` license and remain upstream components; SleepMate does not relicense them.
+- SleepMate's O2Ring protocol integration code is part of the SleepMate source tree. It does not bundle or copy source code from the Wellue/Viatom mobile applications or proprietary vendor applications.
 
 ### Clarifications
 
@@ -63,17 +79,17 @@ The table below reflects the exact Python runtime environment resolved by the su
 
 ## Build/test tools not shipped as SleepMate-owned application components
 
-The following tools participate in producing or testing the Windows release but are not relicensed as SleepMate code:
+The following tools participate in producing or testing the Windows candidate but are not relicensed as SleepMate code:
 
-| Tool | Version used for the v5.2.16 build | License / role |
+| Tool | Version used for the v5.3.0 candidate | License / role |
 |---|---:|---|
 | CPython | 3.13.15 x64 | Python Software Foundation license; build/runtime interpreter packaged by PyInstaller |
 | PyInstaller | 6.22.2 | GPL-2.0 with the official PyInstaller bootloader exception; selected upstream files are Apache-2.0. PyInstaller explicitly permits distribution of bundles generated from application source, subject to dependency licenses. |
 | pyinstaller-hooks-contrib | 2026.7 | PyInstaller build support; build-time hooks |
 | pytest | 9.1.1 | MIT; test-only |
-| GNOME msitools / wixl | Ubuntu package from the successful GitHub-hosted MSI job | Mixed upstream licensing: the main msitools library is LGPL-2.1-or-later and some tools/files use GPL or other upstream licenses. It is used only to build/inspect the MSI and is not distributed as a SleepMate-owned runtime component. |
+| WiX Toolset | 3.14.1.20250415 | Microsoft Reciprocal License (MS-RL); GitHub-hosted Windows build tool used to generate and inspect the Hungarian MSI. WiX is not shipped as a SleepMate-owned runtime component. |
 
-The exact `msitools`, `wixl`, and `wixl-data` Ubuntu package versions used for the public candidate are published with the release as `build-msi-toolchain.txt`.
+The reference pre-release workflow pins WiX Toolset 3.14 and records the exact Python environment from the runtime/build lock files. Build tools remain subject to their upstream licenses and notices.
 
 ## System libraries
 
@@ -93,4 +109,4 @@ Third-party names and trademarks belong to their respective owners. Inclusion in
 
 ## Audit status
 
-The v5.2.16 runtime set above was reviewed as open-source software. No proprietary Python runtime dependency is intentionally included in the locked Windows build environment. This notice must be regenerated and reviewed whenever the dependency locks change.
+The v5.3.0 Windows runtime set above was reviewed against the exact dependency environment from reference build run `33541019309`. Bleak and the Windows PyWinRT projection packages are now explicitly included in the notice. No proprietary Python runtime dependency is intentionally included in the locked Windows build environment. This notice must be regenerated and reviewed whenever the dependency locks change.
