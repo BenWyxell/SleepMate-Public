@@ -9,7 +9,7 @@
   function addStyle(){
     if(document.querySelector('link[data-sleepmate-first-run]'))return;
     const link=document.createElement('link');
-    link.rel='stylesheet';link.href='/first-run.css?v=1';link.dataset.sleepmateFirstRun='1';
+    link.rel='stylesheet';link.href='/first-run.css?v=2';link.dataset.sleepmateFirstRun='1';
     document.head.appendChild(link);
   }
   async function request(url,options={}){
@@ -36,7 +36,7 @@
     root.innerHTML=`
       <div class="fr-shell" role="dialog" aria-modal="true" aria-labelledby="frTitle">
         <header class="fr-top">
-          <div class="fr-brand"><img class="fr-logo" src="/assets/sleepmate-logo.webp" onerror="this.src='/assets/icon-192.png'" alt=""><div><b>SleepMate</b><small>Első beállítás</small></div></div>
+          <div class="fr-brand"><div><b>SleepMate</b><small>Első beállítás</small></div></div>
           <div class="fr-progress" aria-label="Beállítás folyamata">${Array.from({length:TOTAL},(_,i)=>`<i data-progress="${i+1}"></i>`).join('')}</div>
           <div class="fr-step-count"><span id="frStepNum">1</span> / ${TOTAL}</div>
         </header>
@@ -46,7 +46,7 @@
           <section class="fr-panel" data-step="1">
             <span class="fr-kicker">Első indítás</span>
             <h1 class="fr-title" id="frTitle">Rakjuk össze a <span class="fr-highlight">SleepMate-et</span> úgy, ahogy használni szeretnéd.</h1>
-            <p class="fr-lead">A program már telepítve van. Itt azokat a dolgokat állítjuk be, amelyek gépenként vagy felhasználónként eltérnek: terápiás adatok, SleepSync, távoli elérés, PWA, értesítések, backup és opcionális AI.</p>
+            <p class="fr-lead">A program már telepítve van. Itt azokat a dolgokat állítjuk be, amelyek gépenként vagy felhasználónként eltérnek: terápiás adatok, SleepSync, távoli elérés, backup és opcionális AI.</p>
             <div class="fr-grid three">
               <div class="fr-card"><div class="fr-icon">🗂️</div><h3>Saját adatok</h3><p>A terápiás adatok helyben maradnak, a SleepMate saját kezelt adattárában dolgozik velük.</p></div>
               <div class="fr-card"><div class="fr-icon">🔒</div><h3>Biztonságos elérés</h3><p>Tailscale vagy Cloudflare csak akkor kerül beállításra, ha te kéred.</p></div>
@@ -101,10 +101,9 @@
 
           <section class="fr-panel" data-step="5">
             <span class="fr-kicker">5. lépés · Extrák</span>
-            <h1 class="fr-title">PWA, értesítések, backup és <span class="fr-highlight">AI</span>.</h1>
-            <p class="fr-lead">Ezek opcionálisak. A böngésző biztonsági szabályai miatt a PWA telepítéséhez és az értesítési engedélyhez neked kell rákattintanod a megfelelő gombra — ezt egy MSI nem adhatja meg helyetted.</p>
-            <div class="fr-grid">
-              <div class="fr-card"><div class="fr-icon">📱</div><h3>PWA + Web Push</h3><p>A jelenlegi eszközön telepítheted alkalmazásként és engedélyezheted a valódi háttérértesítéseket.</p><div class="fr-actions"><button class="fr-btn primary" id="frPwaInstall" type="button">PWA telepítése</button><button class="fr-btn" id="frNotify" type="button">Értesítések engedélyezése</button></div></div>
+            <h1 class="fr-title">Backup és <span class="fr-highlight">AI</span>.</h1>
+            <p class="fr-lead">Mindkettő opcionális. Itt bekapcsolhatod a heti automatikus biztonsági mentést, illetve megadhatod a helyben, DPAPI-val titkosított AI API-kulcsokat.</p>
+            <div class="fr-grid single">
               <div class="fr-card"><div class="fr-icon">🛟</div><h3>Automatikus backup</h3><p>Alapértelmezés szerint heti teljes SleepMate biztonsági mentést tudunk bekapcsolni.</p><label class="fr-check"><input id="frBackup" type="checkbox"><span>Heti automatikus backup bekapcsolása</span></label></div>
             </div>
             <div class="fr-subsection"><div class="fr-subsection-head"><b>AI összegzés – opcionális</b><span class="fr-status-pill">helyben titkosított kulcsok</span></div><div class="fr-grid">
@@ -146,7 +145,7 @@
   function setStep(step){
     state.step=Math.max(1,Math.min(TOTAL,Number(step)||1));message();$$('.fr-panel').forEach(x=>x.classList.toggle('active',Number(x.dataset.step)===state.step));$$('[data-progress]').forEach(x=>x.classList.toggle('done',Number(x.dataset.progress)<=state.step));$('#frStepNum').textContent=state.step;$('#frBack').style.visibility=state.step===1?'hidden':'visible';$('#frSkip').style.display=state.step===6?'none':'';$('#frNext').textContent=state.step===6?'Kezdjük':'Tovább';
     if(state.step===4)loadRemote(false);if(state.step===6)renderSummary();
-    $('.fr-body')?.scrollTo({top:0,behavior:'smooth'});persistProgress(state.step);
+    const body=$('.fr-body');if(body)body.scrollTop=0;persistProgress(state.step);
   }
 
   async function saveStep2(){
@@ -196,8 +195,7 @@
       ['↻','SleepSync',state.choices.sleepsync_enabled?'Automatika bekapcsolva':'Kézi / később'],
       ['🔒','Távoli elérés',remoteLabel],
       ['🛟','Automatikus backup',state.choices.backup_enabled?'Bekapcsolva':'Kikapcsolva'],
-      ['✨','Luna / Milo',state.choices.gemini_configured||state.choices.groq_configured?'Legalább egy AI beállítva':'Később állítható'],
-      ['📱','PWA / értesítések',state.choices.notifications_attempted?'Engedélykérés megtörtént':state.choices.pwa_attempted?'PWA telepítés megnyitva':'Később is bekapcsolható']
+      ['✨','Luna / Milo',state.choices.gemini_configured||state.choices.groq_configured?'Legalább egy AI beállítva':'Később állítható']
     ];$('#frSummary').innerHTML=rows.map(r=>`<div class="fr-summary-row"><b>${r[0]}</b><span>${r[1]}</span><small>${r[2]}</small></div>`).join('');
   }
 
@@ -210,8 +208,6 @@
     $('#frTsInstall',root).onclick=()=>installRemote('tailscale');$('#frCfInstall',root).onclick=()=>installRemote('cloudflare');$('#frRemoteRefresh',root).onclick=()=>loadRemote(true);$('#frCfRefresh',root).onclick=()=>loadRemote(true);
     $('#frTsEnable',root).onclick=async()=>{busy(true,'Bekapcsolás…');try{await request('/api/remote/tailscale',{method:'POST',body:{action:'enable'}});await loadRemote(true);message('Tailscale HTTPS elérés kész.','ok')}catch(e){message(e.message,'error')}finally{busy(false)}};
     $('#frTsOpen',root).onclick=()=>{const u=$('#frTsUrl').textContent.trim();if(u)window.open(u,'_blank','noopener')};
-    $('#frPwaInstall',root).onclick=async()=>{choicePatch({pwa_attempted:true});if(typeof window.installPwa==='function'){try{await window.installPwa()}catch(e){message(e.message,'error')}}else message('A PWA telepítő még nem áll készen. Próbáld meg pár másodperc múlva vagy a Beállításokból.','info')};
-    $('#frNotify',root).onclick=async()=>{choicePatch({notifications_attempted:true});if(typeof window.enablePwaNotifications==='function'){try{await window.enablePwaNotifications();message('Az értesítési engedélykérés lefutott.','ok')}catch(e){message(e.message,'error')}}else message('Az értesítési modul még nem áll készen. A Beállításokból később bekapcsolható.','info')};
   }
 
   async function hydrate(){
@@ -230,7 +226,7 @@
   }
 
   function injectReopen(){
-    if($('#frSettingsReopen'))return true;const page=$('#page-settings');if(!page)return false;const box=document.createElement('section');box.id='frSettingsReopen';box.className='fr-settings-reopen';box.innerHTML='<b>Első beállítás varázsló</b><p>Újra végigvezet az adatforrás, SleepSync, távoli elérés, PWA, backup és AI alapbeállításain.</p><button type="button" class="fr-btn">Varázsló megnyitása</button>';box.querySelector('button').onclick=()=>open(true);page.appendChild(box);return true
+    if($('#frSettingsReopen'))return true;const page=$('#page-settings');if(!page)return false;const box=document.createElement('section');box.id='frSettingsReopen';box.className='fr-settings-reopen';box.innerHTML='<b>Első beállítás varázsló</b><p>Újra végigvezet az adatforrás, SleepSync, távoli elérés, backup és AI alapbeállításain.</p><button type="button" class="fr-btn">Varázsló megnyitása</button>';box.querySelector('button').onclick=()=>open(true);page.appendChild(box);return true
   }
 
   window.openSleepMateFirstRun=()=>open(true);

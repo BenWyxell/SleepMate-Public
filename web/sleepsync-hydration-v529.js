@@ -279,7 +279,7 @@
     // on the integration path that is actually present in the MSI/PWA bundle.
     if(document.querySelector('script[data-sleepmate-first-run="1"]'))return;
     const script=document.createElement('script');
-    script.src='/first-run.js?v=1';
+    script.src='/first-run.js?v=2';
     script.async=false;
     script.dataset.sleepmateFirstRun='1';
     script.onload=lateBootPackagedOnboarding;
