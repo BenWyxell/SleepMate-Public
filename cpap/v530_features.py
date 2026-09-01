@@ -7,27 +7,26 @@ _installed = False
 
 
 def install_v530_features(app_module) -> None:
-    """Layer the v5.3 visual/PWA controller over the proven v5.2.20 shell.
+    """Layer the v5.3+ visual/PWA controller over the proven v5.2.20 shell.
 
-    Root HTML is served here so source runs and packaged builds use the same
-    deterministic asset order. Existing v5.2.20 sleep/chart extensions remain
-    present exactly as before; v5.3 only adds its own CSS and controller.
+    v5.3.2 keeps the stable launcher/data core while replacing the interval-heavy
+    post-5.3.0 O2 polish with one deterministic, idempotent runtime layer.
     """
     global _installed
     if _installed:
         return
 
-    # Keep v5.3-only endpoint, AI, diagnostics and restore wiring inside the
-    # v5.3 layer. This leaves the proven v5.2.20 launcher/payload/maintenance
-    # core untouched.
     from .o2ring_data_management import install_o2ring_data_management
     from .o2ring_ai import install_o2ring_ai
     from .o2ring_diagnostics import install_o2ring_diagnostics
     from .o2ring_restore import install_o2ring_restore
+    from .o2ring_v532 import install_o2ring_v532
+
     install_o2ring_data_management(app_module)
     install_o2ring_ai(app_module)
     install_o2ring_diagnostics(app_module)
     install_o2ring_restore(app_module)
+    install_o2ring_v532(app_module)
 
     handler_cls = app_module.Handler
     previous_get = handler_cls.do_GET
@@ -41,13 +40,9 @@ def install_v530_features(app_module) -> None:
 
                 head_assets: list[str] = []
                 if "sleepmate-aurora.css" not in text:
-                    head_assets.append('<link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.0">')
+                    head_assets.append('<link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.2">')
                 if "sleepmate-v530.css" not in text:
-                    head_assets.append('<link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.0">')
-                # v5.2.20 already contained preparatory SpO2/HR controls inside
-                # the Display panel. With the v5.3 master switch OFF those must
-                # disappear too, otherwise O2Ring is still visibly present. The
-                # master block itself remains visible so the feature can be enabled.
+                    head_assets.append('<link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.2">')
                 if "sm-o2-master-visibility" not in text:
                     head_assets.append(
                         '<style id="sm-o2-master-visibility">'
@@ -56,12 +51,15 @@ def install_v530_features(app_module) -> None:
                         'body:has(#smO2Enabled:not(:checked)) .o2ring-report-option{display:none!important}'
                         '</style>'
                     )
-                # The post-release polish layer is embedded, not cache-fetched.
-                # This keeps PWA/web and packaged source runs on one deterministic UI.
-                polish_css_path = app_module.WEB / "o2ring-polish.css"
-                if polish_css_path.is_file() and "sm-o2-polish-inline-css" not in text:
+
+                # v5.3.2 is intentionally the only active post-release O2 polish.
+                # It is embedded into the no-cache HTML shell, so PWA and desktop
+                # receive the same code without waiting on stale cache entries.
+                polish_css_path = app_module.WEB / "o2ring-v532.css"
+                if polish_css_path.is_file() and "sm-o2-v532-inline-css" not in text:
                     polish_css = polish_css_path.read_text(encoding="utf-8").replace("</style", "<\\/style")
-                    head_assets.append(f'<style id="sm-o2-polish-inline-css">{polish_css}</style>')
+                    head_assets.append(f'<style id="sm-o2-v532-inline-css">{polish_css}</style>')
+
                 if head_assets:
                     marker = "</head>"
                     inject = "\n  " + "\n  ".join(head_assets) + "\n"
@@ -81,18 +79,11 @@ def install_v530_features(app_module) -> None:
                 if "sleepmate-sleep-refresh-v5212.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>')
                 if "sleepmate-v530.js" not in text:
-                    scripts.append('<script src="/sleepmate-v530.js?v=5.3.0"></script>')
+                    scripts.append('<script src="/sleepmate-v530.js?v=5.3.2"></script>')
 
-                # v5.3 feature helpers are embedded into the HTML shell rather
-                # than loaded as extra cache-sensitive PWA resources. They remain
-                # inert until their corresponding host panels exist.
                 inline_features = (
-                    ("o2ring-combined.js", "sm-o2-combined-inline"),
                     ("o2ring-data-management.js", "sm-o2-data-management-inline"),
-                    ("o2ring-polish-core.js", "sm-o2-polish-core-inline"),
-                    ("o2ring-polish-trends.js", "sm-o2-polish-trends-inline"),
-                    ("o2ring-polish-daily.js", "sm-o2-polish-daily-inline"),
-                    ("o2ring-polish-dashboard.js", "sm-o2-polish-dashboard-inline"),
+                    ("o2ring-v532.js", "sm-o2-v532-inline"),
                 )
                 for filename, element_id in inline_features:
                     feature_path = app_module.WEB / filename
