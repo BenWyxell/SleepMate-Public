@@ -12,7 +12,7 @@ def test_faq_search_panel_stays_in_document_flow():
 
 def test_dashboard_comparison_has_real_delete_action():
     html = text("web/index.html")
-    js = text("web/app.js")
+    js = text("web/app-core.js")
     assert 'id="clearComparison"' in html
     assert "$('#clearComparison').onclick=clearComparison" in js
     assert "state.comparison=null" in js
@@ -34,11 +34,13 @@ def test_windows_notifications_use_sleepmate_identity_and_icon():
 
 def test_startup_has_one_web_loader_and_second_launch_signals_existing_tray():
     html = text("web/index.html")
-    js = text("web/app.js")
+    js = text("web/app-core.js")
+    loader = text("web/app.js")
     tray = text("sleepmate_tray.pyw")
     main = text("sleepmate_main.py")
     assert html.count('id="startupSplash"') == 1
     assert "window.__sleepmateBootStarted" in js
+    assert "const ENGINE='/app-engine119.js?v=130'" in loader
     assert "OPEN_REQUEST_FILE" in tray
     assert "monitor_open_requests" in tray
     assert "OPEN_REQUEST_FILE.write_text" in tray
