@@ -9,7 +9,7 @@
   function addStyle(){
     if(document.querySelector('link[data-sleepmate-first-run]'))return;
     const link=document.createElement('link');
-    link.rel='stylesheet';link.href='/first-run.css?v=2';link.dataset.sleepmateFirstRun='1';
+    link.rel='stylesheet';link.href='/first-run.css?v=3';link.dataset.sleepmateFirstRun='1';
     document.head.appendChild(link);
   }
   async function request(url,options={}){
