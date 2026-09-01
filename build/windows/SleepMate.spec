@@ -238,8 +238,10 @@ if core_app.exists() and engine_app.exists():
         raise RuntimeError('proven service worker code-asset rule is missing')
     code_items = code_asset_match.group('items')
     protected_base_assets = (
-        '/sleepmate-chart-v523.js',
+        '/sleepmate-sleep.js',
         '/sleepmate-sleep-v523.js',
+        '/sleepmate-chart-v523.js',
+        '/sleepmate-sleep-v524.js',
         '/sleepmate-sleep-refresh-v5212.js',
         '/o2ring-v532.css',
         '/o2ring-v532.js',
