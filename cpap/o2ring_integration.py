@@ -37,7 +37,11 @@ class O2RingService:
         self._lock = threading.RLock()
         self._known_source_names: set[str] = set()
         self._load_known_names()
-        self.manager = O2RingBLEManager(known_file=self._known_file, on_file=self._on_file)
+        self.manager = O2RingBLEManager(
+            known_file=self._known_file,
+            on_file=self._on_file,
+            auto_sync_enabled=lambda: bool(self.settings().get("o2ring_auto_sync", True)),
+        )
         cfg = self.settings()
         self.manager.set_preferred_device(cfg.get("o2ring_preferred_address"))
         self.manager.add_listener(self._remember_connected_device)
