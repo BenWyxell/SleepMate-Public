@@ -78,8 +78,14 @@ jobs:
           test "$(jq -r '.git_commit' release-metadata.json)" = "$TARGET_SHA"
           test "$(jq -r '.signed' release-metadata.json)" = "false"
 
+          portable="SleepMate_v${VERSION}_windows_x64.zip"
           test "$(jq -r '.version' sleepmate-update.json)" = "$VERSION"
-          test "$(jq -r '.asset' sleepmate-update.json)" = "SleepMate_Setup_v${VERSION}.msi"
+          test "$(jq -r '.asset' sleepmate-update.json)" = "$portable"
+          test "$(jq -r '.package_type' sleepmate-update.json)" = "windows-x64-program-tree"
+          test "$(jq -r '.git_commit' sleepmate-update.json)" = "$TARGET_SHA"
+          test "$(jq -r '.requires_installer' sleepmate-update.json)" = "false"
+          zip_hash="$(sha256sum "$portable" | awk '{print $1}')"
+          test "$(jq -r '.sha256' sleepmate-update.json)" = "$zip_hash"
 
           msi_hash="$(sha256sum "SleepMate_Setup_v${VERSION}.msi" | awk '{print $1}')"
           grep -qi "$msi_hash" "SleepMate_Setup_v${VERSION}.msi.sha256"
