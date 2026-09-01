@@ -1,0 +1,126 @@
+name: Finalize SleepMate 5.3.0 release
+
+on:
+  push:
+    branches:
+      - v5.3.0-o2ring-aurora-pwa
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: sleepmate-v530-finalize
+  cancel-in-progress: true
+
+jobs:
+  tag-after-verified-pre-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
+          test "$VERSION" = '5.3.0'
+          git merge-base --is-ancestor d1516fb39a67d4666504c885fe1ab80f5b89022e HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(head -n 1 RELEASE_NOTES.md)" = '# SleepMate 5.3.0'
+          grep -Fq 'Reference release: `v5.3.0`' THIRD_PARTY_NOTICES.md
+
+      - name: Wait for exact v5.3 pre-release verification
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          found='false'
+          for attempt in $(seq 1 120); do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=100")"
+            row="$(printf '%s' "$runs" | jq -c '[.workflow_runs[] | select(.name == "v5.3 O2Ring Aurora PWA pre-release CI" and .event == "push" and .head_sha == env.GITHUB_SHA)] | sort_by(.created_at) | last // empty')"
+            if [[ -n "$row" ]]; then
+              found='true'
+              status="$(printf '%s' "$row" | jq -r '.status')"
+              conclusion="$(printf '%s' "$row" | jq -r '.conclusion // ""')"
+              run_id="$(printf '%s' "$row" | jq -r '.id')"
+              echo "Pre-release run $run_id: status=$status conclusion=$conclusion"
+              if [[ "$status" == 'completed' ]]; then
+                [[ "$conclusion" == 'success' ]] || { echo 'Exact candidate pre-release verification failed.' >&2; exit 1; }
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          [[ "$found" == 'true' ]] || echo 'Matching pre-release run was never observed.' >&2
+          echo 'Timed out waiting for successful exact-SHA pre-release verification.' >&2
+          exit 1
+
+      - name: Create immutable v5.3.0 tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG='v5.3.0'
+          if existing="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" 2>/dev/null)"; then
+            existing_sha="$(printf '%s' "$existing" | jq -r '.object.sha')"
+            [[ "$existing_sha" == "$GITHUB_SHA" ]] || {
+              echo "Refusing to move existing $TAG from $existing_sha to $GITHUB_SHA." >&2
+              exit 1
+            }
+            echo "$TAG already points to the exact verified commit."
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$TAG" \
+              -f sha="$GITHUB_SHA" >/dev/null
+            echo "Created immutable tag $TAG -> $GITHUB_SHA"
+          fi
+
+      - name: Wait for verified GitHub Release publication
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG='v5.3.0'
+          for attempt in $(seq 1 120); do
+            if release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,targetCommitish,name 2>/dev/null)"; then
+              draft="$(printf '%s' "$release" | jq -r '.isDraft')"
+              prerelease="$(printf '%s' "$release" | jq -r '.isPrerelease')"
+              if [[ "$draft" == 'false' && "$prerelease" == 'false' ]]; then
+                echo "Published release observed: $release"
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo 'Timed out waiting for the official verified release workflow to publish v5.3.0.' >&2
+          exit 1
+
+      - name: Final release asset and title verification
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG='v5.3.0'
+          expected_title='SleepMate 5.3.0 — O2Ring + Aurora + Windows MSI'
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$expected_title"
+          release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,targetCommitish,name,assets,url)"
+          [[ "$(printf '%s' "$release" | jq -r '.isDraft')" == 'false' ]]
+          [[ "$(printf '%s' "$release" | jq -r '.isPrerelease')" == 'false' ]]
+          [[ "$(printf '%s' "$release" | jq -r '.name')" == "$expected_title" ]]
+          printf '%s' "$release" | jq -e --arg sha "$GITHUB_SHA" '.targetCommitish == $sha' >/dev/null
+          names="$(printf '%s' "$release" | jq -r '.assets[].name')"
+          grep -Fxq 'SleepMate_Setup_v5.3.0.msi' <<<"$names"
+          grep -Fxq 'SleepMate_v5.3.0_windows_x64.zip' <<<"$names"
+          grep -Fxq 'sleepmate-update.json' <<<"$names"
+          grep -Fxq 'SHA256SUMS.txt' <<<"$names"
+          grep -Fxq 'release-metadata.json' <<<"$names"
+          echo "$release" | jq .
