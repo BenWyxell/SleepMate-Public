@@ -76,7 +76,7 @@ def test_frontend_backend_api_contract_matches_again():
     core = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
     assert API_VERSION == 19
     assert "ver.api!==19" in core
-    assert APP_VERSION == "5.2.18"
+    assert APP_VERSION == "5.2.19"
 
 
 def test_v521_sleep_ui_has_required_filters_order_and_editing():
