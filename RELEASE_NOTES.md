@@ -1,3 +1,83 @@
+# SleepMate 5.3.0
+
+A SleepMate 5.3.0 a 5.2.20 stabil publikus alapjára épülő nagy funkcionális kiadás. Bevezeti az opcionális O2Ring oximetriai integrációt, a CPAP- és oximetriai adatok közös idővonalas elemzését, valamint az Aurora/PWA felületfrissítést úgy, hogy az O2Ring funkció kikapcsolt állapotban ne változtassa meg a hagyományos SleepMate használatát.
+
+## O2Ring – valóban opcionális integráció
+
+- Az **O2Ring integráció alapértelmezetten ki van kapcsolva**.
+- Kikapcsolt állapotban nincs Oximetria menüpont, O2/pulzus kártya, napi oximetriai mód, trend, PDF-opció, üres hely vagy BLE háttérmunka; a fő felület a 5.2.20 működését és elrendezését követi.
+- A Beállításokban egyetlen integrációs kapcsolóval aktiválható a funkció.
+- Kikapcsoláskor a korábban eltárolt O2Ring adatok **nem törlődnek**; újbóli engedélyezés után ismét elérhetők.
+- A külön Bluetooth kapcsoló, automatikus kapcsolódás és automatikus szinkron beállítások nem felejtik el a korábban kiválasztott gyűrűt.
+
+## Közvetlen Windows Bluetooth LE kapcsolat
+
+- A SleepMate közvetlenül a Windows Bluetooth LE rétegén kommunikál a kompatibilis Wellue/Viatom O2Ring családdal; külön mobilalkalmazás vagy külön O2Ring CLI nem szükséges.
+- A Windows build a **Bleak 3.0.2** és a szükséges **PyWinRT 3.2.1** komponenseket tartalmazza.
+- A kiválasztott gyűrű megjegyezhető, az automatikus csatlakozás és a tárolt felvételek szinkronja külön szabályozható.
+- A BLE életciklus közös, biztonságos stop/start kaput használ. A gyors OFF→ON váltás, eszköz elfelejtése, adat-törlés és backup-visszaállítás nem hagyhat félbehagyott háttérfolyamatot.
+- Az O2Ring kikapcsolt állapotában a connect/sync útvonalak sem indíthatnak Bluetooth munkát.
+
+## Élő oximetria, felvételek és trendek
+
+- Élő monitor mutatja a rendelkezésre álló **SpO₂**, pulzus, akkumulátor, jelállapot és eszközállapot adatokat.
+- Az élő SpO₂- és pulzusgörbék együtt követhetők.
+- A gyűrűn tárolt VLD felvételek közvetlenül letölthetők és helyileg feldolgozhatók.
+- Külön **Felvételek** és **Trendek** nézet készült.
+- A SleepMate az oximetriai összegzésben többek között átlagos/medián/minimum SpO₂-t, pulzusstatisztikát, T90-et, ODI3/ODI4-et és lefedettséget számol.
+- A felhasználói felületen a nem igazolt perfúziós index helyett a ténylegesen rendelkezésre álló **pulzus-jelerősség** megnevezés szerepel.
+
+## CPAP + O2Ring közös éjszakai elemzés
+
+- Az O2Ring felvételek nem pusztán dátum alapján, hanem a **valós időintervallum átfedése** alapján illeszkednek a PAP sessionökhöz.
+- A napi nézet Oximetria módja csak a PAP-terápiával ténylegesen átfedő mintákat használja.
+- Közös CPAP/SpO₂/pulzus idővonal segíti annak áttekintését, mi történt ugyanabban az éjszakai időszakban.
+- Az óraeltolás külön beállítással korrigálható.
+- A T90 számítása a mintavételi időközt veszi figyelembe, ezért az érvénytelen vagy hiányzó minták nem növelik mesterségesen a deszaturációs időt.
+
+## PDF és AI
+
+- A PDF-jelentés opcionális **Oximetria / Pulzus** részt kapott SpO₂-, T90-, pulzus-, ODI- és lefedettségi mutatókkal és grafikonokkal.
+- Az O2 PDF-rész csak engedélyezett O2Ring integrációnál jelenik meg.
+- Az AI/Luna/Milo felé **nem kerül nyers VLD, teljes oximetriai mintasor, Bluetooth-cím, eszközazonosító, recording ID vagy forrásfájlnév**.
+- AI-elemzéshez kizárólag adatminimalizált, PAP-időszakra illesztett összesített oximetriai mutatók használhatók.
+- Az oximetriai és AI-következtetések továbbra is tájékoztató jellegűek; a SleepMate nem orvosi diagnosztikai szoftver.
+
+## Helyi adatkezelés, törlés és backup
+
+- A SleepMate a feldolgozott O2Ring felvételeket és az eredeti VLD állományokat a felhasználó helyi SleepMate adattárában őrzi.
+- A helyi O2Ring mérési adatok külön, explicit megerősítéssel törölhetők a gyűrű elfelejtése nélkül.
+- A törlés után tombstone-lista akadályozza meg, hogy a gyűrű saját memóriájában még meglévő, már törölt felvétel egy későbbi automatikus szinkronnal észrevétlenül visszakerüljön.
+- A teljes SleepMate backup tartalmazza az O2Ring helyi állapotát és felvételeit is.
+- Backup visszaállítás előtt a BLE worker teljesen leáll, majd a visszaállított O2-konfigurációból és fájlokból új runtime épül.
+- Régi, O2Ring előtti backup visszaállítása nem örökli véletlenül az új gép gyűrűpárosítását; az O2Ring ilyenkor biztonságos alapértékekre áll vissza.
+- A frissített adatvédelmi tájékoztató külön ismerteti az O2Ring helyi adattárolását, BLE-azonosítóit, backupját, távoli PWA-elérését és AI-adatminimalizálását.
+
+## Aurora és PWA felület
+
+- A v5.3 új **Aurora / Northern Lights** vizuális réteget kapott: mély éjszakai háttér, csillagok, fényívek és finom aurora-effektek adják a nem kártya jellegű felületek hátterét.
+- A kártyák olvashatósága és az adatok kontrasztja megmaradt; a vizuális effekt a tartalom mögött dolgozik.
+- A mobil/PWA navigáció dinamikusan alkalmazkodik a ténylegesen elérhető menüpontokhoz, ezért az O2Ring ki- és bekapcsolása nem hagy üres navigációs helyet.
+- Safe-area és kisebb mobil szélességekhez külön reszponzív szabályok kerültek a v5.3 shellbe.
+
+## Stabilitás és regressziós védelem
+
+- A v5.3 forrása közvetlenül a publikus **v5.2.20** release-ből származik; a korábbi, divergált fejlesztési ágra épülő O2Ring próbaváltozat nem lett kiadási alap.
+- Külön regressziótesztek védik az O2 master OFF állapotot, BLE protokollt és életciklust, VLD feldolgozást, oximetriai összegzést, eszközkonfigurációt, PDF contractot, adat-törlést/tombstone-t, AI-adatminimalizálást és backup/restore rehidratálást.
+- A Windows release locked Bleak/PyWinRT függőségekkel, PyInstallerrel és rögzített WiX Toolset 3.14.1 toolchainnel készül.
+- A kiadás csak publikus forrás-higiénia, teljes pytest-készlet, Windows program-tree build, magyar MSI build és payload-ellenőrzés, valódi MSI install/runtime/API/uninstall smoke-test, valamint VERIFIED hash/integritás kapu után publikálható.
+
+## Hardvervalidáció
+
+A CI a Windows BLE runtime csomagolását, az O2Ring protokollkeretezést, parser-logikát és alkalmazásintegrációt hardver nélkül ellenőrzi. A különböző fizikai O2Ring firmware-verziók és rádiós környezetek miatt a valódi gyűrűvel történő BLE kommunikáció továbbra is eszközspecifikus terepi validációt igényel; a release nem állítja, hogy minden gyártói firmware-variánst fizikai hardveren automatizáltan teszteltünk.
+
+Kiadási csatorna: **stable**.
+Release build: **5.3.0**.
+API: **19**.
+Release validation: **publikus forrás-higiénia + teljes regressziós tesztkészlet + PyInstaller Windows build + magyar WiX MSI + valódi install/runtime/O2/PWA/uninstall smoke + VERIFIED release hash/manifeszt/integritás gate + ellenőrzött GitHub publication**.
+
+---
+
 # SleepMate 5.2.20
 
 A SleepMate 5.2.20 a frissítési folyamatot végleges, felhasználóbarát publikus csatornára állítja, és egyértelművé teszi a korábban mentett Cloudflare hostname eredetét.
