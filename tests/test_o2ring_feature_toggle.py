@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 from cpap.o2ring_integration import DEFAULTS, O2RingService
 
 
@@ -46,9 +44,10 @@ def test_ble_off_preserves_remembered_ring_and_history_store(tmp_path):
     assert saved["o2ring_ble_enabled"] is False
     assert saved["o2ring_preferred_address"] == "AA:BB:CC:DD"
     assert service.manager.snapshot()["remembered_address"] == "AA:BB:CC:DD"
-    assert (tmp_path / "private" / "oximetry").exists() is False
-    # Store lives directly below the provided private root and remains present.
-    assert (tmp_path / "oximetry" / "recordings").is_dir()
+    # Oximetry is SleepMate-owned private state. BLE off must leave this store
+    # untouched rather than deleting/recreating it elsewhere.
+    assert (tmp_path / "private" / "oximetry" / "recordings").is_dir()
+    assert (tmp_path / "private" / "oximetry" / "raw").is_dir()
 
 
 def test_master_off_hides_runtime_but_does_not_forget_device(tmp_path):
