@@ -27,6 +27,7 @@ jobs:
       - name: Verify hotfix contract
         shell: pwsh
         run: |
+          python -m pip install pytest
           node --check web/first-run.js
           node --check web/sleepsync-hydration-v529.js
           python -m pytest -q tests/test_first_run_wizard_v5217_hotfix.py
