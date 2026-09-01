@@ -102,10 +102,11 @@ def main() -> int:
         from cpap.google_drive_integration import install_google_drive_integration
         from cpap.o2ring_integration import install_o2ring_integration
         from cpap.o2ring_device_config import install_o2ring_device_config
+        from cpap.o2ring_report import install_o2ring_report
         install_v511_features(); install_v512_features(); install_v513_diagnostics()
         install_sleep_analysis(app); install_sleep_analysis_v521(app); install_sleep_analysis_v522(app)
         install_sleepsync_integration(app); install_google_drive_integration(app)
-        install_o2ring_integration(app); install_o2ring_device_config(app)
+        install_o2ring_integration(app); install_o2ring_device_config(app); install_o2ring_report()
         app.main(); return 0
     if _tray_mutex_exists(): _recover_stuck_tray()
     from sleepmate_tray import main as tray_main
