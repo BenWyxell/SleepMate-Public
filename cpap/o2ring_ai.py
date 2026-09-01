@@ -7,6 +7,7 @@ never added to Luna/Milo requests.
 """
 from __future__ import annotations
 
+import hashlib
 from statistics import mean
 from typing import Any
 
@@ -167,8 +168,47 @@ def _enrich_comparison_payload(payload: dict[str, Any], service, dataset, compar
     return payload
 
 
+def _o2_manifest_fingerprint(service) -> str:
+    """Cheap local fingerprint for AI cache invalidation; never leaves SleepMate."""
+    cfg = service.settings()
+    if not cfg.get("o2ring_enabled"):
+        return ""
+    h = hashlib.sha256()
+    h.update(b"sleepmate-o2-ai-signature-v1\0")
+    h.update(f"clock_offset={float(cfg.get('o2ring_clock_offset_seconds') or 0.0):.3f}".encode("ascii"))
+    paths = []
+    try:
+        paths.extend(service.store.recordings_dir.glob("*.json"))
+    except Exception:
+        pass
+    try:
+        tombstone = service.store.root / "oximetry" / "deleted_sources.json"
+        if tombstone.is_file():
+            paths.append(tombstone)
+    except Exception:
+        pass
+    for path in sorted(paths, key=lambda p: str(p.name)):
+        try:
+            stat = path.stat()
+            h.update(f"|{path.name}:{stat.st_size}:{stat.st_mtime_ns}".encode("utf-8"))
+        except OSError:
+            h.update(f"|{path.name}:missing".encode("utf-8"))
+    return h.hexdigest()
+
+
+def _extend_dataset_signature(base_signature: str, service) -> str:
+    o2 = _o2_manifest_fingerprint(service)
+    if not o2:
+        return base_signature
+    h = hashlib.sha256()
+    h.update(str(base_signature).encode("ascii", errors="ignore"))
+    h.update(b"|o2ring|")
+    h.update(o2.encode("ascii"))
+    return h.hexdigest()
+
+
 def install_o2ring_ai(app_module) -> None:
-    """Wrap app.py's imported AI builders without changing the v5.2.20 module."""
+    """Wrap app.py's imported AI builders/signature without changing v5.2.20."""
     global _installed
     if _installed:
         return
@@ -176,6 +216,8 @@ def install_o2ring_ai(app_module) -> None:
     service = get_service(app_module)
     original_safe = app_module.build_safe_payload
     original_comparison = app_module.build_comparison_payload
+    handler_cls = app_module.Handler
+    original_signature = handler_cls._ai_dataset_signature
 
     def build_safe_payload(dataset, patient_store, analysis_type: str, month: str = ""):
         payload, meta = original_safe(dataset, patient_store, analysis_type, month)
@@ -185,8 +227,12 @@ def install_o2ring_ai(app_module) -> None:
         payload, meta = original_comparison(dataset, patient_store, comparison)
         return _enrich_comparison_payload(payload, service, dataset, comparison), meta
 
+    def _ai_dataset_signature(self):
+        return _extend_dataset_signature(original_signature(self), service)
+
     app_module.build_safe_payload = build_safe_payload
     app_module.build_comparison_payload = build_comparison_payload
+    handler_cls._ai_dataset_signature = _ai_dataset_signature
     _installed = True
 
 
@@ -196,4 +242,6 @@ __all__ = [
     "_period_aggregate",
     "_enrich_standard_payload",
     "_enrich_comparison_payload",
+    "_o2_manifest_fingerprint",
+    "_extend_dataset_signature",
 ]
