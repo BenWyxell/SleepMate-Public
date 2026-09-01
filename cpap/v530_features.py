@@ -17,13 +17,14 @@ def install_v530_features(app_module) -> None:
     if _installed:
         return
 
-    # Keep v5.3-only endpoint and AI wiring inside the v5.3 layer. This leaves
-    # the proven v5.2.20 launcher/payload builder untouched while applying
-    # persisted O2Ring tombstones and privacy-safe aggregate AI enrichment.
+    # Keep v5.3-only endpoint, AI and diagnostics wiring inside the v5.3 layer.
+    # This leaves the proven v5.2.20 launcher/payload/maintenance core untouched.
     from .o2ring_data_management import install_o2ring_data_management
     from .o2ring_ai import install_o2ring_ai
+    from .o2ring_diagnostics import install_o2ring_diagnostics
     install_o2ring_data_management(app_module)
     install_o2ring_ai(app_module)
+    install_o2ring_diagnostics(app_module)
 
     handler_cls = app_module.Handler
     previous_get = handler_cls.do_GET
