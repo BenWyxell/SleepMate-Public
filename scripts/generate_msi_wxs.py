@@ -132,13 +132,13 @@ def add_registry_keypath(component: ET.Element, component_id: str, version: str)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
+    ap = argparse.ArgumentParser(
         description="Generate deterministic WiX v3 WXS for the SleepMate Windows installer."
     )
-    parser.add_argument("--source-dir", required=True)
-    parser.add_argument("--output", required=True)
-    parser.add_argument("--version", required=True)
-    args = parser.parse_args()
+    ap.add_argument("--source-dir", required=True)
+    ap.add_argument("--output", required=True)
+    ap.add_argument("--version", required=True)
+    args = ap.parse_args()
 
     source_dir = Path(args.source_dir).resolve()
     output = Path(args.output).resolve()
