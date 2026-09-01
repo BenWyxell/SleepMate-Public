@@ -6,13 +6,21 @@ from cpap.version import APP_VERSION
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _version_tuple(value: str) -> tuple[int, int, int]:
+    parts = str(value).split(".")
+    return tuple(int(x) for x in parts[:3])
+
+
 def test_official_public_updater_has_no_user_credentials():
     maintenance = (ROOT / "cpap" / "maintenance.py").read_text(encoding="utf-8")
     app = (ROOT / "app.py").read_text(encoding="utf-8")
     html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     js = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
 
-    assert APP_VERSION == "5.2.20"
+    # This contract originated in the public v5.2.20 release and must remain
+    # true for later descendants; do not pin future feature releases back to
+    # the old product version just to satisfy the updater-security test.
+    assert _version_tuple(APP_VERSION) >= (5, 2, 20)
     assert OFFICIAL_GITHUB_REPO == "BenWyxell/SleepMate-Public"
     assert 'OFFICIAL_GITHUB_REPO = "BenWyxell/SleepMate-Public"' in maintenance
     assert 'headers["Authorization"]' not in maintenance
