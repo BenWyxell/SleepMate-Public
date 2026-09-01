@@ -41,8 +41,10 @@ jobs:
           python -c "from bleak import BleakClient, BleakScanner; import winrt.windows.devices.bluetooth; import winrt.windows.devices.bluetooth.genericattributeprofile; print('BLEAK_WINDOWS_RUNTIME_OK')"
           python -m py_compile .\cpap\oximetry.py .\cpap\o2ring_vld.py .\cpap\o2ring_ble.py .\cpap\o2ring_integration.py .\cpap\o2ring_device_config.py .\cpap\o2ring_report.py .\sleepmate_main.py
           node --check .\web\o2ring.js
+          node --check .\web\o2ring-signal-label.js
+          node --check .\web\o2ring-report-ui.js
 
       - name: Run O2Ring regression tests
         shell: powershell
         run: |
-          python -m pytest -q .\tests\test_oximetry.py .\tests\test_o2ring_vld.py .\tests\test_o2ring_ble_protocol.py
+          python -m pytest -q .\tests\test_oximetry.py .\tests\test_o2ring_vld.py .\tests\test_o2ring_ble_protocol.py .\tests\test_o2ring_device_config.py
