@@ -364,5 +364,5 @@ def test_v53_shell_installs_restore_lifecycle_without_modifying_base_restore():
 
 def test_oximetry_delete_uses_same_quiescent_ble_gate():
     text = (ROOT / "cpap" / "o2ring_data_management.py").read_text(encoding="utf-8")
-    assert "from .o2ring_restore import _stop_and_wait" in text
-    assert "_stop_and_wait(service.manager)" in text
+    assert "from .o2ring_lifecycle import start_reliably, stop_and_wait" in text
+    assert "stop_and_wait(service.manager)" in text
