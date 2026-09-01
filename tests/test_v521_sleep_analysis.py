@@ -76,7 +76,9 @@ def test_frontend_backend_api_contract_matches_again():
     core = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
     assert API_VERSION == 19
     assert "ver.api!==19" in core
-    assert APP_VERSION == "5.2.20"
+    # Later product releases may add backward-compatible endpoints without
+    # changing the proven v5.2.20 frontend protocol number.
+    assert tuple(int(x) for x in APP_VERSION.split(".")[:3]) >= (5, 2, 20)
 
 
 def test_v521_sleep_ui_has_required_filters_order_and_editing():
