@@ -1,7 +1,7 @@
 # SleepMate – Adatvédelmi és Adatkezelési Tájékoztató
 
-**Hatályos:** 2026. augusztus 31.
-**Verzió:** 1.0
+**Hatályos:** 2026. szeptember 1.
+**Verzió:** 1.1
 
 ## 1. A tájékoztató célja
 
@@ -93,7 +93,26 @@ A SleepMate kezelheti többek között:
 - rendelkezésre állás esetén pulzus- és véroxigénadatokat;
 - CPAP-készülék által létrehozott EDF és kapcsolódó terápiás állományokból kinyert információkat.
 
-## 4.3. Felszereléssel kapcsolatos adatok
+## 4.3. O2Ring és oximetriás adatok
+
+Az opcionális O2Ring integráció bekapcsolása esetén a SleepMate helyileg kezelheti többek között:
+
+- a mért SpO₂-értékeket és azok időpontját;
+- a pulzusértékeket és azok időpontját;
+- a gyűrű által rendelkezésre bocsátott mozgás- és érvényességi jelzőket;
+- élő mérés közben az aktuális SpO₂-, pulzus-, mozgás-, akkumulátor- és mérési állapotot;
+- a lezárt O2Ring-felvételek eredeti, helyileg letöltött VLD-állományát;
+- a VLD-ből feldolgozott helyi mérési mintákat és összesített oximetriás statisztikákat;
+- a felvétel kezdő és záró időpontját, időtartamát és helyi felvételazonosítóját;
+- a kompatibilis eszköz modell-, sorozatszám- vagy Bluetooth-azonosítóját, ha azt az eszköz a kapcsolat során közli;
+- a megjegyzett Bluetooth-eszköz címét/párosítási azonosítóját;
+- az O2Ring készülékbeállításait és SleepMate-megjelenítési beállításait;
+- a CPAP sessionökkel számított időbeli átfedés és illesztés eredményét;
+- a felhasználó által megadott O2Ring időkorrekciót.
+
+Az O2Ring funkció alapértelmezetten kikapcsolt főkapcsolóval indul. A Bluetooth-kapcsolat a felhasználó Windows számítógépe és a kompatibilis gyűrű között jön létre; a SleepMate ehhez nem használ központi SleepMate-szervert.
+
+## 4.4. Felszereléssel kapcsolatos adatok
 
 A SleepMate nyilvántarthatja például:
 
@@ -105,7 +124,7 @@ A SleepMate nyilvántarthatja például:
 - egyéb kiegészítőket;
 - felszerelés-váltásokat és azok időpontját.
 
-## 4.4. Alkalmazásadatok
+## 4.5. Alkalmazásadatok
 
 A SleepMate helyileg tárolhat továbbá:
 
@@ -127,9 +146,11 @@ Ezen adatok kezelése a felhasználó saját számítógépén történik.
 
 A SleepMate privát adattárolójának érzékeny részei titkosított formában tárolhatók.
 
-A jelenlegi SleepMate verzió hordozható, 256 bites AES-GCM alapú titkosítási mechanizmust alkalmaz a privát adatok meghatározott részeinek védelméhez.
+A jelenlegi SleepMate verzió hordozható, 256 bites AES-GCM alapú titkosítási mechanizmust alkalmaz a privát adatok meghatározott részeinek – például egyes személyes, hitelesítési és AI-adatok – védelméhez.
 
 A titkosítási kulcs szintén a SleepMate helyi privát adattárának része, annak érdekében, hogy a teljes SleepMate biztonsági mentés másik számítógépen is visszaállítható legyen.
+
+A CPAP kezelt mérési állományai, valamint az O2Ring eredeti VLD-fájljai és feldolgozott mérési felvételei helyi mérési adatként külön fájlokban is tárolódhatnak, és **nem minden ilyen mérési fájl kap külön SleepMate alkalmazásszintű AES-GCM titkosítást**. Ezek védelmében ezért különösen fontos a Windows-fiók, a fájlrendszer, a meghajtótitkosítás és a számítógép fizikai védelme.
 
 Ezért a felhasználónak különösen fontos megfelelően védenie:
 
@@ -148,6 +169,10 @@ A SleepMate helyi titkosítása nem helyettesíti az operációs rendszer, a meg
 Mivel a SleepMate alapértelmezetten helyileg tárolja az adatokat, azok megőrzési idejét elsődlegesen a felhasználó határozza meg.
 
 A helyileg tárolt adatok addig maradhatnak a számítógépen vagy a felhasználó által készített biztonsági mentésekben, amíg azokat a felhasználó nem törli.
+
+Az O2Ring helyi mérési adatainak törlése a SleepMate saját számítógépes másolatait törli; ez **nem jelenti a gyűrű saját belső memóriájában lévő felvételek törlését**. Mivel egy kompatibilis O2Ring korábbi felvételeket továbbra is tárolhat, a SleepMate a helyileg törölt gyűrűfájlok forrásnevét technikai törlési jelzőként („tombstone”) megőrizheti azért, hogy ugyanazt a már törölt egészségügyi felvételt egy későbbi automatikus Bluetooth-szinkron ne töltse le újra. Ez a törlési jelző nem tartalmazza a mérési mintasorozatot.
+
+A korábban elkészített teljes biztonsági mentés természetesen továbbra is tartalmazhat olyan O2Ring- vagy CPAP-adatot, amelyet a felhasználó az aktív SleepMate-adattárból később törölt. Az ilyen korábbi mentések törléséről külön kell gondoskodni.
 
 Az alkalmazás eltávolítása önmagában nem feltétlenül jelenti valamennyi korábban létrehozott adat, export vagy biztonsági mentés törlését.
 
@@ -204,6 +229,22 @@ Az ez Share eszköz biztonságos konfigurálásáért, Wi-Fi-beállításaiért 
 
 ---
 
+# 8/A. O2Ring Bluetooth-integráció és oximetria
+
+Az O2Ring-integráció teljes mértékben opcionális. A főkapcsoló kikapcsolt állapotában a SleepMate nem indít O2Ring Bluetooth-adatgyűjtést.
+
+Bekapcsolt állapotban a SleepMate a Windows Bluetooth Low Energy (BLE) rendszerén keresztül közvetlenül kommunikálhat kompatibilis Wellue/Viatom O2Ring vagy azonos protokollt használó eszközzel. A kapcsolat során a SleepMate élő mérési adatot fogadhat, eszközállapotot olvashat, támogatott készülékbeállítást írhat, valamint a gyűrű által lezárt felvételeket automatikusan letöltheti.
+
+A letöltött O2Ring-felvétel feldolgozása helyben történik. A SleepMate az eredeti VLD-fájlt helyi forrásmásolatként megőrizheti, abból időbélyegzett SpO₂-, pulzus-, mozgás- és érvényességi mintákat készíthet, majd ezekből statisztikákat – például átlagos/minimális SpO₂-t, T90-et, ODI-t és pulzusösszesítőket – számíthat.
+
+A SleepMate a lezárt oximetriás felvételt a CPAP sessionökhöz **időbeli átfedés alapján** kapcsolhatja. Az illesztés helyben számított kapcsolat; az O2Ring minták nem kerülnek emiatt külső SleepMate-szerverre.
+
+A PWA vagy más távoli SleepMate felület nem létesít külön Web Bluetooth kapcsolatot a gyűrűvel. Az O2Ringhez a Windows SleepMate backend kapcsolódik; ha a felhasználó Tailscale vagy Cloudflare alapú távoli elérést külön konfigurált, a PWA a felhasználó saját SleepMate backendjén keresztül láthatja a már ott kezelt élő vagy tárolt adatokat. Ilyenkor az adott távoli hozzáférési szolgáltatóra a jelen tájékoztató Tailscale/Cloudflare részei is vonatkoznak.
+
+A SleepMate nem tudja garantálni vagy távolról vezérelni, hogy a fizikai O2Ring saját belső memóriája meddig őrzi a felvételeket. A gyűrű saját adatkezelésére, gyártói alkalmazására és esetleges külön felhőszolgáltatására a gyártó saját feltételei vonatkoznak; ezek nem a SleepMate szolgáltatásai.
+
+---
+
 # 9. Google Drive biztonsági mentés
 
 ## 9.1. Opcionális funkció
@@ -232,7 +273,7 @@ A SleepMate lekérheti a csatlakoztatott Google-fiók e-mail-címét azért, hog
 
 Google Drive mentés engedélyezése esetén a SleepMate biztonsági mentési ZIP-állományt tölthet fel a felhasználó saját Google Drive tárhelyére, alapértelmezetten egy SleepMate biztonsági mentésekhez használt mappába.
 
-A mentés a SleepMate helyi adatainak másolatát tartalmazhatja, ezért **egészségügyi és egyéb érzékeny adatok is lehetnek benne**.
+A teljes SleepMate-mentés a SleepMate helyi adatainak másolatát tartalmazhatja, így CPAP-mérési állományok, O2Ring eredeti VLD-fájlok, feldolgozott oximetriás felvételek, O2Ring-beállítások és megjegyzett eszközazonosító/párosítási adat is kerülhet bele. Emiatt a mentés **egészségügyi és egyéb érzékeny adatokat tartalmazhat**.
 
 ## 9.4. Ki kapja meg az adatokat?
 
@@ -297,14 +338,17 @@ A jelenlegi implementáció többek között kizárja az AI-nak továbbított st
 - felhasználónév;
 - Windows-felhasználónév;
 - IP-cím;
-- MAC-cím;
+- MAC-cím és O2Ring Bluetooth-cím;
 - Wi-Fi SSID;
 - betegazonosító;
 - orvos neve;
 - intézmény neve;
 - fájlnév;
 - fájlútvonal;
-- szabad szöveges jegyzetek.
+- szabad szöveges jegyzetek;
+- az O2Ring eredeti VLD-fájlja;
+- az O2Ring nyers/időbélyegzett teljes mintasorozata;
+- O2Ring forrásfájlnév, helyi recording ID vagy gyűrűazonosító.
 
 A SleepMate tehát kialakítása szerint **közvetlen személyazonosításra alkalmas adatokat nem küld az AI-szolgáltatónak**.
 
@@ -319,7 +363,7 @@ Az AI-elemzéshez szükséges adatminimalizált terápiás csomag ugyanakkor tar
 - diagnózis típusát;
 - kiindulási AHI-t;
 - ODI-t;
-- SpO₂ értékeket;
+- SpO₂-összesítőket;
 - terápiás előírásokat;
 - nyomásbeállításokat;
 - készülék gyártóját és típusát;
@@ -337,7 +381,9 @@ Az AI-elemzéshez szükséges adatminimalizált terápiás csomag ugyanakkor tar
 - légzésszámot;
 - tidal volume értékeket;
 - minute ventilation értékeket;
-- rendelkezésre állás esetén oximetriás adatokat.
+- rendelkezésre állás esetén adatminimalizált oximetriás összesítőket.
+
+**O2Ring esetén** a v5.3 AI-réteg kizárólag a CPAP-időszakkal illesztett, reprodukálható összesítőket adhatja az AI-csomaghoz, például átlagos/minimális SpO₂-t, T90-et, ODI3/ODI4 értéket, pulzusösszesítőt, lefedettséget és az illesztett CPAP sessionök számát. A teljes O2Ring mintasorozat, VLD-fájl, eszközazonosító és forrásfájlnév nem része ennek az AI-csomagnak.
 
 Ezek az adatok önmagukban közvetlen nevet vagy azonosítót nem tartalmaznak, azonban **egészségügyi jellegű adatok**.
 
@@ -504,6 +550,7 @@ A GitHub – mint külső szolgáltató – a hálózati kapcsolat során a saj�
 A SleepMate jelenlegi működésében nincs olyan mechanizmus, amely a felhasználó:
 
 - terápiás adatait;
+- O2Ring/oximetriás mérési adatait;
 - egészségügyi profilját;
 - diagnózisát;
 - gyógyszereit;
@@ -531,7 +578,7 @@ Más a helyzet, ha a felhasználó saját döntése alapján közvetlenül kapcs
 
 Ebben az esetben kizárólag a felhasználó által önkéntesen elküldött adatok jutnak el a Fejlesztőhöz.
 
-A SleepMate szervizcsomag létrehozása önmagában nem jelenti annak automatikus elküldését.
+A SleepMate szervizcsomag létrehozása önmagában nem jelenti annak automatikus elküldését. A v5.3 O2Ring-diagnosztikai réteg a SleepMate által létrehozott szervizcsomagból kizárja a nyers O2Ring VLD-fájlokat és mérési mintasorozatokat, valamint maszkolja az O2Ring forrásfájlneveit, recording/device/sorozatazonosítóit, Bluetooth/MAC-címét és mérési értékeket. A szervizcsomag technikai állapotokat és számlálókat tartalmazhat.
 
 A felhasználó minden esetben ellenőrizze, hogy a támogatási célból elküldött fájl valóban csak olyan adatokat tartalmaz-e, amelyeket meg kíván osztani.
 
@@ -548,7 +595,7 @@ A SleepMate opcionálisan együttműködhet külső szolgáltatásokkal, többek
 - Cloudflare;
 - GitHub.
 
-E szolgáltatások önálló szolgáltatók, amelyekre saját felhasználási feltételeik, adatvédelmi tájékoztatóik, adatmegőrzési szabályaik és adott esetben nemzetközi adattovábbítási rendelkezéseik vonatkoznak.
+E szolgáltatások önálló szolgáltatók, amelyekre saját felhasználási feltételeik, adatvédelmi tájéztatóik, adatmegőrzési szabályaik és adott esetben nemzetközi adattovábbítási rendelkezéseik vonatkoznak.
 
 A Fejlesztő nem vállalhat felelősséget e külső szolgáltatók saját rendszereinek adatkezelési gyakorlatáért.
 
@@ -636,6 +683,7 @@ A felhasználó felelőssége különösen:
 - Tailscale-fiókjának védelme;
 - Cloudflare konfigurációjának védelme;
 - az ez Share Wi-Fi megfelelő konfigurációja;
+- a Bluetooth-környezet és az O2Ring fizikai hozzáférésének megfelelő védelme;
 - az exportált PDF-ek és ZIP-ek megfelelő kezelése.
 
 ---
@@ -644,7 +692,7 @@ A felhasználó felelőssége különösen:
 
 **A SleepMate nem orvosi diagnosztikai szoftver.**
 
-A SleepMate célja a felhasználó saját CPAP/PAP terápiás adatainak:
+A SleepMate célja a felhasználó saját CPAP/PAP terápiás és opcionális oximetriás adatainak:
 
 - megjelenítése;
 - rendszerezése;
@@ -652,13 +700,14 @@ A SleepMate célja a felhasználó saját CPAP/PAP terápiás adatainak:
 - könnyebb értelmezésének támogatása;
 - statisztikai és információs összefoglalása.
 
-A SleepMate által megjelenített számítások, figyelmeztetések, grafikonok, értékelések és AI által generált szövegek **nem minősülnek orvosi diagnózisnak vagy orvosi tanácsnak**.
+A SleepMate által megjelenített számítások, figyelmeztetések, grafikonok, oximetriás mutatók, értékelések és AI által generált szövegek **nem minősülnek orvosi diagnózisnak vagy orvosi tanácsnak**.
 
 A SleepMate:
 
 - nem helyettesíti az orvost;
 - nem helyettesíti az alvásdiagnosztikai vizsgálatot;
 - nem helyettesíti a CPAP/PAP titrálást;
+- nem helyettesíti a klinikai pulzoximetriás vagy egyéb orvosi vizsgálatot;
 - nem állít fel diagnózist;
 - nem jogosít fel gyógyszeres kezelés megváltoztatására;
 - nem jogosít fel előírt terápiás beállítás önálló megváltoztatására;
@@ -710,7 +759,7 @@ A Fejlesztő nem tudja kontrollálni:
 - a felhasználó Tailscale-fiókját;
 - a felhasználó Cloudflare-fiókját;
 - az alkalmazott AI API-fiókok biztonságát;
-- a felhasználó hálózati környezetét;
+- a felhasználó hálózati és Bluetooth-környezetét;
 - az exportált fájlok későbbi kezelését.
 
 ---
@@ -742,7 +791,7 @@ Különösen indokolhatja a módosítást:
 - új külső szolgáltató bevezetése;
 - új AI-szolgáltató bevezetése;
 - felhőszolgáltatás változása;
-- új adattípus kezelése;
+- új adattípus vagy szenzorintegráció kezelése;
 - adatbiztonsági mechanizmus változása;
 - jogszabályi változás.
 
@@ -756,6 +805,8 @@ A SleepMate adatvédelmi működése röviden:
 
 **Helyi CPAP/PAP adatok:** a felhasználó saját számítógépén maradnak.
 
+**O2Ring / oximetria:** opcionális, közvetlen Windows BLE kapcsolat; a felvételek és élő adatok helyileg a felhasználó SleepMate példányában kerülnek kezelésre.
+
 **Központi SleepMate adatbázis:** nincs.
 
 **SleepMate-fiók és központi adatszinkron:** nincs.
@@ -764,11 +815,13 @@ A SleepMate adatvédelmi működése röviden:
 
 **ez Share / SleepSync:** opcionális, helyi adatkapcsolat.
 
-**Google Drive:** opcionális; a felhasználó saját Google-fiókjába készített biztonsági mentés.
+**Google Drive:** opcionális; a felhasználó saját Google-fiókjába készített biztonsági mentés, amely O2Ring/oximetriás adatot is tartalmazhat.
 
 **AI:** opcionális; a felhasználó saját API-kulcsával, közvetlenül a kiválasztott AI-szolgáltató felé.
 
 **AI-nak küldött közvetlen személyazonosító adat:** a SleepMate adatvédelmi szűrője eltávolítja.
+
+**AI-nak küldött O2Ring-adat:** csak adatminimalizált, CPAP-időre illesztett összesítő; nyers VLD és teljes mintasorozat nem.
 
 **AI-nak küldött terápiás adat:** igen, ha a felhasználó az AI-funkciót kifejezetten használja.
 
