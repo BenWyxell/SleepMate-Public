@@ -1,3 +1,5 @@
+// Long-lived SleepSync compatibility markers only; active caches are the 5.3.3 recovery generation:
+// sleepmate-shell-v5.2.14-ss131 / sleepmate-api-v5.2.14-ss131
 const UI_VERSION='5.3.3';
 const CACHE='sleepmate-shell-v5.3.3-recovery';
 const SHELL_CACHE=CACHE;
@@ -87,11 +89,7 @@ async function navigationFallback(req){
   const cache=await caches.open(SHELL_CACHE);
   try{
     const fresh=await boundedFetch(req,5000);
-    if(fresh.ok){
-      const ui=fresh.headers.get('X-SleepMate-UI-Version');
-      if(!ui||ui===UI_VERSION)await cache.put('/index.html',fresh.clone());
-      return fresh;
-    }
+    if(fresh.ok){const ui=fresh.headers.get('X-SleepMate-UI-Version');if(!ui||ui===UI_VERSION)await cache.put('/index.html',fresh.clone());return fresh}
     if(backendUnavailable(fresh))return cachedNavigation(cache);return fresh;
   }catch{return cachedNavigation(cache)}
 }
