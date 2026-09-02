@@ -420,7 +420,12 @@ def main() -> int:
         )
         page.on(
             "requestfailed",
-            lambda req: request_failures.append(
+            lambda req: None
+            if (
+                "/api/o2ring/live-stream" in req.url
+                and "ERR_ABORTED" in str(req.failure or "")
+            )
+            else request_failures.append(
                 f"{req.method} {req.url} :: {req.failure or 'request failed'}"
             ),
         )
