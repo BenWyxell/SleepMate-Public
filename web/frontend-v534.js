@@ -5,7 +5,7 @@ window.__sleepmateFrontendV534=true;
 const VERSION='5.3.4';
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)],id=x=>document.getElementById(x);
 const api=async(path,opts={})=>{const r=await fetch(path,{cache:'no-store',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});const x=await r.json().catch(()=>({}));if(!r.ok)throw new Error(x.error||`HTTP ${r.status}`);return x};
-let lastO2Status=null;
+let lastO2Status=null,lastLiveNavEnabled=null;
 
 function normalizePwaSettings(){
   const tabs=q('.settings-inner-tabs'),sel=id('settingsCategorySelect'),push=tabs?.querySelector('[data-settings-tab="push"]'),pwa=tabs?.querySelector('[data-settings-tab="pwa"]'),pushPanel=q('[data-settings-panel="push"]'),pwaPanel=id('smPwaSettingsPanel');
@@ -33,7 +33,12 @@ function normalizeSetupWizard(){
 }
 function normalizeLiveNav(enabled=!!lastO2Status?.settings?.o2ring_enabled){
   const V=window.SleepMateV530;if(!V?.NAV||!V?.ICONS)return;
-  if(enabled){V.ICONS.oximetry_live=V.ICONS.oximetry;V.NAV.oximetry_live={label:'Élő O₂ monitor',action:'oximetry_live'}}
+  const wanted=!!enabled,current=V.NAV.oximetry_live;
+  const currentCorrect=!!(current&&current.label==='Élő O₂ monitor'&&current.action==='oximetry_live'&&V.ICONS.oximetry_live);
+  const needsChange=wanted?!currentCorrect:!!current;
+  lastLiveNavEnabled=wanted;
+  if(!needsChange)return;
+  if(wanted){V.ICONS.oximetry_live=V.ICONS.oximetry;V.NAV.oximetry_live={label:'Élő O₂ monitor',action:'oximetry_live'}}
   else{delete V.NAV.oximetry_live;delete V.ICONS.oximetry_live}
   V.renderBottomNav?.();V.renderPwaEditor?.();
 }
@@ -85,8 +90,29 @@ async function saveO2Toggles(){
   }finally{saveBusy=false;panel?.classList.remove('sm-saving');normalizeAll()}
 }
 function captureO2Toggle(e){if(!['smO2Enabled','smO2Ble','smO2AutoConnect','smO2AutoSync'].includes(e.target?.id))return;e.stopImmediatePropagation();saveO2Toggles()}
-function fixLatestLoading(){const e=id('latestStatus');if(e&&(e.textContent.trim()==='Befejezve'||!e.textContent.trim()))e.textContent='—'}
-function hookOverviewLoading(){try{if(typeof loadDashboardOverview==='function'&&!loadDashboardOverview.__smLoading534){const orig=loadDashboardOverview;loadDashboardOverview=async function(...a){fixLatestLoading();const r=await orig(...a);return r};loadDashboardOverview.__smLoading534=true}}catch{}}
+
+function fixLatestLoading(){
+  const status=id('latestStatus'),sessions=id('latestSessions');
+  if(status)status.textContent='—';
+  if(sessions)sessions.textContent='—';
+}
+function syncLatestSessionCard(){
+  const status=id('latestStatus'),sessions=id('latestSessions');if(!status||!sessions)return;
+  let latest=null;try{latest=state?.dashboardOverview?.latest||null}catch{}
+  if(!latest){status.textContent='—';sessions.textContent='—';return}
+  const count=Array.isArray(latest.sessions)?latest.sessions.length:null;
+  status.textContent=count==null?'—':String(count);
+  sessions.textContent=count==null?'—':'szakasz';
+}
+function hookOverviewLoading(){
+  try{
+    if(typeof loadDashboardOverview==='function'&&!loadDashboardOverview.__smLoading534){
+      const orig=loadDashboardOverview;
+      loadDashboardOverview=async function(...a){fixLatestLoading();const r=await orig(...a);syncLatestSessionCard();return r};
+      loadDashboardOverview.__smLoading534=true;
+    }
+  }catch{}
+}
 async function enforceFrontendGeneration(){
   const meta=q('meta[name="sleepmate-ui-version"]')?.content||'';let backend='';try{backend=String((await api('/api/version')).version||'')}catch{}const expected=backend||VERSION;if(expected!==VERSION)return;
   try{const keys=await caches.keys();const stale=keys.filter(k=>k.startsWith('sleepmate-')&&!k.includes(`v${VERSION}`));if(stale.length)await Promise.all(stale.map(k=>caches.delete(k)))}catch{}
@@ -94,14 +120,20 @@ async function enforceFrontendGeneration(){
   if(meta&&meta!==expected&&!sessionStorage.getItem('sm-v534-reloaded')){sessionStorage.setItem('sm-v534-reloaded','1');location.reload();return}sessionStorage.removeItem('sm-v534-reloaded');
 }
 function waitForDynamicSettings(){normalizeAll();const page=id('page-settings');if(!page)return;if(id('smPwaSettingsPanel')&&id('smO2Master')&&id('frSettingsReopen')){normalizeAll();return}const ob=new MutationObserver(()=>{normalizeAll();if(id('smPwaSettingsPanel')&&id('smO2Master')&&id('frSettingsReopen'))ob.disconnect()});ob.observe(page,{childList:true,subtree:true});setTimeout(()=>{ob.disconnect();normalizeAll()},8000)}
+function settingsVisible(){return !!id('page-settings')?.classList.contains('active')}
 function bind(){
-  document.addEventListener('change',captureO2Toggle,true);window.addEventListener('hashchange',()=>{normalizeAll();fixLatestLoading()});
-  window.addEventListener('sleepmate-o2-status',e=>{lastO2Status=e.detail||lastO2Status;normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);hydrateAdvancedO2Settings();normalizeAll()});
-  window.addEventListener('sleepmate-o2-runtime-ready',normalizeAll);
+  document.addEventListener('change',captureO2Toggle,true);
+  window.addEventListener('hashchange',()=>{if(settingsVisible())normalizeAll()});
+  window.addEventListener('sleepmate-o2-status',e=>{
+    lastO2Status=e.detail||lastO2Status;
+    normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);
+    if(settingsVisible()){hydrateAdvancedO2Settings();normalizeO2Settings()}
+  });
+  window.addEventListener('sleepmate-o2-runtime-ready',()=>{normalizeLiveNav();if(settingsVisible())normalizeAll()});
   try{if(typeof setSettingsTab==='function'&&!setSettingsTab.__sm534){const orig=setSettingsTab;setSettingsTab=function(name){const r=orig(name);requestAnimationFrame(normalizeAll);return r};setSettingsTab.__sm534=true}}catch{}
 }
-async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);hydrateAdvancedO2Settings()}
+async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);if(settingsVisible())hydrateAdvancedO2Settings()}
 async function boot(){bind();hookOverviewLoading();fixLatestLoading();await refreshO2State();waitForDynamicSettings();normalizeAll();await enforceFrontendGeneration();setTimeout(normalizeAll,300);setTimeout(normalizeAll,1200)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
-window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State};
+window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State,syncLatestSessionCard};
 })();
