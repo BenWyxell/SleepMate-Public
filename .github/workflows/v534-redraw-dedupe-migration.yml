@@ -1,0 +1,53 @@
+name: v5.3.4 one-shot O2 redraw deduplication
+
+on:
+  push:
+    branches:
+      - v5.3.4-o2-full-refactor
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Deduplicate synchronized redraw functions and self-remove migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('web/o2ring.js')
+          s=p.read_text(encoding='utf-8')
+          old="function redrawGroup(group){for(const c of qa('canvas'))if(c._smO2Meta?.syncGroup===group)c._smO2Meta.redraw?.()}"
+          new="function redrawGroup(group){const seen=new Set();for(const c of qa('canvas')){if(c._smO2Meta?.syncGroup!==group)continue;const fn=c._smO2Meta.redraw;if(typeof fn==='function'&&!seen.has(fn)){seen.add(fn);fn()}}}"
+          if s.count(old)!=1:
+              raise SystemExit(f'Expected one redrawGroup implementation, found {s.count(old)}')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+
+          t=Path('tests/test_v534_acceptance_matrix.py')
+          x=t.read_text(encoding='utf-8')
+          marker='''        "function scheduleGroupRedraw(group)",\n'''
+          add='''        "function scheduleGroupRedraw(group)",\n        "const seen=new Set()",\n        "!seen.has(fn)",\n'''
+          if marker not in x:
+              raise SystemExit('Crosshair redraw acceptance marker missing')
+          x=x.replace(marker,add,1)
+          t.write_text(x,encoding='utf-8')
+          PY
+          node --check web/o2ring.js
+          python -m pip install --disable-pip-version-check pytest >/dev/null
+          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py tests/test_v534_first_load_observer_guard.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/v534-redraw-dedupe-migration.yml
+          git add web/o2ring.js tests/test_v534_acceptance_matrix.py
+          git diff --cached --check
+          git commit -m 'Deduplicate synchronized O2 crosshair redraws'
+          git push origin HEAD:v5.3.4-o2-full-refactor
