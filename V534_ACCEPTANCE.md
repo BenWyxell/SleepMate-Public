@@ -23,6 +23,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - O₂ chart zoom/pan interactions work with mouse/touch interaction contracts and reset cleanly.
 - The daily Dashboard O₂ canvases zoom synchronously, while Fókusz and Összes grafikon retain their own zoom ranges when switching between the peer modes.
 - Crosshair redraw is requestAnimationFrame-coalesced to avoid pointer-move render storms, and synchronized canvases sharing one redraw function invoke that function at most once per frame.
+- High-frequency SpO₂ / pulse charts must split the actually rendered canvas path across a long no-data interval; no line may visually bridge an O₂ gap merely because valid samples exist on both sides.
 - Daily O₂ trend series use a day-scale gap policy so valid nightly points form continuous trend lines instead of being split by the high-frequency live-sample gap rule.
 - CPAP-aligned O₂ overlays use the same therapy time range and gap-aware timestamp alignment.
 - The per-chart CPAP O₂ overlay supports off / SpO₂ / pulse / both, persists the choice, displays independent SpO₂ and pulse scales, and shows exact-time O₂/HR hover data.
@@ -34,6 +35,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - SleepSync completion publishes targeted invalidation for affected days; only a small deterministic recent-day fallback is allowed when changed days cannot be determined.
 - A completed SleepSync import must update the currently visible matching O₂/CPAP daily charts and night O₂ summary automatically without requiring a manual refresh.
 - The Dashboard O₂ aggregate and mini trends must hydrate from matched O₂ nights in the packaged frontend, not only exist as source-level markup.
+- Reports must populate SpO₂ average/minimum, average pulse, T90 and ODI3/ODI4 from matched nightly O₂ data, and an active Reports view must refresh those cells after SleepSync invalidation without a manual refresh.
 
 ## Settings and responsive UI
 
@@ -51,6 +53,6 @@ A release may only be created from the same commit that passes:
 2. exact-SHA Windows portable build,
 3. Hungarian MSI build and real install/smoke test,
 4. VERIFIED release-set hash/identity checks,
-5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions and SleepSync invalidation behaviour.
+5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, gap rendering and SleepSync invalidation behaviour.
 
 A source-level marker or a green test with no O₂ data is not sufficient proof for a behavioural acceptance item.
