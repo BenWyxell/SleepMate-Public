@@ -1,0 +1,37 @@
+name: v5.3.4 one-shot expected SSE abort migration
+
+on:
+  push:
+    branches: [v5.3.4-o2-full-refactor]
+    paths:
+      - 'scripts/_v534_filter_expected_sse_abort.py'
+      - '.github/workflows/v534-expected-sse-abort-migration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v5.3.4-o2-full-refactor
+          fetch-depth: 0
+      - name: Filter only intentional Live SSE aborts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/_v534_filter_expected_sse_abort.py
+          python -m py_compile scripts/v534_browser_acceptance.py
+          grep -F '"/api/o2ring/live-stream" in req.url' scripts/v534_browser_acceptance.py
+          grep -F '"ERR_ABORTED" in str(req.failure or "")' scripts/v534_browser_acceptance.py
+          grep -F 'browser request failures:' scripts/v534_browser_acceptance.py
+          git diff --check
+          rm scripts/_v534_filter_expected_sse_abort.py
+          rm .github/workflows/v534-expected-sse-abort-migration.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/v534_browser_acceptance.py scripts/_v534_filter_expected_sse_abort.py .github/workflows/v534-expected-sse-abort-migration.yml
+          git commit -m 'Ignore only intentional Live SSE aborts in Edge gate'
+          git push origin HEAD:v5.3.4-o2-full-refactor
