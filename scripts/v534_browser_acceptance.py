@@ -564,6 +564,15 @@ def main() -> int:
         _, focus_zoom = zoom_canvas(page, "smO2FocusDual")
         page.locator("#stackViewBtn").click()
         page.wait_for_function("() => document.getElementById('smStackO2DualCanvas')?._smO2Meta?.rows?.length >= 5")
+        stack_pointer_events = page.evaluate(
+            """() => ['smStackO2Spo2Canvas','smStackO2HrCanvas','smStackO2DualCanvas'].map(id => ({
+              id, pointerEvents:getComputedStyle(document.getElementById(id)).pointerEvents
+            }))"""
+        )
+        require(
+            all(x["pointerEvents"] != "none" for x in stack_pointer_events),
+            f"Stack O2 chart input was disabled by the CPAP base-canvas CSS: {stack_pointer_events}",
+        )
         hover_canvas(page, "smStackO2Spo2Canvas", ("SpO₂",))
         hover_canvas(page, "smStackO2HrCanvas", ("Pulzus",))
         hover_canvas(page, "smStackO2DualCanvas", ("SpO₂", "Pulzus"))
