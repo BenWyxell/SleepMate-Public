@@ -17,6 +17,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - Live O₂ streaming and chart repainting are active only while the visible Oximetria / Élő O₂ monitor view is active.
 - Leaving Oximetria closes the live SSE, aborts any in-flight live-buffer refill and does not perform live-buffer refill work in the background; route departure itself must disable Live immediately, even before the outgoing page loses its active DOM class.
 - Returning to Oximetria restores the missed interval with one bounded batch request and resumes the live stream without a hand-off gap.
+- Intentional lifecycle closure of `/api/o2ring/live-stream` may surface in Edge as `net::ERR_ABORTED`; packaged acceptance may ignore only that exact Live SSE abort, while every other browser request failure remains release-blocking.
 - Background SleepSync/O2 invalidation remains event-driven so completed therapy imports can update the relevant views without frontend polling.
 
 ## O₂ charts
