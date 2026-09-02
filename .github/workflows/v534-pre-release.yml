@@ -1,0 +1,78 @@
+name: v5.3.4 full O2 refactor pre-release CI
+
+on:
+  push:
+    branches:
+      - v5.3.4-o2-full-refactor
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: sleepmate-v534-pre-release
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify v5.3.4 full refactor contracts
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python scripts/verify_public_source.py
+          python scripts/verify_sleepsync_integration.py
+          python -m py_compile cpap/v530_features.py cpap/o2ring_runtime_v534.py cpap/o2ring_stream.py cpap/o2ring_v532.py cpap/o2ring_integration.py cpap/o2ring_ble.py sleepmate_main.py
+          node --check web/frontend-v534.js
+          node --check web/o2ring.js
+          node --check web/sleepmate-v530.js
+          node --check web/o2ring-report-ui.js
+          node --check web/service-worker.js
+          node --check web/service-worker-v508-base.js
+          python -m pytest -q tests/test_o2ring_v534_release_contract.py
+          ! grep -Fq 'o2ring-v532.js", "sm-o2-v532-inline"' cpap/v530_features.py
+          ! grep -Fq 'frontend-v533.js", "sm-frontend-v533-inline"' cpap/v530_features.py
+          ! grep -Fq 'setInterval(' web/o2ring.js
+
+  official-windows:
+    needs: contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - name: Dispatch official Windows verification on exact commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/windows-release.yml/dispatches" -f ref="$GITHUB_REF_NAME"
+      - name: Wait for exact-SHA VERIFIED Windows workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 450); do
+            row="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=100" | jq -c '[.workflow_runs[] | select(.name == "Windows release + Hungarian MSI + verified publish" and .event == "workflow_dispatch" and .head_sha == env.GITHUB_SHA)] | sort_by(.created_at) | last // empty')"
+            if [[ -n "$row" ]]; then
+              id="$(jq -r '.id' <<<"$row")"
+              status="$(jq -r '.status' <<<"$row")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$row")"
+              echo "Windows run $id: $status / $conclusion"
+              if [[ "$status" == completed ]]; then
+                [[ "$conclusion" == success ]] || exit 1
+                gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" --jq '.artifacts[].name' | grep -Fxq 'SleepMate-Windows-x64-VERIFIED-RELEASE'
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo 'Timed out waiting for official Windows verification.' >&2
+          exit 1
