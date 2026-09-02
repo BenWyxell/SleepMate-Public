@@ -8,6 +8,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - Stale SleepMate service-worker caches are recovered without restoring an obsolete frontend generation.
 - Repeated Dashboard ↔ Oximetria navigation does not duplicate pages, charts or runtime owners.
 - Repeated Fókusz nézet ↔ Összes grafikon ↔ Oximetria switching does not leak interactions or mutate control labels.
+- Persistent O₂ canvases must not accumulate duplicate pointer/wheel interaction listeners across repeated peer-mode or Oximetria-tab switching; packaged Edge acceptance must count actual listener registrations before and after the stress loop.
 - Fókusz nézet, Összes grafikon and Oximetria are persistent peer modes: entering Oximetria must not hide the controls needed to switch directly to either CPAP chart mode, and the shared peer-mode host must not duplicate across navigation or refresh.
 - Mobile Oximetria navigation works through the real mobile drawer and the application itself closes the drawer and scrim after selection; the acceptance test must not close them on the application's behalf.
 
@@ -21,14 +22,15 @@ This branch is not releasable until the following user-facing behaviours are val
 ## O₂ charts
 
 - Live, recording, trend, daily Dashboard, Fókusz, Összes grafikon and Dashboard summary O₂ charts expose an exact HH:MM:SS hover crosshair/tooltip with the value of each displayed series.
-- O₂ chart zoom/pan interactions work with mouse/touch interaction contracts and reset cleanly; the packaged Edge gate must exercise the shared two-finger pinch handler with touch pointer events rather than relying only on source markers.
+- O₂ chart zoom/pan interactions work with mouse/touch interaction contracts and reset cleanly; the packaged Edge gate must exercise both the shared two-finger pinch handler and a one-finger horizontal touch-pan on a zoomed O₂ window rather than relying only on source markers.
+- A one-finger touch-pan must move the time-window centre without changing its zoom span, and the interactive canvas must keep `touch-action: pan-y` so vertical page scrolling remains delegated to the browser.
 - Pointer-based browser acceptance must interact with an actually visible chart target (scrolling an off-screen canvas into the viewport as a user would) instead of forcing events onto hidden/off-screen controls.
 - Interactive O₂ canvases inside the Összes grafikon stack must override the legacy CPAP base-canvas `pointer-events:none` rule; SpO₂, pulse and combined Stack O₂ charts must all remain real pointer/touch targets and pass packaged hover interaction.
 - The daily Dashboard O₂ canvases zoom synchronously, while Fókusz and Összes grafikon retain their own zoom ranges when switching between the peer modes.
 - Crosshair redraw is requestAnimationFrame-coalesced to avoid pointer-move render storms, and synchronized canvases sharing one redraw function invoke that function at most once per frame.
 - High-frequency SpO₂ / pulse charts must split the actually rendered canvas path across a long no-data interval; no line may visually bridge an O₂ gap merely because valid samples exist on both sides.
 - CPAP-aligned O₂ overlays must also split their actually rendered SpO₂ and pulse paths across a long O₂ no-data interval while remaining aligned to the therapy time range.
-- Daily/nightly O₂ trend series use a day-scale gap policy so valid consecutive nightly points form a continuous rendered trend path instead of being split by the high-frequency live-sample gap rule.
+- Daily/nightly O₂ trend series use a day-scale gap policy so valid consecutive nightly points form a continuous rendered trend path instead of being split by the high-frequency live-sample gap rule; the packaged gate must wait for a fresh trend canvas render rather than accepting stale chart metadata from an earlier tab visit.
 - The per-chart CPAP O₂ overlay supports off / SpO₂ / pulse / both, persists the choice, displays independent SpO₂ and pulse scales, and shows exact-time O₂/HR hover data.
 
 ## Matching and automatic refresh
@@ -56,6 +58,6 @@ A release may only be created from the same commit that passes:
 2. exact-SHA Windows portable build,
 3. Hungarian MSI build and real install/smoke test,
 4. VERIFIED release-set hash/identity checks,
-5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, persistent peer-mode switching, Stack O₂ pointer/touch input, two-finger pinch, rendered gap/continuity behaviour, transient latest-session status history and SleepSync invalidation behaviour.
+5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, persistent peer-mode switching, Stack O₂ pointer/touch input, two-finger pinch, one-finger touch-pan, listener-stability stress, rendered gap/continuity behaviour, transient latest-session status history and SleepSync invalidation behaviour.
 
 A source-level marker or a green test with no O₂ data is not sufficient proof for a behavioural acceptance item.
