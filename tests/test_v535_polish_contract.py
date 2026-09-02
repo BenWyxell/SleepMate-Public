@@ -68,3 +68,15 @@ def test_v535_o2_selection_line_weight_overlay_and_dashboard_contract():
     assert "sm-has-o2-overlay" in js and "sm-has-o2-overlay" in css
     assert "function ensureDashboardO2Section()" in js
     assert "seg.length===1" in js
+
+
+def test_v535_oximetry_navigation_is_one_toolbar_and_state_is_not_a_card():
+    js=read("web/o2ring.js"); css=read("web/o2ring-v534.css")
+    page=js[js.index("function installPage"):js.index("function closeMobileO2Drawer")]
+    assert 'id="o2rSyncNowTop"' in page
+    assert page.index('id="o2rSyncNowTop"') < page.index('data-o2r-tab="live"') < page.index('data-o2r-tab="recordings"') < page.index('data-o2r-tab="trends"')
+    assert 'class="o2r-tabs"' not in page
+    assert 'class="panel o2r-live-card state"' not in page
+    assert 'class="o2r-search-state"' in page
+    assert 'id="o2rLiveState"' in page and 'id="o2rLiveSignal"' in page
+    assert '.o2r-search-state' in css
