@@ -108,3 +108,21 @@ def test_release_tree_has_no_v535_one_shot_patch_helpers():
         if p.is_file() and p.name.startswith('_v535_')
     ]
     assert leftovers == []
+
+
+def test_stability_status_timer_cannot_rearm_after_uninstall():
+    assert "async function refreshStatus(){if(!R.installed)return" in JS
+    assert "if(!R.installed)return;R.status=x" in JS
+    assert "finally{if(R.installed)" in JS
+    assert "clearO2Interactions();if(R.eventSource)" in JS
+
+def test_stability_peer_mode_switch_reuses_loaded_daily_o2():
+    assert "ox?.classList.remove('hidden');loadDaily(false).then(drawDaily)" in JS
+    assert "peer-mode switching force-refetched daily O2 data" in BROWSER
+
+def test_stability_trends_break_missing_nights_and_use_date_axis():
+    assert JS.count("gapSeconds:36*3600") >= 2
+    assert JS.count("xLabel:date") >= 2
+    assert "tooltipLabel:ts=>`${date(ts)} ${clock(ts)}`" in JS
+    assert "Dashboard O2 trend bridged a missing night" in BROWSER
+    assert "O2 trend X-axis did not render dates" in BROWSER

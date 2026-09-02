@@ -169,8 +169,9 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
             matches:[{cpap_start:now-3600,cpap_end:now-2940,overlap_seconds:660,cpap_coverage_percent:96}],
             summary:summary(95.8,93,65.2,42,1.4,.7,96.4,64.0), samples:dailySamples
           };
-          const batchRows=[0,1,2,3,4].map(i => {
-            const ts=now-(4-i)*86400;
+          const batchOffsets=[0,1,2,4,5];
+          const batchRows=batchOffsets.map((offset,i) => {
+            const ts=now-(5-offset)*86400;
             return {
               day:dayCodeFor(ts), available:true, auto_match:true,
               matches:[{cpap_start:ts,cpap_end:ts+21600,cpap_coverage_percent:94+i}],
@@ -180,9 +181,9 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
           window.__smAcceptanceO2 = {
             liveRows,
             bufferCalls:0,
-            dailyDay,daily,batchRows,dayCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
-            trendRows:[0,1,2,3,4].map(i => ({
-              start_ts:now-(4-i)*86400,
+            dailyDay,daily,batchRows,dayCalls:0,statusCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
+            trendRows:[0,1,2,4,5].map((offset,i) => ({
+              start_ts:now-(5-offset)*86400,
               summary:summary(96.2+i*.15,91+i%2,63+i,30+i*8,1.0+i*.2,.5+i*.1)
             })),
             recordings:[{
@@ -260,6 +261,7 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
               return nativeFetch(input, init);
             }
             const f = window.__smAcceptanceO2;
+            if (url.pathname === '/api/o2ring/status') { f.statusCalls++; return nativeFetch(input, init); }
             if (url.pathname === `/api/day/${f.dailyDay}/stats`) {
               return jsonResponse({apnea_duration:'0:00',rows:[{key:'pressure',title:'Nyomás',unit:'cmH2O',min:6,median:8,p95:10,p995:11,max:12}]});
             }
@@ -757,8 +759,11 @@ def main() -> int:
         page.evaluate("""() => { const f=window.__smAcceptanceO2; state.dashboardOverview={rows:[{day:f.batchRows.at(-1).day}]}; window.SleepMateO2Ring.refresh(); }""")
         page.wait_for_function("() => document.getElementById('smDashO2Trend')?._smO2Meta?.rows?.length===1")
         require(page.locator("#smDashboardO2V534").count() == 1 and page.locator("#smDashboardO2V534").is_visible(), "Dashboard O2 summary disappeared with one matched night")
-        page.evaluate("""() => { const f=window.__smAcceptanceO2; state.dashboardOverview={rows:f.batchRows.map(r=>({day:r.day}))}; window.SleepMateO2Ring.refresh(); }""")
+        page.evaluate("""() => { const f=window.__smAcceptanceO2; f.pathRecords=[]; state.dashboardOverview={rows:f.batchRows.map(r=>({day:r.day}))}; window.SleepMateO2Ring.refresh(); }""")
         page.wait_for_function("() => document.getElementById('smDashO2Trend')?._smO2Meta?.rows?.length>=5")
+        page.wait_for_timeout(160)
+        dash_gap_paths = page.evaluate("""() => window.__smAcceptanceO2.pathRecords.filter(x => x.id==='smDashO2Trend' && x.lines>0 && ['#55d8ff','rgb(85, 216, 255)'].includes(String(x.style).toLowerCase()))""")
+        require(len([x for x in dash_gap_paths if x.get('moves') == 1]) >= 2, f"Dashboard O2 trend bridged a missing night: {dash_gap_paths}")
 
         page.evaluate(
             """() => {
@@ -779,6 +784,8 @@ def main() -> int:
             "ids => Object.fromEntries(ids.map(id => [id, window.__smO2ListenerCounts[id] || 0]))",
             persistent_daily_ids,
         )
+        page.wait_for_timeout(180)
+        mode_day_calls_before = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
         for _ in range(6):
             for control in ("focusViewBtn", "stackViewBtn", "o2rDailyBtn"):
                 page.evaluate("id => document.getElementById(id)?.click()", control)
@@ -786,6 +793,9 @@ def main() -> int:
             "ids => Object.fromEntries(ids.map(id => [id, window.__smO2ListenerCounts[id] || 0]))",
             persistent_daily_ids,
         )
+        page.wait_for_timeout(180)
+        mode_day_calls_after = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
+        require(mode_day_calls_after == mode_day_calls_before, f"peer-mode switching force-refetched daily O2 data: {mode_day_calls_before} -> {mode_day_calls_after}")
         require(daily_listener_after == daily_listener_before, f"daily O2 chart listeners leaked across peer-mode switching: {daily_listener_before} -> {daily_listener_after}")
         require(page.locator("#smDailyModeSwitchHost").count() == 1, "daily peer-mode host duplicated during repeated switching")
         require(page.locator("#focusViewBtn").inner_text().strip() == "Fókusz nézet", "Focus button text mutated")
@@ -942,7 +952,11 @@ def main() -> int:
               ['#55d8ff','rgb(85, 216, 255)'].includes(String(x.style).toLowerCase())
             )"""
         )
-        require(any(x.get("moves") == 1 and x.get("lines", 0) >= 4 for x in trend_paths), f"nightly SpO2 trend was incorrectly split between consecutive days: {trend_paths}")
+        trend_segments = [x for x in trend_paths if x.get("moves") == 1]
+        require(len(trend_segments) >= 2 and sum(x.get("lines", 0) for x in trend_segments) >= 3, f"nightly SpO2 trend did not split at the missing night: {trend_paths}")
+        expected_trend_date = page.evaluate("""() => new Date(window.__smAcceptanceO2.trendRows[0].start_ts*1000).toLocaleDateString('hu-HU',{year:'numeric',month:'2-digit',day:'2-digit'})""")
+        trend_axis_text = page.evaluate("() => window.__smAcceptanceO2.canvasText.filter(x=>x.id==='o2rTrendSpo2').map(x=>x.text)")
+        require(expected_trend_date in trend_axis_text, f"O2 trend X-axis did not render dates: expected={expected_trend_date!r}, labels={trend_axis_text}")
         hover_canvas(page, "o2rTrendSpo2", ("SpO₂",))
         hover_canvas(page, "o2rTrendHr", ("Pulzus",))
         hover_canvas(page, "o2rTrendT90", ("T90",))
@@ -1007,6 +1021,12 @@ def main() -> int:
         page.set_viewport_size({"width": 844, "height": 390})
         page.wait_for_timeout(120)
         assert_no_horizontal_overflow(page, "O2Ring settings iPhone landscape")
+
+        progress("O2 status polling stays stopped after uninstall race")
+        page.evaluate("""async () => { const p=window.SleepMateO2Ring.refreshStatus(); window.SleepMateO2Ring.uninstall(); try{await p}catch{} }""")
+        status_calls_after_uninstall = page.evaluate("() => window.__smAcceptanceO2.statusCalls")
+        page.wait_for_timeout(6500)
+        require(page.evaluate("() => window.__smAcceptanceO2.statusCalls") == status_calls_after_uninstall, "O2 status polling restarted after uninstall")
 
         browser.close()
 
