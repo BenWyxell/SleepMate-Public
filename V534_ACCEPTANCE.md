@@ -8,7 +8,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - Stale SleepMate service-worker caches are recovered without restoring an obsolete frontend generation.
 - Repeated Dashboard ↔ Oximetria navigation does not duplicate pages, charts or runtime owners.
 - Repeated Fókusz nézet ↔ Összes grafikon ↔ Oximetria switching does not leak interactions or mutate control labels.
-- Mobile Oximetria navigation works through the real mobile drawer and the drawer closes after selection.
+- Mobile Oximetria navigation works through the real mobile drawer and the application itself closes the drawer and scrim after selection; the acceptance test must not close them on the application's behalf.
 
 ## Live O₂ lifecycle
 
