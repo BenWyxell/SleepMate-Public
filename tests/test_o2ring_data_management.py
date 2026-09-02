@@ -182,7 +182,10 @@ def test_delete_confirmation_and_settings_ui_contract_are_explicit():
     assert "SleepMateO2Combined?.refresh" in ui
 
     assert "install_o2ring_data_management(app_module)" in shell
-    assert '("o2ring-data-management.js", "sm-o2-data-management-inline")' in shell
+    assert 'data_management_path = app_module.WEB / "o2ring-data-management.js"' in shell
+    assert '"sm-o2-data-management-inline" not in text' in shell
+    assert "data_management_path.read_text" in shell
+    assert '<script id="sm-o2-data-management-inline">' in shell
     assert "self._load_known_names()" in integration
     assert 'self.manager = O2RingBLEManager(' in integration
     assert integration.index("self._load_known_names()") < integration.index("self.manager = O2RingBLEManager(")
