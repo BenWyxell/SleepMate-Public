@@ -5,22 +5,23 @@ window.__sleepmateFrontendV534=true;
 const VERSION='5.3.4';
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)],id=x=>document.getElementById(x);
 const api=async(path,opts={})=>{const r=await fetch(path,{cache:'no-store',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});const x=await r.json().catch(()=>({}));if(!r.ok)throw new Error(x.error||`HTTP ${r.status}`);return x};
-let lastO2Status=null,lastLiveNavEnabled=null;
+const setText=(el,value)=>{if(el&&el.textContent!==String(value))el.textContent=String(value)};
+let lastO2Status=null,lastLiveNavEnabled=null,settingsNormalizeRaf=0;
 
 function normalizePwaSettings(){
   const tabs=q('.settings-inner-tabs'),sel=id('settingsCategorySelect'),push=tabs?.querySelector('[data-settings-tab="push"]'),pwa=tabs?.querySelector('[data-settings-tab="pwa"]'),pushPanel=q('[data-settings-panel="push"]'),pwaPanel=id('smPwaSettingsPanel');
-  if(push)push.textContent='PWA';
+  setText(push,'PWA');
   pwa?.remove();
-  if(sel){const keep=[...sel.options].find(o=>o.value==='push');if(keep)keep.textContent='PWA';for(const o of [...sel.options].filter(o=>o.value==='pwa'))o.remove()}
+  if(sel){const keep=[...sel.options].find(o=>o.value==='push');setText(keep,'PWA');for(const o of [...sel.options].filter(o=>o.value==='pwa'))o.remove()}
   if(pushPanel&&pwaPanel&&!pushPanel.contains(pwaPanel)){
     pwaPanel.classList.remove('settings-tab-panel','panel');pwaPanel.removeAttribute('data-settings-panel');pushPanel.prepend(pwaPanel);
   }
 }
 function normalizeO2Settings(){
   const tab=q('[data-settings-tab="display"]'),panel=q('[data-settings-panel="display"]'),sel=id('settingsCategorySelect');
-  if(tab)tab.textContent='O2Ring';
-  if(sel){const o=[...sel.options].find(x=>x.value==='display');if(o)o.textContent='O2Ring'}
-  if(panel){panel.classList.add('sm-o2-settings-panel');const h=panel.querySelector(':scope > .panel-head h3');if(h)h.textContent='O2Ring';const sub=panel.querySelector(':scope > .panel-head span');if(sub)sub.textContent='O2Ring integráció, Bluetooth, automatikus kapcsolódás, illesztés és készülékbeállítások.'}
+  setText(tab,'O2Ring');
+  if(sel){const o=[...sel.options].find(x=>x.value==='display');setText(o,'O2Ring')}
+  if(panel){panel.classList.add('sm-o2-settings-panel');const h=panel.querySelector(':scope > .panel-head h3');setText(h,'O2Ring');const sub=panel.querySelector(':scope > .panel-head span');setText(sub,'O2Ring integráció, Bluetooth, automatikus kapcsolódás, illesztés és készülékbeállítások.')}
   installAdvancedO2Settings();
 }
 function normalizeSetupWizard(){
@@ -54,21 +55,21 @@ function installAdvancedO2Settings(){
   id('smO2WriteDevice').onclick=writeO2DeviceSettings;
   hydrateAdvancedO2Settings();
 }
-function setInputValue(elid,value){const el=id(elid);if(el&&document.activeElement!==el&&value!=null)el.value=String(value)}
-function setChecked(elid,value){const el=id(elid);if(el&&document.activeElement!==el)el.checked=!!value}
+function setInputValue(elid,value){const el=id(elid);if(el&&document.activeElement!==el&&value!=null&&el.value!==String(value))el.value=String(value)}
+function setChecked(elid,value){const el=id(elid),next=!!value;if(el&&document.activeElement!==el&&el.checked!==next)el.checked=next}
 function hydrateAdvancedO2Settings(){
   const s=lastO2Status?.settings||{},live=lastO2Status?.live||{},dc=live.device_config||{};
   setInputValue('smO2ClockOffset',s.o2ring_clock_offset_seconds??0);setInputValue('smO2Ref',s.o2ring_spo2_reference??90);setInputValue('smO2Ref2',s.o2ring_spo2_secondary_reference??88);setChecked('smO2AutoMatch',s.o2ring_auto_match);
   setChecked('smO2DevOxiSwitch',dc.CurOxiSwitch??dc.OxiSwitch);setInputValue('smO2DevOxi',dc.CurOxiThr??dc.OxiThr);setChecked('smO2DevHrSwitch',dc.CurHRSwitch??dc.HRSwitch);setInputValue('smO2DevHrLow',dc.HRLowThr);setInputValue('smO2DevHrHigh',dc.HRHighThr);setInputValue('smO2DevMotor',dc.CurMotor??dc.Motor);setInputValue('smO2DevLighting',dc.LightingMode);setInputValue('smO2DevLight',dc.LightStr);
-  const badge=id('smO2AdvancedState');if(badge)badge.textContent=!s.o2ring_ble_enabled?'BLE kikapcsolva':live.connected?'Kapcsolódva':'Nincs kapcsolat';
+  const badge=id('smO2AdvancedState');setText(badge,!s.o2ring_ble_enabled?'BLE kikapcsolva':live.connected?'Kapcsolódva':'Nincs kapcsolat');
   const write=id('smO2WriteDevice');if(write)write.disabled=!live.connected;
 }
 async function saveAdvancedO2Settings(){
-  const msg=id('smO2AnalysisMsg');if(msg)msg.textContent='Mentés…';
-  try{const settings=await api('/api/o2ring/settings',{method:'POST',body:JSON.stringify({o2ring_clock_offset_seconds:Number(id('smO2ClockOffset')?.value||0),o2ring_spo2_reference:Number(id('smO2Ref')?.value||90),o2ring_spo2_secondary_reference:Number(id('smO2Ref2')?.value||88),o2ring_auto_match:!!id('smO2AutoMatch')?.checked})});lastO2Status={...(lastO2Status||{}),settings};if(msg)msg.textContent='Illesztési beállítások mentve.';await window.SleepMateO2Ring?.refresh?.();hydrateAdvancedO2Settings()}catch(e){if(msg)msg.textContent=e.message||String(e)}}
+  const msg=id('smO2AnalysisMsg');setText(msg,'Mentés…');
+  try{const settings=await api('/api/o2ring/settings',{method:'POST',body:JSON.stringify({o2ring_clock_offset_seconds:Number(id('smO2ClockOffset')?.value||0),o2ring_spo2_reference:Number(id('smO2Ref')?.value||90),o2ring_spo2_secondary_reference:Number(id('smO2Ref2')?.value||88),o2ring_auto_match:!!id('smO2AutoMatch')?.checked})});lastO2Status={...(lastO2Status||{}),settings};setText(msg,'Illesztési beállítások mentve.');await window.SleepMateO2Ring?.refresh?.();hydrateAdvancedO2Settings()}catch(e){setText(msg,e.message||String(e))}}
 async function writeO2DeviceSettings(){
-  const msg=id('smO2DeviceMsg');if(msg)msg.textContent='Küldés a gyűrűre…';
-  try{await api('/api/o2ring/device-config',{method:'POST',body:JSON.stringify({oxi_alert_enabled:!!id('smO2DevOxiSwitch')?.checked,oxi_threshold:Number(id('smO2DevOxi')?.value),hr_alert_enabled:!!id('smO2DevHrSwitch')?.checked,hr_low:Number(id('smO2DevHrLow')?.value),hr_high:Number(id('smO2DevHrHigh')?.value),motor:Number(id('smO2DevMotor')?.value),lighting_mode:Number(id('smO2DevLighting')?.value),brightness:Number(id('smO2DevLight')?.value)})});if(msg)msg.textContent='Készülékbeállítások elküldve.';setTimeout(()=>window.SleepMateO2Ring?.refreshStatus?.(),600)}catch(e){if(msg)msg.textContent=e.message||String(e)}}
+  const msg=id('smO2DeviceMsg');setText(msg,'Küldés a gyűrűre…');
+  try{await api('/api/o2ring/device-config',{method:'POST',body:JSON.stringify({oxi_alert_enabled:!!id('smO2DevOxiSwitch')?.checked,oxi_threshold:Number(id('smO2DevOxi')?.value),hr_alert_enabled:!!id('smO2DevHrSwitch')?.checked,hr_low:Number(id('smO2DevHrLow')?.value),hr_high:Number(id('smO2DevHrHigh')?.value),motor:Number(id('smO2DevMotor')?.value),lighting_mode:Number(id('smO2DevLighting')?.value),brightness:Number(id('smO2DevLight')?.value)})});setText(msg,'Készülékbeállítások elküldve.');setTimeout(()=>window.SleepMateO2Ring?.refreshStatus?.(),600)}catch(e){setText(msg,e.message||String(e))}}
 
 let saveBusy=false,saveQueued=false;
 async function saveO2Toggles(){
@@ -78,31 +79,30 @@ async function saveO2Toggles(){
     while(saveQueued){
       saveQueued=false;
       const payload={o2ring_enabled:!!id('smO2Enabled')?.checked,o2ring_ble_enabled:!!id('smO2Ble')?.checked,o2ring_auto_connect:!!id('smO2AutoConnect')?.checked,o2ring_auto_sync:!!id('smO2AutoSync')?.checked};
-      panel?.classList.add('sm-saving');const msg=id('smO2MasterMsg');if(msg)msg.textContent='Mentés…';
+      panel?.classList.add('sm-saving');const msg=id('smO2MasterMsg');setText(msg,'Mentés…');
       try{
         const settings=await api('/api/o2ring/settings',{method:'POST',body:JSON.stringify(payload)});
         for(const[k,elid]of [['o2ring_enabled','smO2Enabled'],['o2ring_ble_enabled','smO2Ble'],['o2ring_auto_connect','smO2AutoConnect'],['o2ring_auto_sync','smO2AutoSync']])if(id(elid))id(elid).checked=!!settings[k];
         lastO2Status={...(lastO2Status||{}),settings};normalizeLiveNav(!!settings.o2ring_enabled);
-        if(msg)msg.textContent='O2Ring beállítások mentve.';
+        setText(msg,'O2Ring beállítások mentve.');
         await window.SleepMateV530?.refreshO2?.();await window.SleepMateO2Ring?.refresh?.();
-      }catch(e){if(msg)msg.textContent=e.message||String(e)}
+      }catch(e){setText(msg,e.message||String(e))}
     }
   }finally{saveBusy=false;panel?.classList.remove('sm-saving');normalizeAll()}
 }
 function captureO2Toggle(e){if(!['smO2Enabled','smO2Ble','smO2AutoConnect','smO2AutoSync'].includes(e.target?.id))return;e.stopImmediatePropagation();saveO2Toggles()}
 
 function fixLatestLoading(){
-  const status=id('latestStatus'),sessions=id('latestSessions');
-  if(status)status.textContent='—';
-  if(sessions)sessions.textContent='—';
+  setText(id('latestStatus'),'—');
+  setText(id('latestSessions'),'—');
 }
 function syncLatestSessionCard(){
   const status=id('latestStatus'),sessions=id('latestSessions');if(!status||!sessions)return;
   let latest=null;try{latest=state?.dashboardOverview?.latest||null}catch{}
-  if(!latest){status.textContent='—';sessions.textContent='—';return}
+  if(!latest){setText(status,'—');setText(sessions,'—');return}
   const count=Array.isArray(latest.sessions)?latest.sessions.length:null;
-  status.textContent=count==null?'—':String(count);
-  sessions.textContent=count==null?'—':'szakasz';
+  setText(status,count==null?'—':String(count));
+  setText(sessions,count==null?'—':'szakasz');
 }
 function hookOverviewLoading(){
   try{
@@ -113,13 +113,28 @@ function hookOverviewLoading(){
     }
   }catch{}
 }
+function watchLatestSessionCard(){
+  const status=id('latestStatus'),sessions=id('latestSessions');if(!status||!sessions||status.__smLatest534)return;
+  status.__smLatest534=true;
+  const ob=new MutationObserver(()=>syncLatestSessionCard());
+  ob.observe(status,{childList:true,characterData:true,subtree:true});
+  ob.observe(sessions,{childList:true,characterData:true,subtree:true});
+}
 async function enforceFrontendGeneration(){
   const meta=q('meta[name="sleepmate-ui-version"]')?.content||'';let backend='';try{backend=String((await api('/api/version')).version||'')}catch{}const expected=backend||VERSION;if(expected!==VERSION)return;
   try{const keys=await caches.keys();const stale=keys.filter(k=>k.startsWith('sleepmate-')&&!k.includes(`v${VERSION}`));if(stale.length)await Promise.all(stale.map(k=>caches.delete(k)))}catch{}
   if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
   if(meta&&meta!==expected&&!sessionStorage.getItem('sm-v534-reloaded')){sessionStorage.setItem('sm-v534-reloaded','1');location.reload();return}sessionStorage.removeItem('sm-v534-reloaded');
 }
-function waitForDynamicSettings(){normalizeAll();const page=id('page-settings');if(!page)return;if(id('smPwaSettingsPanel')&&id('smO2Master')&&id('frSettingsReopen')){normalizeAll();return}const ob=new MutationObserver(()=>{normalizeAll();if(id('smPwaSettingsPanel')&&id('smO2Master')&&id('frSettingsReopen'))ob.disconnect()});ob.observe(page,{childList:true,subtree:true});setTimeout(()=>{ob.disconnect();normalizeAll()},8000)}
+function waitForDynamicSettings(){
+  normalizeAll();const page=id('page-settings');if(!page)return;
+  const done=()=>!!(id('smPwaSettingsPanel')&&id('smO2Master')&&id('frSettingsReopen'));
+  if(done()){normalizeAll();return}
+  let ob=null;
+  const schedule=()=>{if(settingsNormalizeRaf)return;settingsNormalizeRaf=requestAnimationFrame(()=>{settingsNormalizeRaf=0;normalizeAll();if(done())ob?.disconnect()})};
+  ob=new MutationObserver(schedule);ob.observe(page,{childList:true,subtree:true});
+  setTimeout(()=>{ob.disconnect();schedule()},8000)
+}
 function settingsVisible(){return !!id('page-settings')?.classList.contains('active')}
 function bind(){
   document.addEventListener('change',captureO2Toggle,true);
@@ -133,7 +148,7 @@ function bind(){
   try{if(typeof setSettingsTab==='function'&&!setSettingsTab.__sm534){const orig=setSettingsTab;setSettingsTab=function(name){const r=orig(name);requestAnimationFrame(normalizeAll);return r};setSettingsTab.__sm534=true}}catch{}
 }
 async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);if(settingsVisible())hydrateAdvancedO2Settings()}
-async function boot(){bind();hookOverviewLoading();fixLatestLoading();await refreshO2State();waitForDynamicSettings();normalizeAll();await enforceFrontendGeneration();setTimeout(normalizeAll,300);setTimeout(normalizeAll,1200)}
+async function boot(){bind();hookOverviewLoading();watchLatestSessionCard();fixLatestLoading();await refreshO2State();waitForDynamicSettings();normalizeAll();await enforceFrontendGeneration();setTimeout(normalizeAll,300);setTimeout(normalizeAll,1200)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State,syncLatestSessionCard};
 })();
