@@ -25,14 +25,22 @@ class _EventHub:
     the page is backgrounded. Keeping only the last event can lose an O2 import or
     SleepSync completion that happened between reconnects. The bounded history
     lets the client resume from its last sequence number without polling or a full
-    database rescan.
+    database rescan. Sequence numbers are seeded from wall-clock milliseconds so
+    a backend restart does not reset them behind an already-running PWA cursor.
     """
 
     def __init__(self, max_events: int = 256) -> None:
         self._cond = threading.Condition()
-        self._seq = 0
-        self._last: dict[str, Any] = {"seq": 0, "type": "boot", "days": [], "source": "runtime"}
-        self._history: deque[dict[str, Any]] = deque([dict(self._last)], maxlen=max(16, int(max_events)))
+        self._seq = int(time.time() * 1000)
+        self._last: dict[str, Any] = {
+            "seq": self._seq,
+            "type": "boot",
+            "days": [],
+            "source": "runtime",
+            "details": {},
+            "timestamp": time.time(),
+        }
+        self._history: deque[dict[str, Any]] = deque(maxlen=max(16, int(max_events)))
 
     def publish(self, event_type: str, *, days: Iterable[str] = (), source: str = "runtime", details: dict[str, Any] | None = None) -> dict[str, Any]:
         clean = sorted({str(day).replace("-", "")[:8] for day in days if str(day).replace("-", "")[:8].isdigit()})
@@ -343,9 +351,14 @@ def install_o2ring_runtime_v534(app_module) -> None:
                 return self._json({"error": "Az O2Ring integráció nincs bekapcsolva."}, 409)
             query = urllib.parse.parse_qs(parsed.query)
             try:
-                after = int(query.get("after", ["0"])[0])
+                query_after = int(query.get("after", ["0"])[0])
             except Exception:
-                after = 0
+                query_after = 0
+            try:
+                last_event_id = int(str(self.headers.get("Last-Event-ID") or "0").strip() or 0)
+            except Exception:
+                last_event_id = 0
+            after = max(query_after, last_event_id)
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache, no-store")
@@ -361,7 +374,8 @@ def install_o2ring_runtime_v534(app_module) -> None:
                     else:
                         current = int(event.get("seq") or current)
                         payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
-                        self.wfile.write(("event: invalidation\ndata: " + payload + "\n\n").encode("utf-8"))
+                        frame = f"id: {current}\nevent: invalidation\ndata: {payload}\n\n"
+                        self.wfile.write(frame.encode("utf-8"))
                     self.wfile.flush()
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
                 return
