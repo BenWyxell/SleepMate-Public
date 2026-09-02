@@ -339,10 +339,10 @@ def main() -> int:
 
         page.locator('#sidebar [data-page="oximetry"]').click()
         page.wait_for_function("() => document.querySelector('#page-oximetry')?.classList.contains('active')")
-        page.wait_for_function("n => window.__smAcceptanceO2.bufferCalls > n", before_buffers)
+        page.wait_for_function("n => window.__smAcceptanceO2.bufferCalls > n", arg=before_buffers)
         page.wait_for_function(
             "t => document.getElementById('o2rLiveDual')?._smO2Meta?.rows?.some(r => r.timestamp > t)",
-            latest_before,
+            arg=latest_before,
         )
         page.wait_for_timeout(300)
         require(len(live_stream_requests) > before_streams, "returning to Oximetria Live did not reopen the SSE stream")

@@ -255,6 +255,11 @@ def test_acceptance_o2_trends_live_handoff_and_hover_redraw_are_gap_safe():
         "R.hoverRaf.delete(group)",
         "const since=R.live.at(-1)?.timestamp||0",
         "openLiveStream();await refillLive(since)",
+        "liveAbort:null",
+        "new AbortController()",
+        "signal:ctl.signal",
+        "R.liveAbort.abort()",
+        "if(R.liveResumePromise===work)",
         "function closeMobileO2Drawer()",
     ):
         assert marker in js
