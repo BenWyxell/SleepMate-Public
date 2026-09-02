@@ -21,7 +21,7 @@ This branch is not releasable until the following user-facing behaviours are val
 
 - Live, recording and trend O₂ charts expose an exact HH:MM:SS hover crosshair/tooltip with the value of each displayed series.
 - O₂ chart zoom/pan interactions work with mouse/touch interaction contracts and reset cleanly.
-- Crosshair redraw is requestAnimationFrame-coalesced to avoid pointer-move render storms.
+- Crosshair redraw is requestAnimationFrame-coalesced to avoid pointer-move render storms, and synchronized canvases sharing one redraw function invoke that function at most once per frame.
 - Daily O₂ trend series use a day-scale gap policy so valid nightly points form continuous trend lines instead of being split by the high-frequency live-sample gap rule.
 - CPAP-aligned O₂ overlays use the same therapy time range and gap-aware timestamp alignment.
 
