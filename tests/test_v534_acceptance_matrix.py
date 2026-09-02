@@ -167,6 +167,7 @@ def test_acceptance_p2_focus_stack_daily_dashboard_night_and_report_o2_surfaces_
 
 def test_acceptance_p2_overlay_is_per_chart_timestamp_aligned_gap_aware_and_secondary_scaled():
     js = read("web/o2ring.js")
+    css = read("web/o2ring-v534.css")
     for marker in (
         'value="off"',
         'value="spo2"',
@@ -185,6 +186,8 @@ def test_acceptance_p2_overlay_is_per_chart_timestamp_aligned_gap_aware_and_seco
         "clock(r.timestamp)",
     ):
         assert marker in js
+    assert "right:-42px!important" in css
+    assert "width:calc(100% + 42px)!important" in css
 
 
 def test_acceptance_p2_dashboard_bars_loading_and_palette_are_consistent():
@@ -197,7 +200,10 @@ def test_acceptance_p2_dashboard_bars_loading_and_palette_are_consistent():
         assert color in js
     assert "#trendUsage,#trendEvents{filter:none!important}" in css
     assert "function fixLatestLoading()" in front
-    assert "e.textContent='—'" in front
+    assert "function syncLatestSessionCard()" in front
+    assert "latest.sessions" in front
+    assert "status.textContent='—'" in front
+    assert "Befejezve" not in front
 
 
 def test_acceptance_settings_pwa_and_setup_wizard_are_source_level_single_and_responsive():
