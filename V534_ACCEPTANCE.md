@@ -13,7 +13,7 @@ This branch is not releasable until the following user-facing behaviours are val
 ## Live O₂ lifecycle
 
 - Live O₂ streaming and chart repainting are active only while the visible Oximetria / Élő O₂ monitor view is active.
-- Leaving Oximetria closes the live SSE and does not perform live-buffer refill work in the background.
+- Leaving Oximetria closes the live SSE and does not perform live-buffer refill work in the background; route departure itself must disable Live immediately, even before the outgoing page loses its active DOM class.
 - Returning to Oximetria restores the missed interval with a bounded batch request and resumes the live stream without a hand-off gap.
 - Background SleepSync/O2 invalidation remains event-driven so completed therapy imports can update the relevant views without frontend polling.
 
