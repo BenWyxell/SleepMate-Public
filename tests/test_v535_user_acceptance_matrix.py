@@ -95,3 +95,7 @@ def test_15_night_o2_card_is_a_normal_grid_card_not_full_width():
     assert '#nightEvalList .sm-night-o2-card' in CSS
     assert 'width:auto!important' in CSS and 'max-width:none!important' in CSS
     assert 'night O2 card still spans the full PC width' in BROWSER
+
+
+def test_browser_acceptance_fixture_has_single_live_rows_declaration():
+    assert BROWSER.count('const liveRows = [') == 1

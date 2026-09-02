@@ -142,7 +142,6 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
             t90_seconds:t90, odi3, odi4, coverage_percent:100
           });
           const liveRows = [
-          const liveRows = [
             {timestamp:now-60,spo2:97,heart_rate:62,motion:0},
             {timestamp:now-40,spo2:96,heart_rate:64,motion:0},
             {timestamp:now-20,spo2:95,heart_rate:66,motion:1},
