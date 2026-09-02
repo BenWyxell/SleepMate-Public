@@ -36,8 +36,11 @@ def test_combined_timeline_is_owned_by_v534_authoritative_runtime():
     assert 'UI_VERSION = "5.3.4"' in shell
     assert "o2ring-v532.js" not in shell
     assert "frontend-v533.js" not in shell
-    for marker in ("smO2FocusDual", "smStackO2Dual", "o2rLiveDual", "daily-o2"):
+    for marker in ("O2_FOCUS_DEFS", "o2_spo2", "o2_hr", "smStackO2Dual", "o2rLiveDual", "daily-o2"):
         assert marker in runtime
+    assert "smO2FocusDual" not in runtime
+    assert "smO2FocusSpo2" not in runtime
+    assert "smO2FocusHr" not in runtime
 
 
 def test_combined_timeline_is_inert_without_dynamic_o2_daily_panel():
