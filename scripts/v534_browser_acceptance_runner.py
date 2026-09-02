@@ -73,6 +73,39 @@ if _stale_seed not in _acceptance_source:
     raise RuntimeError("Legacy stale-cache recovery contract changed unexpectedly.")
 _acceptance_source = _acceptance_source.replace(_stale_seed, _stale_reactivation, 1)
 
+# The legacy route-leak assertion captured its baseline before the Oximetria
+# page's first legitimate lazy initialization. Warm the route once, then require
+# the initialized canvas DOM to remain exactly stable across all later switches.
+_navigation_leak_block = """        progress(\"repeated Dashboard/Oximetria navigation\")
+        initial_canvas_count = page.locator(\"#page-oximetry canvas\").count()
+        for _ in range(8):
+            navigate(page, \"dashboard\")
+            page.locator('#sidebar [data-page=\"oximetry\"]').click()
+            page.wait_for_function(\"() => document.querySelector('#page-oximetry')?.classList.contains('active')\")
+            require(page.locator(\"#page-oximetry\").count() == 1, \"Oximetria page duplicated during route switching\")
+            require(page.locator(\"#page-oximetry canvas\").count() == initial_canvas_count, \"O2 chart DOM leaked during route switching\")
+            navigate(page, \"dashboard\")
+"""
+_navigation_stable_block = """        progress(\"repeated Dashboard/Oximetria navigation\")
+        navigate(page, \"dashboard\")
+        page.locator('#sidebar [data-page=\"oximetry\"]').click()
+        page.wait_for_function(\"() => document.querySelector('#page-oximetry')?.classList.contains('active')\")
+        page.wait_for_timeout(350)
+        initial_canvas_count = page.locator(\"#page-oximetry canvas\").count()
+        require(initial_canvas_count > 0, \"O2 chart DOM did not initialize on first Oximetria visit\")
+        for _ in range(8):
+            navigate(page, \"dashboard\")
+            page.locator('#sidebar [data-page=\"oximetry\"]').click()
+            page.wait_for_function(\"() => document.querySelector('#page-oximetry')?.classList.contains('active')\")
+            page.wait_for_timeout(120)
+            require(page.locator(\"#page-oximetry\").count() == 1, \"Oximetria page duplicated during route switching\")
+            require(page.locator(\"#page-oximetry canvas\").count() == initial_canvas_count, \"O2 chart DOM leaked during route switching\")
+            navigate(page, \"dashboard\")
+"""
+if _navigation_leak_block not in _acceptance_source:
+    raise RuntimeError("Legacy Oximetria route-leak contract changed unexpectedly.")
+_acceptance_source = _acceptance_source.replace(_navigation_leak_block, _navigation_stable_block, 1)
+
 # Inject the canonical application version next to the retained v5.3.4 UI
 # generation constant. This file mutation exists only in the Actions checkout.
 _acceptance_source = _acceptance_source.replace(
