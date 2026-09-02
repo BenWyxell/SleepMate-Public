@@ -1,0 +1,217 @@
+name: Finalize SleepMate 5.3.3 frontend recovery release
+
+on:
+  push:
+    branches:
+      - v5.3.3-frontend-pwa-recovery
+    paths:
+      - .github/workflows/v533-finalize-release.yml
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: sleepmate-v533-finalize
+  cancel-in-progress: false
+
+jobs:
+  publish-verified-v533:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout finalizer commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve immutable verified release candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_SHA="$(git rev-parse HEAD^)"
+          test -n "$RELEASE_SHA"
+          changed="$(git diff --name-only "$RELEASE_SHA" "$GITHUB_SHA")"
+          [[ "$changed" == '.github/workflows/v533-finalize-release.yml' ]] || {
+            echo 'Finalizer commit contains product/source changes; refusing publication.' >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          }
+          echo "RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
+          echo "Release candidate: $RELEASE_SHA"
+
+      - name: Guard already published release
+        id: target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view v5.3.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'exists=true' >> "$GITHUB_OUTPUT"
+            echo 'SleepMate v5.3.3 is already published; no release mutation will be performed.'
+          else
+            echo 'exists=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify exact v5.3.3 candidate identity
+        if: steps.target.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$RELEASE_SHA"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git fetch --tags --force
+          BASE_SHA="$(git rev-list -n 1 v5.3.2)"
+          test -n "$BASE_SHA"
+          git merge-base --is-ancestor "$BASE_SHA" "$RELEASE_SHA"
+          test "$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')" = '5.3.3'
+          test "$(python -c 'from cpap.version import API_VERSION; print(API_VERSION)')" = '19'
+          test "$(python -c 'from cpap.version import BUILD_CHANNEL; print(BUILD_CHANNEL)')" = 'stable'
+          test "$(head -n 1 RELEASE_NOTES_5_3_3.md)" = '# SleepMate 5.3.3'
+          python scripts/verify_v533_frontend.py
+          python scripts/verify_public_source.py
+          python scripts/verify_sleepsync_integration.py
+          python -m py_compile cpap/v530_features.py cpap/o2ring_v532.py cpap/o2ring_integration.py cpap/o2ring_ble.py sleepmate_main.py
+          node --check web/frontend-v533.js
+          node --check web/o2ring-v532.js
+          node --check web/sleepmate-v530.js
+          node --check web/o2ring.js
+          node --check web/o2ring-report-ui.js
+
+      - name: Resolve successful exact-SHA pre-release gate
+        if: steps.target.outputs.exists != 'true'
+        id: prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&per_page=100")"
+          row="$(printf '%s' "$runs" | jq -c '[.workflow_runs[] | select(.name == "v5.3.3 frontend recovery pre-release CI" and .head_sha == env.RELEASE_SHA and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last // empty')"
+          [[ -n "$row" ]] || { echo 'No successful exact-SHA v5.3.3 pre-release gate exists.' >&2; exit 1; }
+          run_id="$(printf '%s' "$row" | jq -r '.id')"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Using pre-release run $run_id."
+
+      - name: Resolve successful official Windows VERIFIED run
+        if: steps.target.outputs.exists != 'true'
+        id: official
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&per_page=100")"
+          row="$(printf '%s' "$runs" | jq -c '[.workflow_runs[] | select(.name == "Windows release + Hungarian MSI + verified publish" and .event == "workflow_dispatch" and .head_sha == env.RELEASE_SHA and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last // empty')"
+          [[ -n "$row" ]] || { echo 'No successful exact-SHA official Windows VERIFIED run exists.' >&2; exit 1; }
+          run_id="$(printf '%s' "$row" | jq -r '.id')"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts" --jq '.artifacts[] | select(.expired == false) | .name' | grep -Fxq 'SleepMate-Windows-x64-VERIFIED-RELEASE'
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Using official Windows VERIFIED run $run_id."
+
+      - name: Download and re-verify official VERIFIED artifact
+        if: steps.target.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ steps.official.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          mkdir release-staging
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name 'SleepMate-Windows-x64-VERIFIED-RELEASE' --dir release-staging
+          test -s release-staging/SHA256SUMS.txt
+          (
+            cd release-staging
+            sha256sum -c SHA256SUMS.txt
+          )
+          for file in SleepMate_Setup_v5.3.3.msi SleepMate_v5.3.3_windows_x64.zip sleepmate-update.json SHA256SUMS.txt release-metadata.json; do
+            test -s "release-staging/$file"
+          done
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          manifest = json.loads(Path('release-staging/sleepmate-update.json').read_text(encoding='utf-8'))
+          metadata = json.loads(Path('release-staging/release-metadata.json').read_text(encoding='utf-8'))
+          assert manifest['version'] == '5.3.3', manifest
+          assert metadata['version'] == '5.3.3', metadata
+          assert manifest['git_commit'] == os.environ['RELEASE_SHA'], manifest
+          assert metadata['git_commit'] == os.environ['RELEASE_SHA'], metadata
+          PY
+
+      - name: Create immutable v5.3.3 tag after verification
+        if: steps.target.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG='v5.3.3'
+          if existing="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" 2>/dev/null)"; then
+            old_sha="$(printf '%s' "$existing" | jq -r '.object.sha')"
+            [[ "$old_sha" == "$RELEASE_SHA" ]] || { echo "$TAG already points to a different commit; refusing to move it." >&2; exit 1; }
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$RELEASE_SHA" >/dev/null
+          fi
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')" == "$RELEASE_SHA" ]]
+
+      - name: Build final v5.3.3 release notes
+        if: steps.target.outputs.exists != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat RELEASE_NOTES_5_3_3.md > release-notes.generated.md
+          {
+            echo
+            echo '---'
+            echo
+            echo '## Kiadás ellenőrzése'
+            echo
+            echo 'A 5.3.3 kizárólag az ugyanazon commiton sikeresen lefutott frontend recovery pre-release kapu és a hivatalos Windows workflow **VERIFIED** artifactja alapján kerül publikálásra. A kapu tartalmazza a teljes publikus tesztkészletet, a PyInstaller Windows program-tree buildet, a WiX 3.14.1 magyar MSI buildet és payload-ellenőrzést, valódi msiexec telepítést, telepített backend/API smoke testet, eltávolítást, majd a ZIP/MSI/manifeszt SHA-256 integritásellenőrzését.'
+            echo
+            echo '**Aláírás:** a Windows kiadás jelenleg nincs Authenticode-dal aláírva, ezért SmartScreen vagy vírusvédelmi reputációs figyelmeztetés megjelenhet.'
+            echo
+            echo '**Hardver:** fizikai O2Ring BLE rádiós/firmware validáció nem automatizálható a CI-ben, ezért ilyen hardvertesztet a release nem állít.'
+            echo
+            printf 'Verified commit: `%s`\n' "$RELEASE_SHA"
+          } >> release-notes.generated.md
+
+      - name: Publish SleepMate 5.3.3 from VERIFIED artifact
+        if: steps.target.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG='v5.3.3'
+          TITLE='SleepMate 5.3.3 — Frontend + PWA recovery'
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_SHA" --title "$TITLE" --notes-file release-notes.generated.md --draft
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" release-staging/* --clobber
+          (
+            cd release-staging
+            sha256sum -c SHA256SUMS.txt
+          )
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
+
+      - name: Final public v5.3.3 verification
+        if: steps.target.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG='v5.3.3'
+          TITLE='SleepMate 5.3.3 — Frontend + PWA recovery'
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')" == "$RELEASE_SHA" ]]
+          release="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,name,assets,url)"
+          [[ "$(printf '%s' "$release" | jq -r '.isDraft')" == 'false' ]]
+          [[ "$(printf '%s' "$release" | jq -r '.isPrerelease')" == 'false' ]]
+          [[ "$(printf '%s' "$release" | jq -r '.name')" == "$TITLE" ]]
+          names="$(printf '%s' "$release" | jq -r '.assets[].name')"
+          grep -Fxq 'SleepMate_Setup_v5.3.3.msi' <<<"$names"
+          grep -Fxq 'SleepMate_v5.3.3_windows_x64.zip' <<<"$names"
+          grep -Fxq 'sleepmate-update.json' <<<"$names"
+          grep -Fxq 'SHA256SUMS.txt' <<<"$names"
+          grep -Fxq 'release-metadata.json' <<<"$names"
+          echo "$release" | jq .
