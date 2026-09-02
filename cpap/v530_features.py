@@ -4,13 +4,15 @@ import urllib.parse
 
 
 _installed = False
+UI_VERSION = "5.3.4"
 
 
 def install_v530_features(app_module) -> None:
-    """Layer the v5.3+ visual/PWA controller over the proven data core.
+    """Install the v5.3.4 frontend shell over the stable SleepMate data core.
 
-    v5.3.3 adds a deterministic frontend recovery controller which owns version
-    synchronization, settings deduplication and the dashboard/O2 view state.
+    v5.3.4 deliberately removes the layered v5.3.2/v5.3.3 O2 controllers from
+    the active shell. The base ``o2ring.js`` is now the single O2 UI owner;
+    ``frontend-v534.js`` only owns general PWA/settings/cache normalization.
     """
     global _installed
     if _installed:
@@ -21,12 +23,14 @@ def install_v530_features(app_module) -> None:
     from .o2ring_diagnostics import install_o2ring_diagnostics
     from .o2ring_restore import install_o2ring_restore
     from .o2ring_v532 import install_o2ring_v532
+    from .o2ring_runtime_v534 import install_o2ring_runtime_v534
 
     install_o2ring_data_management(app_module)
     install_o2ring_ai(app_module)
     install_o2ring_diagnostics(app_module)
     install_o2ring_restore(app_module)
     install_o2ring_v532(app_module)
+    install_o2ring_runtime_v534(app_module)
 
     handler_cls = app_module.Handler
     previous_get = handler_cls.do_GET
@@ -37,36 +41,29 @@ def install_v530_features(app_module) -> None:
             try:
                 index_path = app_module.WEB / "index.html"
                 text = index_path.read_text(encoding="utf-8")
-                # Never expose a stale source-shell cache key. Packaged builds may
-                # already contain the current version; these replacements are safe.
-                text = text.replace('/style.css?v=5.0.0', '/style.css?v=5.3.3')
-                text = text.replace('/app.js?v=5.0.0', '/app.js?v=5.3.3')
-                text = text.replace('<strong id="sidebarVersion">v2.7</strong>', '<strong id="sidebarVersion">v5.3.3</strong>')
+                text = text.replace('/style.css?v=5.0.0', f'/style.css?v={UI_VERSION}')
+                text = text.replace('/app.js?v=5.0.0', f'/app.js?v={UI_VERSION}')
+                text = text.replace('<strong id="sidebarVersion">v2.7</strong>', f'<strong id="sidebarVersion">v{UI_VERSION}</strong>')
+                text = text.replace('<strong id="sidebarVersion">v5.0.0</strong>', f'<strong id="sidebarVersion">v{UI_VERSION}</strong>')
 
                 head_assets: list[str] = []
                 if 'name="sleepmate-ui-version"' not in text:
-                    head_assets.append('<meta name="sleepmate-ui-version" content="5.3.3">')
+                    head_assets.append(f'<meta name="sleepmate-ui-version" content="{UI_VERSION}">')
                 if "sleepmate-aurora.css" not in text:
-                    head_assets.append('<link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.3">')
+                    head_assets.append(f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={UI_VERSION}">')
                 if "sleepmate-v530.css" not in text:
-                    head_assets.append('<link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.3">')
+                    head_assets.append(f'<link rel="stylesheet" href="/sleepmate-v530.css?v={UI_VERSION}">')
+                if "o2ring-v534.css" not in text:
+                    head_assets.append(f'<link rel="stylesheet" href="/o2ring-v534.css?v={UI_VERSION}">')
                 if "sm-o2-master-visibility" not in text:
                     head_assets.append(
                         '<style id="sm-o2-master-visibility">'
                         '#page-settings [data-settings-panel="display"]:has(#smO2Enabled:not(:checked))>'
-                        ':not(#smO2Master){display:none!important}'
+                        ':not(#smO2Master):not(.panel-head){display:none!important}'
                         'body:has(#smO2Enabled:not(:checked)) .o2ring-report-option{display:none!important}'
+                        '[data-settings-tab="pwa"]{display:none!important}'
                         '</style>'
                     )
-
-                for filename, element_id in (
-                    ("o2ring-v532.css", "sm-o2-v532-inline-css"),
-                    ("frontend-v533.css", "sm-frontend-v533-inline-css"),
-                ):
-                    css_path = app_module.WEB / filename
-                    if css_path.is_file() and element_id not in text:
-                        css = css_path.read_text(encoding="utf-8").replace("</style", "<\\/style")
-                        head_assets.append(f'<style id="{element_id}">{css}</style>')
 
                 if head_assets:
                     marker = "</head>"
@@ -85,12 +82,11 @@ def install_v530_features(app_module) -> None:
                 if "sleepmate-sleep-refresh-v5212.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>')
                 if "sleepmate-v530.js" not in text:
-                    scripts.append('<script src="/sleepmate-v530.js?v=5.3.3"></script>')
+                    scripts.append(f'<script src="/sleepmate-v530.js?v={UI_VERSION}"></script>')
 
                 inline_features = (
                     ("o2ring-data-management.js", "sm-o2-data-management-inline"),
-                    ("o2ring-v532.js", "sm-o2-v532-inline"),
-                    ("frontend-v533.js", "sm-frontend-v533-inline"),
+                    ("frontend-v534.js", "sm-frontend-v534-inline"),
                 )
                 for filename, element_id in inline_features:
                     feature_path = app_module.WEB / filename
@@ -98,6 +94,8 @@ def install_v530_features(app_module) -> None:
                         feature_js = feature_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
                         scripts.append(f'<script id="{element_id}">{feature_js}</script>')
 
+                # Historical v532/v533 files remain in the source tree for old
+                # release reproducibility, but are intentionally not active here.
                 if scripts:
                     marker = "</body>"
                     inject = "\n" + "\n".join(scripts) + "\n"
@@ -109,7 +107,7 @@ def install_v530_features(app_module) -> None:
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Pragma", "no-cache")
-                self.send_header("X-SleepMate-UI-Version", "5.3.3")
+                self.send_header("X-SleepMate-UI-Version", UI_VERSION)
                 self.end_headers()
                 self.wfile.write(body)
                 return
@@ -121,4 +119,4 @@ def install_v530_features(app_module) -> None:
     _installed = True
 
 
-__all__ = ["install_v530_features"]
+__all__ = ["install_v530_features", "UI_VERSION"]
