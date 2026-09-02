@@ -1,0 +1,52 @@
+name: v5.3.4 one-shot Live O2 route gate
+
+on:
+  push:
+    branches:
+      - v5.3.4-o2-full-refactor
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gate Live O2 by actual route and self-remove migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          js_path = Path('web/o2ring.js')
+          js = js_path.read_text(encoding='utf-8')
+          old = "function o2PageVisible(){return document.visibilityState==='visible'&&id('page-oximetry')?.classList.contains('active')&&R.pageTab==='live'}"
+          new = "function o2PageVisible(){return document.visibilityState==='visible'&&location.hash.startsWith('#oximetry')&&id('page-oximetry')?.classList.contains('active')&&R.pageTab==='live'}"
+          if js.count(old) != 1:
+              raise SystemExit(f'Expected exactly one o2PageVisible route-gate target, found {js.count(old)}')
+          js_path.write_text(js.replace(old, new, 1), encoding='utf-8')
+
+          test_path = Path('tests/test_v534_acceptance_matrix.py')
+          test = test_path.read_text(encoding='utf-8')
+          anchor = '    assert "class _LiveBuffer" in stream\n'
+          guard = '    assert "function o2PageVisible(){return document.visibilityState===\'visible\'&&location.hash.startsWith(\'#oximetry\')" in js\n'
+          if test.count(anchor) != 1:
+              raise SystemExit(f'Expected exactly one acceptance insertion anchor, found {test.count(anchor)}')
+          test_path.write_text(test.replace(anchor, guard + anchor, 1), encoding='utf-8')
+          PY
+          node --check web/o2ring.js
+          python -m pip install --disable-pip-version-check pytest >/dev/null
+          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py tests/test_v534_first_load_regression.py tests/test_v534_packaging_acceptance.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/v534-live-route-gate-migration.yml
+          git add web/o2ring.js tests/test_v534_acceptance_matrix.py
+          git diff --cached --check
+          git commit -m 'Stop Live O2 refills immediately when leaving Oximetria'
+          git push origin HEAD:v5.3.4-o2-full-refactor
