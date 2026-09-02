@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# This matrix is the source-level companion to the exact-SHA packaged Edge acceptance.
 ROOT = Path(__file__).resolve().parents[1]
 
 def read(path: str) -> str:
