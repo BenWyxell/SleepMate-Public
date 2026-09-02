@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
-from playwright.sync_api import Page, sync_playwright
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 
 VERSION = "5.3.4"
@@ -16,14 +17,95 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def wait_runtime(page: Page) -> None:
-    page.wait_for_function(
-        """() => document.querySelector('.hidden-until-ready')?.classList.contains('ready')
-            && window.SleepMateV530
-            && window.SleepMateFrontendV534
-            && window.SleepMateO2Ring""",
-        timeout=20_000,
-    )
+def runtime_snapshot(
+    page: Page,
+    *,
+    page_errors: list[str] | None = None,
+    console_errors: list[str] | None = None,
+    request_failures: list[str] | None = None,
+    http_errors: list[str] | None = None,
+) -> dict:
+    """Capture enough browser state to distinguish a stale assertion from a real boot failure."""
+    try:
+        browser_state = page.evaluate(
+            """() => {
+                const shell=document.querySelector('.hidden-until-ready');
+                const splash=document.getElementById('startupSplash');
+                const error=document.getElementById('error');
+                const scripts=[...document.scripts].map(s=>({
+                    id:s.id||'',
+                    src:s.src||'(inline)',
+                    readyState:s.readyState||''
+                }));
+                const resources=performance.getEntriesByType('resource')
+                    .filter(x=>x.initiatorType==='script'||x.initiatorType==='link')
+                    .map(x=>({name:x.name,initiatorType:x.initiatorType,duration:Math.round(x.duration)}))
+                    .slice(-80);
+                return {
+                    url:location.href,
+                    title:document.title,
+                    readyState:document.readyState,
+                    shellExists:!!shell,
+                    shellClass:shell?.className||null,
+                    splashClass:splash?.className||null,
+                    bodyClass:document.body?.className||'',
+                    globals:{
+                        navigate:typeof window.navigate,
+                        SleepMateV530:!!window.SleepMateV530,
+                        SleepMateFrontendV534:!!window.SleepMateFrontendV534,
+                        SleepMateO2Ring:!!window.SleepMateO2Ring,
+                        bootStarted:!!window.__sleepmateBootStarted,
+                        stableEngine130:!!window.__sleepmateStableEngine130
+                    },
+                    uiMeta:document.querySelector('meta[name="sleepmate-ui-version"]')?.content||null,
+                    sidebarVersion:document.getElementById('sidebarVersion')?.textContent?.trim()||null,
+                    visibleError:error&&!error.classList.contains('hidden')?{
+                        title:document.getElementById('errorTitle')?.textContent||'',
+                        message:document.getElementById('errorMessage')?.textContent||'',
+                        technical:document.getElementById('errorTechnical')?.textContent||''
+                    }:null,
+                    scripts,
+                    resources
+                };
+            }"""
+        )
+    except Exception as exc:  # pragma: no cover - only used when the page itself is broken
+        browser_state = {"snapshot_error": repr(exc), "url": page.url}
+    browser_state["pageErrors"] = list(page_errors or [])
+    browser_state["consoleErrors"] = list(console_errors or [])
+    browser_state["requestFailures"] = list(request_failures or [])
+    browser_state["httpErrors"] = list(http_errors or [])
+    return browser_state
+
+
+def wait_runtime(
+    page: Page,
+    *,
+    page_errors: list[str] | None = None,
+    console_errors: list[str] | None = None,
+    request_failures: list[str] | None = None,
+    http_errors: list[str] | None = None,
+) -> None:
+    try:
+        page.wait_for_function(
+            """() => document.querySelector('.hidden-until-ready')?.classList.contains('ready')
+                && window.SleepMateV530
+                && window.SleepMateFrontendV534
+                && window.SleepMateO2Ring""",
+            timeout=20_000,
+        )
+    except PlaywrightTimeoutError as exc:
+        snapshot = runtime_snapshot(
+            page,
+            page_errors=page_errors,
+            console_errors=console_errors,
+            request_failures=request_failures,
+            http_errors=http_errors,
+        )
+        raise AssertionError(
+            "SleepMate browser runtime did not become ready within the first-load acceptance window.\n"
+            + json.dumps(snapshot, ensure_ascii=False, indent=2)
+        ) from exc
     page.wait_for_timeout(350)
 
 
@@ -50,6 +132,8 @@ def main() -> int:
     require(EDGE_PATH.is_file(), f"Edge executable missing: {EDGE_PATH}")
     page_errors: list[str] = []
     console_errors: list[str] = []
+    request_failures: list[str] = []
+    http_errors: list[str] = []
     live_stream_requests: list[str] = []
 
     with sync_playwright() as p:
@@ -71,6 +155,18 @@ def main() -> int:
             else None,
         )
         page.on(
+            "requestfailed",
+            lambda req: request_failures.append(
+                f"{req.method} {req.url} :: {req.failure or 'request failed'}"
+            ),
+        )
+        page.on(
+            "response",
+            lambda res: http_errors.append(f"HTTP {res.status} {res.url}")
+            if res.status >= 400
+            else None,
+        )
+        page.on(
             "request",
             lambda req: live_stream_requests.append(req.url)
             if "/api/o2ring/live-stream" in req.url
@@ -79,7 +175,13 @@ def main() -> int:
 
         # First real browser boot: this is deliberately not a static DOM check.
         page.goto(f"{BASE_URL}/#dashboard", wait_until="domcontentloaded", timeout=20_000)
-        wait_runtime(page)
+        wait_runtime(
+            page,
+            page_errors=page_errors,
+            console_errors=console_errors,
+            request_failures=request_failures,
+            http_errors=http_errors,
+        )
 
         meta = page.locator('meta[name="sleepmate-ui-version"]').get_attribute("content")
         require(meta == VERSION, f"wrong UI generation meta: {meta}")
@@ -101,7 +203,13 @@ def main() -> int:
             }"""
         )
         page.reload(wait_until="domcontentloaded", timeout=20_000)
-        wait_runtime(page)
+        wait_runtime(
+            page,
+            page_errors=page_errors,
+            console_errors=console_errors,
+            request_failures=request_failures,
+            http_errors=http_errors,
+        )
         stale = page.evaluate("() => caches.keys()")
         require(
             "sleepmate-shell-v5.2.16-acceptance-stale" not in stale,
@@ -213,6 +321,8 @@ def main() -> int:
     # Ignore Chromium's own optional-resource console chatter only if it does not
     # originate from SleepMate JS. In the acceptance build we expect none.
     require(not console_errors, "browser console errors: " + " | ".join(console_errors))
+    require(not request_failures, "browser request failures: " + " | ".join(request_failures))
+    require(not http_errors, "browser HTTP errors: " + " | ".join(http_errors))
     print("v5.3.4 real Edge/PWA acceptance smoke: PASS")
     return 0
 
