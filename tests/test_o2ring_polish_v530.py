@@ -16,8 +16,9 @@ def test_v534_runtime_is_the_only_active_post_release_o2_owner():
 
 def test_v534_runtime_contains_requested_dashboard_and_oximetry_contracts():
     js=text("o2ring.js")
-    for marker in ("SpO₂ + pulzus – élő","smO2FocusSpo2","smO2FocusHr","smO2FocusDual","smStackO2Spo2","smStackO2Hr","smStackO2Dual","switchMode","sm-o2-overlay-select","Oximetriai összegzés","smNightO2Card","SpO₂ átlag","smO2QuickConnect","o2rTrendSpo2"):
+    for marker in ("SpO₂ + pulzus – élő","O2_FOCUS_DEFS","o2_spo2","o2_hr","card.className='overview-card sm-o2-focus-mini'","function o2CoreSignal(key)","smStackO2Spo2","smStackO2Hr","smStackO2Dual","switchMode","sm-o2-overlay-select","Oximetriai összegzés","smNightO2Card","SpO₂ átlag","smO2QuickConnect","o2rTrendSpo2"):
         assert marker in js
+    assert "smO2FocusSpo2" not in js and "smO2FocusHr" not in js and "smO2FocusDual" not in js
     assert "setInterval(" not in js
 
 def test_connect_buttons_hide_when_ring_is_connected():
