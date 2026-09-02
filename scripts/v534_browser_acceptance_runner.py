@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import time
 import urllib.request
 
 from playwright.sync_api import Page
@@ -87,11 +88,11 @@ import v534_browser_acceptance as acceptance
 _ORIGINAL_EVALUATE = Page.evaluate
 _ORIGINAL_WAIT_RUNTIME = acceptance.wait_runtime
 _CACHE_KEYS_EXPRESSION = "() => caches.keys()"
+_STALE_ACCEPTANCE_CACHE = "sleepmate-shell-v5.2.16-acceptance-stale"
 _wait_runtime_calls = 0
 
 
-def _cache_names_via_cdp(page: Page) -> list[str]:
-    """Read CacheStorage without depending on the page's navigation-prone JS context."""
+def _cache_names_once(page: Page) -> list[str]:
     session = page.context.new_cdp_session(page)
     try:
         payload = session.send(
@@ -105,6 +106,16 @@ def _cache_names_via_cdp(page: Page) -> list[str]:
         for item in payload.get("caches", [])
         if item.get("cacheName")
     )
+
+
+def _cache_names_via_cdp(page: Page) -> list[str]:
+    """Read CacheStorage after allowing asynchronous worker activation to settle."""
+    deadline = time.monotonic() + 5.0
+    names = _cache_names_once(page)
+    while _STALE_ACCEPTANCE_CACHE in names and time.monotonic() < deadline:
+        time.sleep(0.1)
+        names = _cache_names_once(page)
+    return names
 
 
 def _navigation_safe_evaluate(self: Page, expression, arg=None):
