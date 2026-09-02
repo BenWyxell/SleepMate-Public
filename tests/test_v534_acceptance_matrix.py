@@ -92,7 +92,6 @@ def test_acceptance_p1_all_o2_charts_share_exact_hover_crosshair_zoom_pan_contra
         "setHover(ctl.syncGroup,t)",
         "syncGroup:'live'",
         "syncGroup:'daily-o2'",
-        "syncGroup:'focus-o2'",
         "syncGroup:'stack-o2'",
         "syncGroup:'recording'",
         "syncGroup:'trends'",
@@ -145,9 +144,9 @@ def test_acceptance_p1_session_matching_is_timestamp_overlap_deterministic_and_d
 def test_acceptance_p2_focus_stack_daily_dashboard_night_and_report_o2_surfaces_exist():
     js = read("web/o2ring.js")
     for marker in (
-        "smO2FocusSpo2",
-        "smO2FocusHr",
-        "smO2FocusDual",
+        "O2_FOCUS_DEFS",
+        "mini-${d.key}",
+        "o2CoreSignal",
         "smStackO2Spo2",
         "smStackO2Hr",
         "smStackO2Dual",
@@ -202,7 +201,9 @@ def test_acceptance_p2_dashboard_bars_loading_and_palette_are_consistent():
     assert "#trendUsage,#trendEvents{filter:none!important}" in css
     assert "function fixLatestLoading()" in front
     assert "function syncLatestSessionCard()" in front
-    assert "latest.sessions" in front
+    assert "latest?.summary||latest" in front
+    assert "latestDuration(summary)" in front
+    assert "summary.sessions" in front
     assert "status.textContent='—'" in front
     assert "Befejezve" not in front
 

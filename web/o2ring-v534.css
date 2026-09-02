@@ -22,3 +22,8 @@
 /* v5.3.5 report + night-card polish */
 .sm-report-days-compact>.panel-head{padding:8px 10px 3px!important;margin:0 0 5px!important}.sm-report-days-compact>.panel-head h3{font-size:12px!important}.sm-report-days-compact>.panel-head span{font-size:9px!important}.sm-report-days-compact .report-days-table.clean-fixed-table{table-layout:auto!important;min-width:1080px!important}.sm-report-days-compact .report-days-table th,.sm-report-days-compact .report-days-table td{padding:6px 8px!important;line-height:1.15!important;white-space:nowrap!important;font-size:10px!important}.sm-report-days-compact .report-days-table th{font-size:9px!important}
 #nightEvalList .sm-night-o2-card{margin:0!important;width:auto!important;max-width:none!important;min-height:82px!important;background:#101923!important;border:0!important;border-radius:10px!important;box-shadow:none!important}#nightEvalList .sm-night-o2-card .night-fact-icon{background:rgba(85,216,255,.13);color:#55d8ff}
+
+
+/* v5.3.5 chart integration */
+.overview-card.sm-o2-focus-mini{background:#171b30;border-color:#242b45}.overview-card.sm-o2-focus-mini.selected{outline:1px solid #64bdfb;border-color:#64bdfb}.overview-card.sm-o2-focus-mini canvas{display:block;width:100%;height:72px;background:#101722;border-radius:4px}
+#stackedCharts .stack-chart.sm-has-o2-overlay{padding-right:52px}#stackedCharts .stack-chart.sm-has-o2-overlay .stack-canvas{overflow:visible!important}.o2r-hero-actions [data-o2r-tab].active{background:#203449;color:#77ceff;border-color:#4b7795}

@@ -47,3 +47,24 @@ def test_v535_reports_and_night_card_contract():
     for forbidden in ("Minimum <b>", "T90 <b>", "ODI3 / ODI4 <b>"):
         assert forbidden not in js[js.index("function renderNightCard"):js.index("function drawDashboardO2Mini")]
     assert ".sm-report-days-compact" in css
+
+
+def test_v535_focus_uses_normal_mini_and_hero_chart_engine():
+    js=read("web/o2ring.js")
+    assert "O2_FOCUS_DEFS" in js
+    assert "card.className='overview-card sm-o2-focus-mini'" in js
+    assert "card.onclick=()=>selectSignal(d.key)" in js
+    assert "function o2CoreSignal(key)" in js
+    focus=js[js.index("const O2_FOCUS_DEFS"):js.index("function ensureStackO2")]
+    assert "smO2FocusDual" not in focus
+
+def test_v535_o2_selection_line_weight_overlay_and_dashboard_contract():
+    js=read("web/o2ring.js"); css=read("web/o2ring-v534.css")
+    assert "drag?.mode==='zoom'" in js and "ctx.fillStyle='rgba(85,183,255,.16)'" in js
+    assert "opts.lineWidth??1.15" in js
+    assert "COLORS.spo2,1.05" in js and "COLORS.hr,1.05" in js
+    assert '<option value="off">Alapnézet</option>' in js
+    assert "scheduleOverlayRender.__smO2" in js
+    assert "sm-has-o2-overlay" in js and "sm-has-o2-overlay" in css
+    assert "function ensureDashboardO2Section()" in js
+    assert "seg.length===1" in js
