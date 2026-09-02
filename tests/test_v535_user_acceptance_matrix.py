@@ -99,3 +99,12 @@ def test_15_night_o2_card_is_a_normal_grid_card_not_full_width():
 
 def test_browser_acceptance_fixture_has_single_live_rows_declaration():
     assert BROWSER.count('const liveRows = [') == 1
+
+
+def test_release_tree_has_no_v535_one_shot_patch_helpers():
+    leftovers = [
+        p.relative_to(ROOT).as_posix()
+        for p in ROOT.rglob('*')
+        if p.is_file() and p.name.startswith('_v535_')
+    ]
+    assert leftovers == []
