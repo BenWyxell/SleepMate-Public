@@ -410,8 +410,8 @@ def main() -> int:
         page.wait_for_function("() => document.getElementById('sidebar')?.classList.contains('mobile-open')")
         page.locator('#sidebar [data-page="oximetry"]').click()
         page.wait_for_function("() => document.querySelector('#page-oximetry')?.classList.contains('active')")
-        if page.locator("#sidebarScrim.active").count():
-            page.locator("#sidebarScrim.active").click()
+        page.wait_for_function("() => !document.getElementById('sidebar')?.classList.contains('mobile-open')")
+        require(page.locator("#sidebarScrim.active").count() == 0, "mobile Oximetria navigation did not close the drawer/scrim automatically")
         page.locator('[data-o2r-tab="live"]').click()
         page.wait_for_timeout(250)
         assert_no_horizontal_overflow(page, "Oximetria iPhone portrait")
