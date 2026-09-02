@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import asdict
 from datetime import datetime
 import json
@@ -18,10 +19,20 @@ _installed = False
 
 
 class _EventHub:
-    def __init__(self) -> None:
+    """Small ordered replay buffer for O2/SleepSync invalidation events.
+
+    A browser/PWA may temporarily lose its SSE connection while Wi-Fi changes or
+    the page is backgrounded. Keeping only the last event can lose an O2 import or
+    SleepSync completion that happened between reconnects. The bounded history
+    lets the client resume from its last sequence number without polling or a full
+    database rescan.
+    """
+
+    def __init__(self, max_events: int = 256) -> None:
         self._cond = threading.Condition()
         self._seq = 0
         self._last: dict[str, Any] = {"seq": 0, "type": "boot", "days": [], "source": "runtime"}
+        self._history: deque[dict[str, Any]] = deque([dict(self._last)], maxlen=max(16, int(max_events)))
 
     def publish(self, event_type: str, *, days: Iterable[str] = (), source: str = "runtime", details: dict[str, Any] | None = None) -> dict[str, Any]:
         clean = sorted({str(day).replace("-", "")[:8] for day in days if str(day).replace("-", "")[:8].isdigit()})
@@ -35,6 +46,7 @@ class _EventHub:
                 "details": details or {},
                 "timestamp": time.time(),
             }
+            self._history.append(dict(self._last))
             self._cond.notify_all()
             return dict(self._last)
 
@@ -42,15 +54,25 @@ class _EventHub:
         with self._cond:
             return dict(self._last)
 
+    def events_after(self, after: int) -> list[dict[str, Any]]:
+        """Return retained events newer than *after*, in sequence order."""
+        with self._cond:
+            return [dict(event) for event in self._history if int(event.get("seq") or 0) > int(after)]
+
     def wait(self, after: int, timeout: float = 15.0) -> dict[str, Any] | None:
         deadline = time.monotonic() + max(0.1, timeout)
         with self._cond:
-            while self._seq <= after:
+            while True:
+                # Return the earliest retained event after the caller's cursor.
+                # Repeated calls therefore replay every missed invalidation in
+                # order instead of jumping straight to the newest one.
+                for event in self._history:
+                    if int(event.get("seq") or 0) > int(after):
+                        return dict(event)
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     return None
                 self._cond.wait(remaining)
-            return dict(self._last)
 
 
 HUB = _EventHub()
@@ -79,12 +101,23 @@ def _daily_v534(self: O2RingService, day: str, max_points: int = 8000) -> dict[s
     recordings only the strongest overlap is kept, while non-overlapping O2
     fragments remain eligible so a night may consist of multiple ring segments.
     """
+    cfg = self.settings()
+    auto_match = bool(cfg.get("o2ring_auto_match", True))
+    if not auto_match:
+        return {
+            "day": day,
+            "available": False,
+            "auto_match": False,
+            "matches": [],
+            "samples": [],
+            "summary": None,
+        }
+
     sessions = list(self.app.Handler.dataset.sessions(day))
     if not sessions:
-        return {"day": day, "available": False, "matches": [], "samples": [], "summary": None}
+        return {"day": day, "available": False, "auto_match": True, "matches": [], "samples": [], "summary": None}
 
     day_start = sessions[0].start.timestamp()
-    cfg = self.settings()
     offset = float(cfg.get("o2ring_clock_offset_seconds") or 0.0)
     recordings = self.store.list_recordings()
     chosen: list[tuple[Any, dict[str, Any], int]] = []
@@ -129,7 +162,7 @@ def _daily_v534(self: O2RingService, day: str, max_points: int = 8000) -> dict[s
             if not conflicts:
                 accepted.append(candidate)
 
-        for rank, (match, rec) in enumerate(accepted, start=1):
+        for match, rec in accepted:
             chosen.append((match, rec, session_index))
 
     matches: list[dict[str, Any]] = []
@@ -161,7 +194,7 @@ def _daily_v534(self: O2RingService, day: str, max_points: int = 8000) -> dict[s
 
     full_samples = sorted(selected.values(), key=lambda item: item.timestamp)
     if not full_samples:
-        return {"day": day, "available": False, "matches": matches, "samples": [], "summary": None}
+        return {"day": day, "available": False, "auto_match": True, "matches": matches, "samples": [], "summary": None}
 
     summary = summarize_samples(
         full_samples,
@@ -178,6 +211,7 @@ def _daily_v534(self: O2RingService, day: str, max_points: int = 8000) -> dict[s
     return {
         "day": day,
         "available": True,
+        "auto_match": True,
         "matches": matches,
         "summary": asdict(summary),
         "samples": [
@@ -212,6 +246,11 @@ def _extract_day_codes(value: Any) -> set[str]:
                 continue
             found.add(f"{y}{m}{d}")
     return found
+
+
+def _recent_day_codes(values: Iterable[Any], limit: int = 4) -> list[str]:
+    clean = sorted(_extract_day_codes(list(values)))
+    return clean[-max(1, int(limit)):]
 
 
 def _install_recording_invalidation(service: O2RingService) -> None:
@@ -257,12 +296,12 @@ def _install_sleepsync_bridge(app_module, service: O2RingService) -> None:
         if not days:
             after = list(self.handler.dataset.days())
             before_set, after_set = set(before), set(after)
-            days.update(before_set.symmetric_difference(after_set))
+            days.update(_extract_day_codes(before_set.symmetric_difference(after_set)))
             # Modified existing EDF data may not change the day list. Use only a
-            # tiny recent fallback rather than rescanning every therapy day.
+            # deterministic tiny recent fallback rather than rescanning every
+            # therapy day; sort by actual YYYYMMDD value, never collection order.
             if not days:
-                recent = after[-4:] if after else before[-4:]
-                days.update(str(day).replace("-", "")[:8] for day in recent)
+                days.update(_recent_day_codes(after or before, 4))
         clean = sorted(day for day in days if len(day) == 8 and day.isdigit())
         HUB.publish(
             "sleepsync-completed",
@@ -332,4 +371,4 @@ def install_o2ring_runtime_v534(app_module) -> None:
     _installed = True
 
 
-__all__ = ["HUB", "install_o2ring_runtime_v534", "_daily_v534", "_extract_day_codes"]
+__all__ = ["HUB", "install_o2ring_runtime_v534", "_daily_v534", "_extract_day_codes", "_recent_day_codes", "_EventHub"]
