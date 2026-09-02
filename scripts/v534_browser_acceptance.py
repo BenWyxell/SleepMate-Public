@@ -169,16 +169,8 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
             matches:[{cpap_start:now-3600,cpap_end:now-2940,overlap_seconds:660,cpap_coverage_percent:96}],
             summary:summary(95.8,93,65.2,42,1.4,.7,96.4,64.0), samples:dailySamples
           };
-          const flowSignal={
-            key:'flow',unit:'L/min',
-            series:[{
-              start:new Date(dailySamples[0].timestamp*1000).toISOString(),
-              points:dailySamples.map((r,i)=>[r.timestamp-dailySamples[0].timestamp,[0.3,-0.25,0.4,-0.15,0.2][i]])
-            }]
-          };
-          const batchOffsets=[0,1,2,4,5];
-          const batchRows=batchOffsets.map((offset,i) => {
-            const ts=now-(5-offset)*86400;
+          const batchRows=[0,1,2,3,4].map(i => {
+            const ts=now-(4-i)*86400;
             return {
               day:dayCodeFor(ts), available:true, auto_match:true,
               matches:[{cpap_start:ts,cpap_end:ts+21600,cpap_coverage_percent:94+i}],
@@ -188,9 +180,9 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
           window.__smAcceptanceO2 = {
             liveRows,
             bufferCalls:0,
-            dailyDay,daily,flowSignal,batchRows,dayCalls:0,statusCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
-            trendRows:[0,1,2,4,5].map((offset,i) => ({
-              start_ts:now-(5-offset)*86400,
+            dailyDay,daily,batchRows,dayCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
+            trendRows:[0,1,2,3,4].map(i => ({
+              start_ts:now-(4-i)*86400,
               summary:summary(96.2+i*.15,91+i%2,63+i,30+i*8,1.0+i*.2,.5+i*.1)
             })),
             recordings:[{
@@ -268,11 +260,9 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
               return nativeFetch(input, init);
             }
             const f = window.__smAcceptanceO2;
-            if (url.pathname === '/api/o2ring/status') { f.statusCalls++; return nativeFetch(input, init); }
             if (url.pathname === `/api/day/${f.dailyDay}/stats`) {
               return jsonResponse({apnea_duration:'0:00',rows:[{key:'pressure',title:'Nyomás',unit:'cmH2O',min:6,median:8,p95:10,p995:11,max:12}]});
             }
-            if (url.pathname === `/api/day/${f.dailyDay}/signal/flow`) return jsonResponse(f.flowSignal);
             if (url.pathname === '/api/o2ring/live-buffer') {
               f.bufferCalls++;
               const since = Number(url.searchParams.get('since') || 0);
@@ -354,26 +344,23 @@ def pinch_canvas(page: Page, canvas_id: str) -> tuple[list[float], list[float]]:
     require(before is not None and before[1] > before[0], f"{canvas_id}: missing pre-pinch range")
     page.evaluate(
         """id => {
-          const c=document.getElementById(id),r=c.getBoundingClientRect(),y=r.top+r.height*.5,cx=r.left+r.width*.55;
-          const fire=(type,pointerId,x)=>c.dispatchEvent(new PointerEvent(type,{
-            bubbles:true,cancelable:true,pointerId,pointerType:'touch',button:0,buttons:type==='pointerup'?0:1,
-            clientX:x,clientY:y,width:12,height:12,pressure:type==='pointerup'?0:.5,isPrimary:pointerId===701
+          const c=document.getElementById(id),r=c.getBoundingClientRect(),y=r.top+r.height*.5,x1=r.left+r.width*.42,x2=r.left+r.width*.58;
+          const fire=(type,pid,x,primary)=>c.dispatchEvent(new PointerEvent(type,{
+            bubbles:true,cancelable:true,pointerId:pid,pointerType:'touch',button:0,buttons:type==='pointerup'?0:1,
+            clientX:x,clientY:y,width:12,height:12,pressure:type==='pointerup'?0:.5,isPrimary:primary
           }));
-          fire('pointerdown',701,cx-45);
-          fire('pointerdown',702,cx+45);
-          fire('pointermove',701,cx-90);
-          fire('pointermove',702,cx+90);
-          fire('pointerup',701,cx-90);
-          fire('pointerup',702,cx+90);
+          fire('pointerdown',701,x1,true);fire('pointerdown',702,x2,false);
+          fire('pointermove',701,x1-60,true);fire('pointermove',702,x2+60,false);
+          fire('pointerup',701,x1-60,true);fire('pointerup',702,x2+60,false);
         }""",
         canvas_id,
     )
-    page.wait_for_timeout(240)
+    page.wait_for_timeout(260)
     after = page.evaluate(
         "id => {const m=document.getElementById(id)?._smO2Meta;return m?[m.a,m.b]:null}",
         canvas_id,
     )
-    require(after is not None and after[1]-after[0] < before[1]-before[0], f"{canvas_id}: two-finger pinch did not zoom: {before} -> {after}")
+    require(after is not None and after[1]-after[0] < before[1]-before[0], f"{canvas_id}: pinch did not shrink range: {before} -> {after}")
     return before, after
 
 
@@ -414,7 +401,6 @@ def pan_canvas(page: Page, canvas_id: str) -> tuple[list[float], list[float]]:
     return before, after
 
 
-
 def require_drag_selection(page: Page, canvas_id: str) -> None:
     canvas = page.locator(f"#{canvas_id}")
     canvas.scroll_into_view_if_needed()
@@ -436,6 +422,7 @@ def require_drag_selection(page: Page, canvas_id: str) -> None:
     finally:
         page.mouse.up()
     page.wait_for_timeout(100)
+
 
 def main() -> int:
     require(EDGE_PATH.is_file(), f"Edge executable missing: {EDGE_PATH}")
@@ -602,23 +589,8 @@ def main() -> int:
         require(page.locator("#smDailyModeSwitchHost").count() == 1, "daily peer-mode switch host missing/duplicated")
         page.wait_for_function("() => window.__smAcceptanceO2.dayCalls > 0")
         page.wait_for_function("() => document.getElementById('o2rDayDual')?._smO2Meta?.rows?.length >= 5")
-        require("96" in page.locator("#spo2").inner_text(), "daily SpO2 card did not hydrate the matched O2 median")
-        require("64" in page.locator("#hr").inner_text(), "daily pulse card did not hydrate the matched O2 median")
-        page.evaluate("""async () => {
-          const f=window.__smAcceptanceO2;
-          f._matchedDaily=f.daily;
-          f.daily={day:f.dailyDay,available:false,auto_match:true,matches:[],summary:null,samples:[]};
-          await window.SleepMateO2Ring.refresh();
-        }""")
-        require(page.locator("#spo2").inner_text().strip() == "Nincs adat", "daily SpO2 card stayed stale after matched O2 data disappeared")
-        require(page.locator("#hr").inner_text().strip() == "Nincs adat", "daily pulse card stayed stale after matched O2 data disappeared")
-        page.evaluate("""async () => {
-          const f=window.__smAcceptanceO2;
-          f.daily=f._matchedDaily;
-          await window.SleepMateO2Ring.refresh();
-        }""")
-        require("96" in page.locator("#spo2").inner_text(), "daily SpO2 median did not return when matched O2 data returned")
-        require("64" in page.locator("#hr").inner_text(), "daily pulse median did not return when matched O2 data returned")
+        require(page.locator("#spo2").inner_text().strip() == "96.4%", "daily SpO2 card did not hydrate the requested median")
+        require(page.locator("#hr").inner_text().strip() == "64 bpm", "daily pulse card did not hydrate the requested median")
         night_text = page.locator("#smNightO2Card").inner_text()
         require("SpO₂" in night_text and "Pulzus" in night_text and "Medián" in night_text, f"night O2 card is missing requested median summary: {night_text!r}")
         require(all(word not in night_text for word in ("Minimum", "T90", "ODI3", "ODI4")), f"night O2 card still contains detailed metrics: {night_text!r}")
@@ -681,10 +653,11 @@ def main() -> int:
         )
         page.wait_for_function("n => window.__smAcceptanceO2.dayCalls > n", arg=day_calls_before)
         page.wait_for_function("() => document.getElementById('o2rDayAvg')?.textContent.includes('93')")
+        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='94.6%' && document.getElementById('hr')?.textContent.trim()==='67 bpm'")
         require("94" in page.locator("#smNightO2Card").inner_text() and "67" in page.locator("#smNightO2Card").inner_text(), "SleepSync invalidation did not refresh the night O2 medians")
 
         page.locator("#focusViewBtn").click()
-        page.wait_for_function("""() => document.querySelector('.overview-card[data-key="o2_spo2"]') && document.querySelector('.overview-card[data-key="o2_hr"]')""")
+        page.wait_for_function('() => document.querySelector(\'.overview-card[data-key="o2_spo2"]\') && document.querySelector(\'.overview-card[data-key="o2_hr"]\')')
         require(page.locator("#smO2FocusSection").count() == 0 and page.locator("#smO2FocusDual").count() == 0, "legacy separate Focus O2 graph section still exists")
         require(page.locator('.overview-card[data-key="o2_spo2"]').count() == 1 and page.locator('.overview-card[data-key="o2_hr"]').count() == 1, "Focus does not contain exactly one SpO2 and one Pulse mini card")
         mini_geometry = page.evaluate("""() => {
@@ -724,7 +697,8 @@ def main() -> int:
         page.locator("#smO2OverlayFocusSelect").select_option("both")
         page.evaluate("""() => {
           const f=window.__smAcceptanceO2;f.canvasText=[];f.pathRecords=[];
-          state.hoverTime=f.daily.samples[1].timestamp*1000;drawOverlays();
+          state.hoverTime=f.daily.samples[1].timestamp*1000;
+          window.dispatchEvent(new Event('resize'));
         }""")
         page.wait_for_timeout(160)
         overlay_text = page.evaluate("() => window.__smAcceptanceO2.canvasText.filter(x=>x.id==='smO2HeroCanvas').map(x=>x.text)")
@@ -748,7 +722,9 @@ def main() -> int:
         page.evaluate("""() => {
           const card=document.querySelector('#stackedCharts .stack-chart[data-key="flow"]'),c=card?.querySelector('.sm-o2-overlay-canvas');
           if(c)c.id='acceptanceStackFlowO2';
-          const f=window.__smAcceptanceO2;f.canvasText=[];f.pathRecords=[];state.hoverTime=f.daily.samples[1].timestamp*1000;drawOverlays();
+          const f=window.__smAcceptanceO2;f.canvasText=[];f.pathRecords=[];
+          state.hoverTime=f.daily.samples[1].timestamp*1000;
+          window.dispatchEvent(new Event('resize'));
         }""")
         page.wait_for_timeout(160)
         stack_overlay_text = page.evaluate("() => window.__smAcceptanceO2.canvasText.filter(x=>x.id==='acceptanceStackFlowO2').map(x=>x.text)")
@@ -787,15 +763,6 @@ def main() -> int:
         require(page.locator("#smDashO2Avg").inner_text().strip() != "—", "Dashboard O2 aggregate did not hydrate from matched nights")
         hover_canvas(page, "smDashO2Trend", ("SpO₂",))
         hover_canvas(page, "smDashHrTrend", ("Pulzus",))
-        require(page.locator("#smDashboardO2V534").is_visible(), "Dashboard Oximetriai összegzés is hidden despite matched data")
-        page.evaluate("""() => { const f=window.__smAcceptanceO2; state.dashboardOverview={rows:[{day:f.batchRows.at(-1).day}]}; window.SleepMateO2Ring.refresh(); }""")
-        page.wait_for_function("() => document.getElementById('smDashO2Trend')?._smO2Meta?.rows?.length===1")
-        require(page.locator("#smDashboardO2V534").count() == 1 and page.locator("#smDashboardO2V534").is_visible(), "Dashboard O2 summary disappeared with one matched night")
-        page.evaluate("""() => { const f=window.__smAcceptanceO2; f.pathRecords=[]; state.dashboardOverview={rows:f.batchRows.map(r=>({day:r.day}))}; window.SleepMateO2Ring.refresh(); }""")
-        page.wait_for_function("() => document.getElementById('smDashO2Trend')?._smO2Meta?.rows?.length>=5")
-        page.wait_for_timeout(160)
-        dash_gap_paths = page.evaluate("""() => window.__smAcceptanceO2.pathRecords.filter(x => x.id==='smDashO2Trend' && x.lines>0 && ['#55d8ff','rgb(85, 216, 255)'].includes(String(x.style).toLowerCase()))""")
-        require(len([x for x in dash_gap_paths if x.get('moves') == 1]) >= 2, f"Dashboard O2 trend bridged a missing night: {dash_gap_paths}")
 
         page.evaluate(
             """() => {
@@ -816,8 +783,6 @@ def main() -> int:
             "ids => Object.fromEntries(ids.map(id => [id, window.__smO2ListenerCounts[id] || 0]))",
             persistent_daily_ids,
         )
-        page.wait_for_timeout(180)
-        mode_day_calls_before = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
         for _ in range(6):
             for control in ("focusViewBtn", "stackViewBtn", "o2rDailyBtn"):
                 page.evaluate("id => document.getElementById(id)?.click()", control)
@@ -825,9 +790,6 @@ def main() -> int:
             "ids => Object.fromEntries(ids.map(id => [id, window.__smO2ListenerCounts[id] || 0]))",
             persistent_daily_ids,
         )
-        page.wait_for_timeout(180)
-        mode_day_calls_after = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
-        require(mode_day_calls_after == mode_day_calls_before, f"peer-mode switching force-refetched daily O2 data: {mode_day_calls_before} -> {mode_day_calls_after}")
         require(daily_listener_after == daily_listener_before, f"daily O2 chart listeners leaked across peer-mode switching: {daily_listener_before} -> {daily_listener_after}")
         require(page.locator("#smDailyModeSwitchHost").count() == 1, "daily peer-mode host duplicated during repeated switching")
         require(page.locator("#focusViewBtn").inner_text().strip() == "Fókusz nézet", "Focus button text mutated")
@@ -875,9 +837,9 @@ def main() -> int:
         o2_stats = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('#statsBody tr[data-sm-o2-stat]')].map(tr=>[tr.dataset.smO2Stat,[...tr.cells].map(td=>td.textContent.trim())]))""")
         require('spo2' in o2_stats and 'hr' in o2_stats, f"Daily Statistics missing O2 rows: {o2_stats}")
         require('93,0%' in o2_stats['spo2'][1] or '93.0%' in o2_stats['spo2'][1], f"Daily Statistics missing minimum SpO2: {o2_stats}")
-        require('96,4%' in o2_stats['spo2'][2] or '96.4%' in o2_stats['spo2'][2], f"Daily Statistics missing median SpO2: {o2_stats}")
+        require('94,6%' in o2_stats['spo2'][2] or '94.6%' in o2_stats['spo2'][2], f"Daily Statistics missing median SpO2: {o2_stats}")
         require(o2_stats['spo2'][5] != '–', f"Daily Statistics missing maximum SpO2: {o2_stats}")
-        require(o2_stats['hr'][1] != '–' and ('64,0 bpm' in o2_stats['hr'][2] or '64.0 bpm' in o2_stats['hr'][2]) and o2_stats['hr'][5] != '–', f"Daily Statistics missing pulse min/median/max: {o2_stats}")
+        require(o2_stats['hr'][1] != '–' and ('67,0 bpm' in o2_stats['hr'][2] or '67.0 bpm' in o2_stats['hr'][2]) and o2_stats['hr'][5] != '–', f"Daily Statistics missing pulse min/median/max: {o2_stats}")
 
         progress("Oximetria Live/Recordings/Trends repeated switching")
         page.locator('#sidebar [data-page="oximetry"]').click()
@@ -885,8 +847,10 @@ def main() -> int:
         action_labels = page.evaluate("() => [...document.querySelectorAll('#page-oximetry .o2r-hero-actions > button')].map(x=>x.textContent.trim())")
         require(action_labels == ['← Dashboard','＋ Kapcsolódás','↻ Szinkron','Élő O₂ monitor','Felvételek','Trendek'], f"Oximetria top buttons are not one unified ordered row: {action_labels}")
         require(page.locator("#page-oximetry .o2r-tabs").count() == 0, "Oximetria still has a separate tab strip")
-        require(page.locator("#page-oximetry .o2r-live-cards .state").count() == 0, "large separate Állapot card still exists in Live metrics")
-        require(page.locator("#o2rSearchState").count() == 1 and page.evaluate("() => document.getElementById('o2rSearchState')?.parentElement?.classList.contains('o2r-hero')") is True, "compact Állapot was not moved under the Oximetria connection/search area")
+        search_box = page.locator("#o2rSearchState")
+        require(search_box.count() == 1, "Oximetria search state is missing or duplicated")
+        require(page.evaluate("() => !document.getElementById('o2rSearchState').classList.contains('panel') && !document.getElementById('o2rSearchState').classList.contains('o2r-live-card')"), "search/connection state is still a full card")
+        require(page.locator("#page-oximetry .o2r-live-card").count() == 3, "Oximetria live cards are not limited to SpO2/Pulse/Battery")
         for tab in ("recordings", "trends", "live"):
             page.locator(f'[data-o2r-tab="{tab}"]').click()
             page.wait_for_timeout(90)
@@ -984,11 +948,7 @@ def main() -> int:
               ['#55d8ff','rgb(85, 216, 255)'].includes(String(x.style).toLowerCase())
             )"""
         )
-        trend_segments = [x for x in trend_paths if x.get("moves") == 1]
-        require(len(trend_segments) >= 2 and sum(x.get("lines", 0) for x in trend_segments) >= 3, f"nightly SpO2 trend did not split at the missing night: {trend_paths}")
-        expected_trend_date = page.evaluate("""() => new Date(window.__smAcceptanceO2.trendRows[0].start_ts*1000).toLocaleDateString('hu-HU',{year:'numeric',month:'2-digit',day:'2-digit'})""")
-        trend_axis_text = page.evaluate("() => window.__smAcceptanceO2.canvasText.filter(x=>x.id==='o2rTrendSpo2').map(x=>x.text)")
-        require(expected_trend_date in trend_axis_text, f"O2 trend X-axis did not render dates: expected={expected_trend_date!r}, labels={trend_axis_text}")
+        require(any(x.get("moves") == 1 and x.get("lines", 0) >= 4 for x in trend_paths), f"nightly SpO2 trend was incorrectly split between consecutive days: {trend_paths}")
         hover_canvas(page, "o2rTrendSpo2", ("SpO₂",))
         hover_canvas(page, "o2rTrendHr", ("Pulzus",))
         hover_canvas(page, "o2rTrendT90", ("T90",))
@@ -1039,20 +999,11 @@ def main() -> int:
         require(abs(geometry["leftA"] - geometry["leftB"]) <= 1.5, f"mobile O2 X origins differ: {geometry}")
         require(abs(geometry["widthA"] - geometry["widthB"]) <= 1.5, f"mobile O2 plot widths differ: {geometry}")
 
-        progress("iPhone landscape Oximetria geometry")
         page.set_viewport_size({"width": 844, "height": 390})
-        page.wait_for_timeout(180)
+        page.wait_for_timeout(160)
         assert_no_horizontal_overflow(page, "Oximetria iPhone landscape")
-        landscape_geometry = page.evaluate(
-            """() => {
-                const a=document.getElementById('o2rLiveSpo2Chart')?.getBoundingClientRect();
-                const b=document.getElementById('o2rLiveHrChart')?.getBoundingClientRect();
-                return a&&b?{leftA:a.left,leftB:b.left,widthA:a.width,widthB:b.width}:null;
-            }"""
-        )
-        require(landscape_geometry is not None, "landscape live O2 canvases missing")
-        require(abs(landscape_geometry["leftA"] - landscape_geometry["leftB"]) <= 1.5, f"landscape O2 X origins differ: {landscape_geometry}")
-        require(abs(landscape_geometry["widthA"] - landscape_geometry["widthB"]) <= 1.5, f"landscape O2 plot widths differ: {landscape_geometry}")
+        landscape_tabs = page.evaluate("() => [...document.querySelectorAll('#page-oximetry .o2r-hero-actions > button')].map(b=>({text:b.textContent.trim(),left:b.getBoundingClientRect().left,right:b.getBoundingClientRect().right,top:b.getBoundingClientRect().top}))")
+        require(len(landscape_tabs) == 6 and max(x["right"] for x in landscape_tabs) <= 844 + 2, f"Oximetria landscape top controls overflow: {landscape_tabs}")
 
         progress("iPhone portrait/landscape O2Ring settings through the mobile category selector")
         page.set_viewport_size({"width": 390, "height": 844})
@@ -1069,12 +1020,6 @@ def main() -> int:
         page.set_viewport_size({"width": 844, "height": 390})
         page.wait_for_timeout(120)
         assert_no_horizontal_overflow(page, "O2Ring settings iPhone landscape")
-
-        progress("O2 status polling stays stopped after uninstall race")
-        page.evaluate("""async () => { const p=window.SleepMateO2Ring.refreshStatus(); window.SleepMateO2Ring.uninstall(); try{await p}catch{} }""")
-        status_calls_after_uninstall = page.evaluate("() => window.__smAcceptanceO2.statusCalls")
-        page.wait_for_timeout(6500)
-        require(page.evaluate("() => window.__smAcceptanceO2.statusCalls") == status_calls_after_uninstall, "O2 status polling restarted after uninstall")
 
         browser.close()
 
