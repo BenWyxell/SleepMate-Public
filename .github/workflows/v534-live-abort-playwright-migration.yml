@@ -1,0 +1,105 @@
+name: v5.3.4 one-shot Live abort and browser API fixes
+
+on:
+  push:
+    branches:
+      - v5.3.4-o2-full-refactor
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Abort hidden Live refills, fix Playwright args, and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text: str, old: str, new: str, *, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one target, found {count}')
+              return text.replace(old, new, 1)
+
+          js_path = Path('web/o2ring.js')
+          js = js_path.read_text(encoding='utf-8')
+          js = replace_exact(
+              js,
+              "dashboardTrendZoom:null,dashboardTrendRows:[],liveResumePromise:null};",
+              "dashboardTrendZoom:null,dashboardTrendRows:[],liveResumePromise:null,liveAbort:null};",
+              label='Live abort runtime state',
+          )
+          js = replace_exact(
+              js,
+              "async function refillLive(since=null){const last=since==null?(R.live.at(-1)?.timestamp||0):(Number(since)||0);try{const x=await api(`/api/o2ring/live-buffer?since=${encodeURIComponent(last)}&limit=43200`);mergeLive(x.rows||[])}catch{}drawLive()}",
+              "async function refillLive(since=null){if(!o2PageVisible())return;const last=since==null?(R.live.at(-1)?.timestamp||0):(Number(since)||0),ctl=new AbortController();if(R.liveAbort)R.liveAbort.abort();R.liveAbort=ctl;let applied=false;try{const x=await api(`/api/o2ring/live-buffer?since=${encodeURIComponent(last)}&limit=43200`,{signal:ctl.signal});if(ctl.signal.aborted||!o2PageVisible())return;mergeLive(x.rows||[]);applied=true}catch{}finally{if(R.liveAbort===ctl)R.liveAbort=null}if(applied&&o2PageVisible())drawLive()}",
+              label='Live refill abortability',
+          )
+          js = replace_exact(
+              js,
+              "function closeLiveStream(){if(R.liveSource){R.liveSource.close();R.liveSource=null}cancelAnimationFrame(R.liveRaf);R.liveRaf=0}",
+              "function closeLiveStream(){if(R.liveSource){R.liveSource.close();R.liveSource=null}if(R.liveAbort){R.liveAbort.abort();R.liveAbort=null}R.liveResumePromise=null;cancelAnimationFrame(R.liveRaf);R.liveRaf=0}",
+              label='Live close abort',
+          )
+          js = replace_exact(
+              js,
+              "async function resumeLive(){if(!o2PageVisible())return;if(R.liveResumePromise)return R.liveResumePromise;const since=R.live.at(-1)?.timestamp||0;R.liveResumePromise=(async()=>{if(o2PageVisible())openLiveStream();await refillLive(since)})().finally(()=>{R.liveResumePromise=null});return R.liveResumePromise}",
+              "async function resumeLive(){if(!o2PageVisible())return;if(R.liveResumePromise)return R.liveResumePromise;const since=R.live.at(-1)?.timestamp||0,work=(async()=>{if(o2PageVisible())openLiveStream();await refillLive(since)})();R.liveResumePromise=work;try{return await work}finally{if(R.liveResumePromise===work)R.liveResumePromise=null}}",
+              label='Live resume identity',
+          )
+          js_path.write_text(js, encoding='utf-8')
+
+          test_path = Path('tests/test_v534_acceptance_matrix.py')
+          test = test_path.read_text(encoding='utf-8')
+          anchor = '        "function closeMobileO2Drawer()",\n'
+          additions = (
+              '        "liveAbort:null",\n'
+              '        "new AbortController()",\n'
+              '        "signal:ctl.signal",\n'
+              '        "R.liveAbort.abort()",\n'
+              '        "if(R.liveResumePromise===work)",\n'
+          )
+          if additions not in test:
+              if test.count(anchor) != 1:
+                  raise SystemExit(f'Acceptance marker anchor: expected one target, found {test.count(anchor)}')
+              test = test.replace(anchor, additions + anchor, 1)
+          test_path.write_text(test, encoding='utf-8')
+
+          browser_path = Path('scripts/v534_browser_acceptance.py')
+          browser = browser_path.read_text(encoding='utf-8')
+          browser = replace_exact(
+              browser,
+              'page.wait_for_function("n => window.__smAcceptanceO2.bufferCalls > n", before_buffers)',
+              'page.wait_for_function("n => window.__smAcceptanceO2.bufferCalls > n", arg=before_buffers)',
+              label='Playwright buffer arg',
+          )
+          browser = replace_exact(
+              browser,
+              '            latest_before,\n        )',
+              '            arg=latest_before,\n        )',
+              label='Playwright latest timestamp arg',
+          )
+          browser_path.write_text(browser, encoding='utf-8')
+          PY
+
+          node --check web/o2ring.js
+          python -m py_compile scripts/v534_browser_acceptance.py
+          python -m pip install --disable-pip-version-check pytest >/dev/null
+          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py tests/test_v534_packaging_acceptance.py tests/test_v534_first_load_observer_guard.py
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/v534-live-abort-playwright-migration.yml
+          git add web/o2ring.js scripts/v534_browser_acceptance.py tests/test_v534_acceptance_matrix.py
+          git diff --cached --check
+          git commit -m 'Abort Live O2 refills off-page and fix Edge acceptance args'
+          git push origin HEAD:v5.3.4-o2-full-refactor
