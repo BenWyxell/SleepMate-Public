@@ -105,9 +105,11 @@ def test_v534_dashboard_modes_focus_charts_and_night_card_are_present():
     for marker in (
         "#focusViewBtn,#stackViewBtn,#o2rDailyBtn",
         "if(o)o.textContent='Oximetria'",
-        "smO2FocusSpo2",
-        "smO2FocusHr",
-        "smO2FocusDual",
+        "O2_FOCUS_DEFS",
+        "o2_spo2",
+        "o2_hr",
+        "card.className='overview-card sm-o2-focus-mini'",
+        "card.onclick=()=>selectSignal(d.key)",
         "smStackO2Spo2",
         "smStackO2Hr",
         "smStackO2Dual",
@@ -115,6 +117,10 @@ def test_v534_dashboard_modes_focus_charts_and_night_card_are_present():
         "smDashboardO2V534",
     ):
         assert marker in js
+    focus = js[js.index("const O2_FOCUS_DEFS"):js.index("function ensureStackO2")]
+    assert "smO2FocusSpo2" not in focus
+    assert "smO2FocusHr" not in focus
+    assert "smO2FocusDual" not in focus
     assert "Vissza" not in js
 
 
@@ -129,9 +135,12 @@ def test_v534_o2_chart_interaction_has_zoom_exact_crosshair_and_sync_groups():
         "dblclick",
         "syncGroup:'live'",
         "syncGroup:'daily-o2'",
-        "syncGroup:'focus-o2'",
         "syncGroup:'recording'",
         "setHover(ctl.syncGroup,t)",
+        "function o2CoreSignal(key)",
+        "loadMainSignal.__smO2",
+        "o2CoreSignal(state.selectedSignal)",
+        "card.onclick=()=>selectSignal(d.key)",
     ):
         assert marker in js
 
