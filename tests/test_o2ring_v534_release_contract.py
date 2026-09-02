@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
-from cpap.o2ring_runtime_v534 import _daily_v534, _extract_day_codes
+from cpap.o2ring_runtime_v534 import _EventHub, _daily_v534, _extract_day_codes, _recent_day_codes
 from cpap.version import API_VERSION, APP_VERSION, BUILD_CHANNEL
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,14 +28,14 @@ def recording(rid: str, start: datetime, end: datetime, samples: list[dict]):
     }
 
 
-def fake_service(recordings: list[dict], start: datetime, end: datetime):
+def fake_service(recordings: list[dict], start: datetime, end: datetime, *, auto_match: bool = True):
     session = SimpleNamespace(start=start, end=end)
     dataset = SimpleNamespace(sessions=lambda _day: [session])
     handler = SimpleNamespace(dataset=dataset)
     return SimpleNamespace(
         app=SimpleNamespace(Handler=handler),
         store=SimpleNamespace(list_recordings=lambda: recordings),
-        settings=lambda: {"o2ring_clock_offset_seconds": 0.0},
+        settings=lambda: {"o2ring_clock_offset_seconds": 0.0, "o2ring_auto_match": auto_match},
     )
 
 
@@ -87,6 +87,19 @@ def test_v534_sleepsync_is_event_driven_not_frontend_polled():
     assert "setInterval(" not in js
 
 
+def test_v534_invalidation_hub_replays_every_missed_event_in_order():
+    hub = _EventHub(max_events=32)
+    first = hub.publish("recording-added", days=["20260901"], source="o2ring")
+    second = hub.publish("sleepsync-completed", days=["20260902"], source="sleepsync")
+    third = hub.publish("therapy-invalidated", days=["20260903"], source="runtime")
+
+    assert hub.wait(0, timeout=0.01)["seq"] == first["seq"]
+    assert hub.wait(first["seq"], timeout=0.01)["seq"] == second["seq"]
+    assert hub.wait(second["seq"], timeout=0.01)["seq"] == third["seq"]
+    assert [x["seq"] for x in hub.events_after(0)] == [0, first["seq"], second["seq"], third["seq"]]
+    assert hub.snapshot()["seq"] == third["seq"]
+
+
 def test_v534_dashboard_modes_focus_charts_and_night_card_are_present():
     js = read("web/o2ring.js")
     for marker in (
@@ -125,6 +138,7 @@ def test_v534_o2_chart_interaction_has_zoom_exact_crosshair_and_sync_groups():
 
 def test_v534_overlay_is_per_signal_timestamp_aligned_and_gap_aware():
     js = read("web/o2ring.js")
+    css = read("web/o2ring-v534.css")
     for option in ('value="off"', 'value="spo2"', 'value="hr"', 'value="both"'):
         assert option in js
     for marker in (
@@ -136,6 +150,12 @@ def test_v534_overlay_is_per_signal_timestamp_aligned_and_gap_aware():
         "installPerStackOverlayControls",
     ):
         assert marker in js
+    # Core CPAP charts plot from left=54 to right=12. The O2 renderer reserves
+    # 54 px on the right for its secondary scale, so its canvas is deliberately
+    # extended by exactly 42 px. The visible O2 plot then ends at the same pixel
+    # as the underlying CPAP plot instead of drifting left.
+    assert "right:-42px!important" in css
+    assert "width:calc(100% + 42px)!important" in css
 
 
 def test_v534_pwa_settings_are_merged_and_o2ring_named_consistently():
@@ -162,6 +182,15 @@ def test_v534_pwa_settings_are_merged_and_o2ring_named_consistently():
     assert "@media(max-width:600px)" in css
 
 
+def test_v534_pwa_live_nav_is_not_rerendered_on_unchanged_status_ticks():
+    js = read("web/frontend-v534.js")
+    assert "lastLiveNavEnabled" in js
+    assert "const needsChange=wanted?!currentCorrect:!!current" in js
+    assert "if(!needsChange)return" in js
+    status_handler = js.split("window.addEventListener('sleepmate-o2-status'", 1)[1].split("});", 1)[0]
+    assert "normalizeAll()" not in status_handler
+
+
 def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
     js = read("web/o2ring.js")
     bootstrap = read("web/frontend-v534.js")
@@ -176,8 +205,10 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
         assert marker in js
     assert "shadowBlur" not in js
     assert "function fixLatestLoading()" in bootstrap
-    assert "Befejezve" in bootstrap
-    assert "e.textContent='—'" in bootstrap
+    assert "function syncLatestSessionCard()" in bootstrap
+    assert "latest.sessions" in bootstrap
+    assert "status.textContent='—'" in bootstrap
+    assert "Befejezve" not in bootstrap
 
 
 def test_v534_service_workers_only_activate_current_o2_frontend_generation():
@@ -200,6 +231,11 @@ def test_v534_extracts_affected_sleepsync_days_without_full_rescan_contract():
     assert _extract_day_codes(value) == {"20260901", "20260902", "20260903"}
 
 
+def test_v534_recent_day_fallback_is_chronological_not_collection_order():
+    values = ["20260904", "20260901", "2026-09-06", "20260903", "20260905", "20260902"]
+    assert _recent_day_codes(values, 4) == ["20260903", "20260904", "20260905", "20260906"]
+
+
 def test_v534_matching_prefers_largest_overlap_deterministically():
     start = datetime(2026, 9, 1, 23, 0, tzinfo=timezone.utc)
     end = start + timedelta(hours=8)
@@ -219,6 +255,23 @@ def test_v534_matching_prefers_largest_overlap_deterministically():
     result = _daily_v534(service, "20260901", max_points=1000)
     assert result["available"] is True
     assert [m["recording_id"] for m in result["matches"]] == ["long"]
+
+
+def test_v534_auto_match_off_really_disables_cpap_pairing():
+    start = datetime(2026, 9, 1, 23, 0, tzinfo=timezone.utc)
+    end = start + timedelta(hours=8)
+    rec = recording(
+        "night",
+        start + timedelta(minutes=5),
+        end - timedelta(minutes=5),
+        [sample((start + timedelta(hours=i)).timestamp()) for i in range(1, 8)],
+    )
+    service = fake_service([rec], start, end, auto_match=False)
+    result = _daily_v534(service, "20260901", max_points=1000)
+    assert result["auto_match"] is False
+    assert result["available"] is False
+    assert result["matches"] == []
+    assert result["samples"] == []
 
 
 def test_v534_matching_keeps_split_segments_and_deduplicates_timestamp_points():
