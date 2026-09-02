@@ -114,8 +114,8 @@ report_test = '''        require(page.locator("#o2rDailyBtn").inner_text().strip
               f.emitInvalidation('sleepsync-completed');
             }"""
         )
-        page.wait_for_function("() => document.querySelectorAll('#reportDaysBody [data-sm-o2-cell="spo2avg"]').length === 2")
-        page.wait_for_function("() => [...document.querySelectorAll('#reportDaysBody [data-sm-o2-cell="spo2avg"]')].every(x=>x.textContent.trim()!=='—')")
+        page.wait_for_function("""() => document.querySelectorAll('#reportDaysBody [data-sm-o2-cell="spo2avg"]').length === 2""")
+        page.wait_for_function("""() => [...document.querySelectorAll('#reportDaysBody [data-sm-o2-cell="spo2avg"]')].every(x=>x.textContent.trim()!=='—')""")
         report_day = page.evaluate("() => window.__smAcceptanceO2.batchRows.at(-1).day")
         report_before = page.locator(f'#reportDaysBody tr[data-day="{report_day}"] [data-sm-o2-cell="spo2avg"]').inner_text().strip()
         page.evaluate(
