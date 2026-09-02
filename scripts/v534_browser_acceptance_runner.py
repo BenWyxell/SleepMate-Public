@@ -1,6 +1,43 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from playwright.sync_api import Page
+
+from cpap.version import APP_VERSION
+
+
+# The v5.3.4 acceptance suite intentionally keeps validating the retained
+# frontend generation marker (frontend-v534 / UI_VERSION=5.3.4). The visible
+# application version, however, must follow the canonical app version. Patch
+# only those two legacy sidebar expectations in the ephemeral CI checkout
+# before importing the regression suite; all v5.3.4 frontend-generation gates
+# remain unchanged.
+_ACCEPTANCE_PATH = Path(__file__).with_name("v534_browser_acceptance.py")
+_acceptance_source = _ACCEPTANCE_PATH.read_text(encoding="utf-8")
+_sidebar_expectations = (
+    (
+        'require(page.locator("#sidebarVersion").inner_text().strip() == f"v{VERSION}", "stale sidebar version")',
+        'require(page.locator("#sidebarVersion").inner_text().strip() == f"v{APP_VERSION}", "stale sidebar version")',
+    ),
+    (
+        'require(page.locator("#sidebarVersion").inner_text().strip() == f"v{VERSION}", "reload restored stale UI version")',
+        'require(page.locator("#sidebarVersion").inner_text().strip() == f"v{APP_VERSION}", "reload restored stale UI version")',
+    ),
+)
+for old, new in _sidebar_expectations:
+    if old not in _acceptance_source:
+        raise RuntimeError(f"Legacy browser acceptance contract changed unexpectedly: {old}")
+    _acceptance_source = _acceptance_source.replace(old, new, 1)
+
+# Inject the canonical application version next to the retained v5.3.4 UI
+# generation constant. This file mutation exists only in the Actions checkout.
+_acceptance_source = _acceptance_source.replace(
+    'VERSION = "5.3.4"\n',
+    f'VERSION = "5.3.4"\nAPP_VERSION = {APP_VERSION!r}\n',
+    1,
+)
+_ACCEPTANCE_PATH.write_text(_acceptance_source, encoding="utf-8")
 
 import v534_browser_acceptance as acceptance
 
