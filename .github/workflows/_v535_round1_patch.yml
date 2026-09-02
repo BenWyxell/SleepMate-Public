@@ -6,6 +6,7 @@ on:
       - v5.3.5-o2-dashboard-polish
     paths:
       - scripts/_v535_round1_patch.py
+      - scripts/_v535_round1_contract_fix.py
       - .github/workflows/_v535_round1_patch.yml
 
 permissions:
@@ -23,7 +24,9 @@ jobs:
         with:
           python-version: '3.13'
       - name: Apply requested fixes
-        run: python scripts/_v535_round1_patch.py
+        run: |
+          python scripts/_v535_round1_patch.py
+          python scripts/_v535_round1_contract_fix.py
       - name: Validate syntax and focused contracts
         run: |
           set -euo pipefail
@@ -38,7 +41,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm scripts/_v535_round1_patch.py .github/workflows/_v535_round1_patch.yml
-          git add cpap/oximetry.py web/o2ring.js web/frontend-v534.js web/index.html web/o2ring-v534.css build/windows/SleepMate.spec tests/test_v534_packaging_acceptance.py tests/test_v535_polish_contract.py
+          git rm scripts/_v535_round1_patch.py scripts/_v535_round1_contract_fix.py .github/workflows/_v535_round1_patch.yml
+          git add cpap/oximetry.py web/o2ring.js web/frontend-v534.js web/index.html web/o2ring-v534.css build/windows/SleepMate.spec tests/test_v534_packaging_acceptance.py tests/test_o2ring_v534_release_contract.py tests/test_v535_polish_contract.py
           git commit -m 'Fix O2 medians reports latest sleep and night card'
           git push origin HEAD:v5.3.5-o2-dashboard-polish
