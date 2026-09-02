@@ -66,7 +66,7 @@ def test_acceptance_p0_live_o2_only_paints_when_visible_and_batch_refills_on_ret
         "await refillLive()",
         "if(o2PageVisible())openLiveStream()",
         "/api/o2ring/live-buffer?since=",
-        "requestAnimationFrame(drawLive)",
+        "R.liveRaf=requestAnimationFrame(()=>{R.liveRaf=0;drawLive()})",
     ):
         assert marker in js
     assert "class _LiveBuffer" in stream
@@ -98,7 +98,6 @@ def test_acceptance_p1_all_o2_charts_share_exact_hover_crosshair_zoom_pan_contra
         "syncGroup:'dash-o2'",
     ):
         assert marker in js
-    # Missing sections are deliberately broken into separate line segments.
     assert "medianDelta(rows)*3.2" in js
     assert "makeSegments" in js
 
@@ -151,9 +150,9 @@ def test_acceptance_p2_focus_stack_daily_dashboard_night_and_report_o2_surfaces_
         "smStackO2Spo2",
         "smStackO2Hr",
         "smStackO2Dual",
-        "o2rDailySpo2",
-        "o2rDailyHr",
-        "o2rDailyDual",
+        "o2rDaySpo2Chart",
+        "o2rDayHrChart",
+        "o2rDayDual",
         "smDashboardO2V534",
         "smDashO2Trend",
         "smDashHrTrend",
