@@ -45,6 +45,7 @@ def test_06_all_charts_overlay_has_right_scales_and_hover_values():
     assert "parts.push(`SpO₂ ${fmt(r.spo2,0)}%`)" in JS
     assert "parts.push(`Pulzus ${fmt(r.heart_rate,0)} bpm`)" in JS
     assert 'All Charts overlay lacks SpO2 right-axis labels' in BROWSER
+    assert "'SpO₂' in x and 'Pulzus' in x" in BROWSER
 
 def test_07_overlay_off_option_is_alapnezet():
     assert '<option value="off">Alapnézet</option>' in JS

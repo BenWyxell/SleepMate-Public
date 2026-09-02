@@ -745,7 +745,7 @@ def main() -> int:
         overlay_text = page.evaluate("() => window.__smAcceptanceO2.canvasText.filter(x=>x.id==='smO2HeroCanvas').map(x=>x.text)")
         require("O₂ 100%" in overlay_text and "O₂ 75%" in overlay_text, f"focus CPAP overlay lost SpO2 scale labels: {overlay_text}")
         require(any(x.startswith("HR ") for x in overlay_text), f"focus CPAP overlay lost HR scale labels: {overlay_text}")
-        require(any(x.count(':') >= 2 and 'O₂' in x and 'HR' in x for x in overlay_text), f"focus CPAP overlay lost hover values: {overlay_text}")
+        require(any(x.count(':') >= 2 and 'SpO₂' in x and 'Pulzus' in x for x in overlay_text), f"focus CPAP overlay lost localized SpO2/Pulse hover values: {overlay_text}")
         page.locator("#stackViewBtn").click()
         page.wait_for_function("() => document.getElementById('smStackO2DualCanvas')?._smO2Meta?.rows?.length >= 5")
         stack_pointer_events = page.evaluate(
