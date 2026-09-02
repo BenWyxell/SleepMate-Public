@@ -1,0 +1,241 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from types import SimpleNamespace
+
+from cpap.o2ring_runtime_v534 import _daily_v534, _extract_day_codes
+from cpap.version import API_VERSION, APP_VERSION, BUILD_CHANNEL
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def sample(ts: float, spo2: int = 96, hr: int = 65):
+    return {"timestamp": ts, "spo2": spo2, "heart_rate": hr, "valid": True}
+
+
+def recording(rid: str, start: datetime, end: datetime, samples: list[dict]):
+    return {
+        "recording_id": rid,
+        "source_name": f"{rid}.vld",
+        "start_ts": start.timestamp(),
+        "end_ts": end.timestamp(),
+        "samples": samples,
+    }
+
+
+def fake_service(recordings: list[dict], start: datetime, end: datetime):
+    session = SimpleNamespace(start=start, end=end)
+    dataset = SimpleNamespace(sessions=lambda _day: [session])
+    handler = SimpleNamespace(dataset=dataset)
+    return SimpleNamespace(
+        app=SimpleNamespace(Handler=handler),
+        store=SimpleNamespace(list_recordings=lambda: recordings),
+        settings=lambda: {"o2ring_clock_offset_seconds": 0.0},
+    )
+
+
+def test_v534_release_identity_and_single_active_frontend_owner():
+    shell = read("cpap/v530_features.py")
+    assert APP_VERSION == "5.3.4"
+    assert API_VERSION == 19
+    assert BUILD_CHANNEL == "stable"
+    assert 'UI_VERSION = "5.3.4"' in shell
+    assert 'frontend-v534.js' in shell
+    assert 'o2ring-v534.css' in shell
+    assert 'o2ring-v532.js' not in shell
+    assert 'frontend-v533.js' not in shell
+    assert 'install_o2ring_runtime_v534' in shell
+
+
+def test_v534_live_chart_is_visibility_scoped_and_batch_restored():
+    js = read("web/o2ring.js")
+    stream = read("cpap/o2ring_stream.py")
+    for marker in (
+        "document.visibilityState==='visible'",
+        "function updateLiveLifecycle()",
+        "function closeLiveStream()",
+        "/api/o2ring/live-buffer?since=",
+        "async function refillLive()",
+        "await refillLive();openLiveStream()",
+    ):
+        assert marker in js
+    assert "class _LiveBuffer" in stream
+    assert 'path == "/api/o2ring/live-buffer"' in stream
+    assert "service.manager.add_listener(BUFFER.append_snapshot)" in stream
+    assert "setInterval(" not in js
+
+
+def test_v534_sleepsync_is_event_driven_not_frontend_polled():
+    backend = read("cpap/o2ring_runtime_v534.py")
+    js = read("web/o2ring.js")
+    for marker in (
+        '"sleepsync-completed"',
+        "sync._sync_job = types.MethodType(wrapped, sync)",
+        'parsed.path == "/api/o2ring/events"',
+        "EventSource(`/api/o2ring/events?after=${R.eventSeq}`)",
+        "invalidateDays(x.days||[])",
+    ):
+        assert marker in backend or marker in js
+    assert "setInterval(" not in backend
+    assert "setInterval(" not in js
+
+
+def test_v534_dashboard_modes_focus_charts_and_night_card_are_present():
+    js = read("web/o2ring.js")
+    for marker in (
+        "#focusViewBtn,#stackViewBtn,#o2rDailyBtn",
+        "if(o)o.textContent='Oximetria'",
+        "smO2FocusSpo2",
+        "smO2FocusHr",
+        "smO2FocusDual",
+        "smStackO2Spo2",
+        "smStackO2Hr",
+        "smStackO2Dual",
+        "smNightO2Card",
+        "smDashboardO2V534",
+    ):
+        assert marker in js
+    assert "Vissza" not in js
+
+
+def test_v534_o2_chart_interaction_has_zoom_exact_crosshair_and_sync_groups():
+    js = read("web/o2ring.js")
+    for marker in (
+        "hour:'2-digit',minute:'2-digit',second:'2-digit'",
+        "function nearest(rows,t)",
+        "function bindChart(c,",
+        "pointerdown",
+        "pointermove",
+        "dblclick",
+        "syncGroup:'live'",
+        "syncGroup:'daily-o2'",
+        "syncGroup:'focus-o2'",
+        "syncGroup:'recording'",
+        "setHover(ctl.syncGroup,t)",
+    ):
+        assert marker in js
+
+
+def test_v534_overlay_is_per_signal_timestamp_aligned_and_gap_aware():
+    js = read("web/o2ring.js")
+    for option in ('value="off"', 'value="spo2"', 'value="hr"', 'value="both"'):
+        assert option in js
+    for marker in (
+        "localStorage.setItem(`sm-o2-overlay:${key}`",
+        "makeSegments(rs,'spo2'",
+        "makeSegments(rs,'heart_rate'",
+        "medianDelta(rs)*3.2",
+        "sm-o2-overlay-select",
+        "installPerStackOverlayControls",
+    ):
+        assert marker in js
+
+
+def test_v534_pwa_settings_are_merged_and_o2ring_named_consistently():
+    js = read("web/frontend-v534.js")
+    css = read("web/o2ring-v534.css")
+    for marker in (
+        "function normalizePwaSettings()",
+        "push.textContent='PWA'",
+        "pwa?.remove()",
+        "pwaPanel.removeAttribute('data-settings-panel')",
+        "function normalizeO2Settings()",
+        "tab.textContent='O2Ring'",
+        "o.textContent='O2Ring'",
+        "Élő O₂ monitor",
+        "function normalizeSetupWizard()",
+        "x!==keep)x.remove()",
+        "system.appendChild(keep)",
+        "function saveO2Toggles()",
+        "e.stopImmediatePropagation()",
+    ):
+        assert marker in js
+    assert '[data-settings-tab="pwa"]' in css
+    assert ".sm-o2-settings-panel" in css
+    assert "@media(max-width:600px)" in css
+
+
+def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
+    js = read("web/o2ring.js")
+    bootstrap = read("web/frontend-v534.js")
+    for marker in (
+        "SpO₂ átlag",
+        "SpO₂ min.",
+        "Pulzus átlag",
+        "ODI3 / ODI4",
+        "EVENT_COLORS",
+        "COLORS.teal:COLORS.blue",
+    ):
+        assert marker in js
+    assert "shadowBlur" not in js
+    assert "if(e)e.textContent='—'" in bootstrap
+
+
+def test_v534_service_workers_only_activate_current_o2_frontend_generation():
+    for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
+        sw = read(path)
+        assert "sleepmate-shell-v5.3.4-refactor" in sw
+        assert "/o2ring-v534.css?v=5.3.4" in sw
+        assert "/frontend-v534.js?v=5.3.4" in sw
+        assert "'/o2ring.js'" in sw
+        assert "o2ring-v532.js?v=5.3.3" not in sw
+        assert "frontend-v533.js?v=5.3.3" not in sw
+        assert "X-SleepMate-UI-Version" in sw
+
+
+def test_v534_extracts_affected_sleepsync_days_without_full_rescan_contract():
+    value = {
+        "files": ["DATALOG/2026-09-01/file.edf", "20260902"],
+        "nested": {"day": "2026_09_03"},
+    }
+    assert _extract_day_codes(value) == {"20260901", "20260902", "20260903"}
+
+
+def test_v534_matching_prefers_largest_overlap_deterministically():
+    start = datetime(2026, 9, 1, 23, 0, tzinfo=timezone.utc)
+    end = start + timedelta(hours=8)
+    long_a = recording(
+        "long",
+        start + timedelta(minutes=5),
+        end - timedelta(minutes=5),
+        [sample((start + timedelta(hours=i)).timestamp()) for i in range(1, 8)],
+    )
+    shorter = recording(
+        "short",
+        start + timedelta(minutes=35),
+        end - timedelta(minutes=35),
+        [sample((start + timedelta(hours=i, minutes=1)).timestamp(), 95, 66) for i in range(1, 7)],
+    )
+    service = fake_service([shorter, long_a], start, end)
+    result = _daily_v534(service, "20260901", max_points=1000)
+    assert result["available"] is True
+    assert [m["recording_id"] for m in result["matches"]] == ["long"]
+
+
+def test_v534_matching_keeps_split_segments_and_deduplicates_timestamp_points():
+    start = datetime(2026, 9, 1, 23, 0, tzinfo=timezone.utc)
+    end = start + timedelta(hours=8)
+    seam = start + timedelta(hours=3)
+    duplicate_ts = (seam + timedelta(seconds=5)).timestamp()
+    first = recording(
+        "part-a",
+        start + timedelta(minutes=5),
+        seam + timedelta(seconds=10),
+        [sample((start + timedelta(hours=1)).timestamp()), sample(duplicate_ts, 94, 67)],
+    )
+    second = recording(
+        "part-b",
+        seam,
+        end - timedelta(minutes=5),
+        [sample(duplicate_ts, 93, 70), sample((start + timedelta(hours=6)).timestamp(), 96, 64)],
+    )
+    service = fake_service([first, second], start, end)
+    result = _daily_v534(service, "20260901", max_points=1000)
+    assert {m["recording_id"] for m in result["matches"]} == {"part-a", "part-b"}
+    timestamps = [round(row["timestamp"] * 1000) for row in result["samples"]]
+    assert len(timestamps) == len(set(timestamps))
