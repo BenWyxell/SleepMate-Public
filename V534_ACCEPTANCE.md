@@ -8,6 +8,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - Stale SleepMate service-worker caches are recovered without restoring an obsolete frontend generation.
 - Repeated Dashboard ↔ Oximetria navigation does not duplicate pages, charts or runtime owners.
 - Repeated Fókusz nézet ↔ Összes grafikon ↔ Oximetria switching does not leak interactions or mutate control labels.
+- Fókusz nézet, Összes grafikon and Oximetria are persistent peer modes: entering Oximetria must not hide the controls needed to switch directly to either CPAP chart mode, and the shared peer-mode host must not duplicate across navigation or refresh.
 - Mobile Oximetria navigation works through the real mobile drawer and the application itself closes the drawer and scrim after selection; the acceptance test must not close them on the application's behalf.
 
 ## Live O₂ lifecycle
@@ -44,7 +45,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - O2Ring settings are a single responsive category and first-interaction toggle changes persist.
 - The first-run wizard reopen card is not duplicated.
 - Oximetria and O2Ring settings have no horizontal overflow at iPhone portrait and landscape sizes.
-- The latest-session dashboard card never flashes the legacy “Befejezve” status; the packaged core owns the session-count presentation.
+- The latest-session dashboard card never flashes the legacy “Befejezve” status; packaged Edge acceptance must observe the actual `latestStatus` DOM mutation history during first boot, stale-cache recovery and repeated navigation so a transient legacy flash fails the gate even if the final text is correct.
 
 ## Release gate
 
@@ -54,6 +55,6 @@ A release may only be created from the same commit that passes:
 2. exact-SHA Windows portable build,
 3. Hungarian MSI build and real install/smoke test,
 4. VERIFIED release-set hash/identity checks,
-5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, two-finger pinch, rendered gap/continuity behaviour and SleepSync invalidation behaviour.
+5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, persistent peer-mode switching, two-finger pinch, rendered gap/continuity behaviour, transient latest-session status history and SleepSync invalidation behaviour.
 
 A source-level marker or a green test with no O₂ data is not sufficient proof for a behavioural acceptance item.
