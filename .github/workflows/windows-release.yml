@@ -67,7 +67,7 @@ jobs:
           .\build\windows\build_release.ps1 -SkipTests
 
       - name: Upload program tree for MSI job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-Windows-x64-PROGRAM-TREE
           path: |
@@ -148,7 +148,7 @@ jobs:
           test -n "$(find msi-extracted -type f -name SleepMate.ico -print -quit)"
 
       - name: Upload unsigned MSI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-MSI-UNSIGNED-CI
           path: |
@@ -307,7 +307,7 @@ jobs:
           Write-Host 'MSI uninstall contract OK: program removed, user state preserved.'
 
       - name: Upload complete unsigned CI release set
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-Windows-x64-UNSIGNED-CI
           path: |
