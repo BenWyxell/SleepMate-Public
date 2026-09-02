@@ -14,4 +14,4 @@ BROWSER.write_text(text.replace(old, new, 1), encoding='utf-8')
 matrix = MATRIX.read_text(encoding='utf-8')
 addition = '''\n\ndef test_request_05_edge_compares_o2_hero_to_real_core_hero_width():\n    assert "normal_hero_widths" in BROWSER\n    assert "spo2_hero_width" in BROWSER\n    assert "Focus SpO2 hero line does not match normal hero line width" in BROWSER\n    assert "Focus SpO2 hero line is thicker than normal" not in BROWSER\n'''
 if 'test_request_05_edge_compares_o2_hero_to_real_core_hero_width' not in matrix:
-    MATRIX.write_text(matrix.rstrip() + addition + '\n', encoding='utf-8')
+    MATRIX.write_text(matrix.rstrip() + addition, encoding='utf-8')
