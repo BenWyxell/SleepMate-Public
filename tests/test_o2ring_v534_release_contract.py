@@ -272,3 +272,22 @@ def test_v534_source_settings_are_single_pwa_category_and_single_setup_wizard_ca
     assert "system.appendChild(box)" in first
     assert "for(const x of all)if(x!==box)x.remove()" in first
     assert "setInterval(()=>{tries++" not in first
+
+
+def test_v534_overlay_has_compact_secondary_o2_hr_scale_labels():
+    js=read('web/o2ring.js')
+    assert 'function drawOverlayScaleLabels' in js
+    assert "O₂ 100%" in js and "O₂ 75%" in js
+    assert 'HR ${hrHi}' in js and 'HR ${hrLo}' in js
+
+
+def test_v534_auto_match_toggle_saves_on_first_change_and_settings_grid_is_responsive():
+    js=read('web/frontend-v534.js');css=read('web/o2ring-v534.css')
+    assert "id('smO2AutoMatch').onchange=saveAdvancedO2Settings" in js
+    assert '.sm-o2-advanced-grid,.sm-o2-device-grid{display:grid' in css
+    assert '@media(max-width:700px)' in css
+
+
+def test_v534_sleepsync_nested_import_changed_days_are_targeted():
+    value={'import':{'changed_days':['20260901','20260902'],'changed_files':['DATALOG/20260902/x.edf']}}
+    assert _extract_day_codes(value)=={'20260901','20260902'}
