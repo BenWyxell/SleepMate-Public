@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from cpap.version import APP_VERSION
+
 # This matrix is the source-level companion to the exact-SHA packaged Edge acceptance.
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -12,6 +14,7 @@ FRONT = read('web/frontend-v534.js')
 HTML = read('web/index.html')
 DOMAIN = read('cpap/oximetry.py')
 BROWSER = read('scripts/v534_browser_acceptance.py')
+RELEASE_NOTES = read('RELEASE_NOTES.md')
 
 def test_01_daily_spo2_and_pulse_cards_use_matched_medians():
     assert 'function hydrateDailyO2Metrics()' in JS
@@ -173,3 +176,11 @@ def test_mobile_oximetry_landscape_is_behaviorally_covered():
     assert "Oximetria iPhone landscape" in BROWSER
     assert "landscape O2 X origins differ" in BROWSER
     assert "landscape O2 plot widths differ" in BROWSER
+
+
+def test_release_identity_is_v535():
+    assert APP_VERSION == '5.3.5'
+    assert RELEASE_NOTES.startswith('# SleepMate 5.3.5\n')
+    section = RELEASE_NOTES.split('\n---\n', 1)[0]
+    assert 'Release build: **5.3.5**.' in section
+    assert 'Kiadási csatorna: **stable**.' in section

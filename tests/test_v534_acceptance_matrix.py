@@ -16,7 +16,7 @@ def test_acceptance_p0_single_frontend_owner_and_stale_pwa_recovery():
     shell = read("cpap/v530_features.py")
     sw = read("web/service-worker.js")
     base = read("web/service-worker-v508-base.js")
-    assert APP_VERSION == "5.3.4"
+    assert APP_VERSION == "5.3.5"
     assert 'UI_VERSION = "5.3.4"' in shell
     assert "o2ring-v532.js" not in shell
     assert "frontend-v533.js" not in shell

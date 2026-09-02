@@ -41,7 +41,7 @@ def fake_service(recordings: list[dict], start: datetime, end: datetime, *, auto
 
 def test_v534_release_identity_and_single_active_frontend_owner():
     shell = read("cpap/v530_features.py")
-    assert APP_VERSION == "5.3.4"
+    assert APP_VERSION == "5.3.5"
     assert API_VERSION == 19
     assert BUILD_CHANNEL == "stable"
     assert 'UI_VERSION = "5.3.4"' in shell
