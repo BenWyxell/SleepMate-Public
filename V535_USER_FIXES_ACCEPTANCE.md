@@ -7,7 +7,7 @@ A v5.3.5 javítási kör kizárólag akkor tekinthető késznek, ha ugyanazon ex
 3. Oximetriás grafikonokon a húzás közbeni kijelölés látható, a normál chart-viselkedéssel megegyezően.
 4. A Fókusznézet SpO₂/Pulzus mini kártyái a normál közös hero nagy grafikonra nyílnak.
 5. Az oximetriás vonalak vastagsága megegyezik a normál grafikonokéval.
-6. Összes grafikon nézetben az O₂ overlay jobb oldali SpO₂/HR skálát és hoverértékeket mutat.
+6. Összes grafikon nézetben az O₂ overlay jobb oldali SpO₂/HR tengelyskálát mutat, a hover felirat pedig pontos időponttal a felhasználói megnevezéseket és aktuális értékeket írja ki: `SpO₂ …%` és `Pulzus … bpm`.
 7. Az overlay kikapcsolt állapotának neve `Alapnézet`.
 8. Dashboard → Legutóbbi alvás: a kártya teljes alvás-/terápiás időt mutat, nem státuszszöveget; a szakaszszám másodlagos információ.
 9. Dashboard → Oximetriai összegzés stabilan megjelenik és tényleges adatot rajzol, PWA-n is.
