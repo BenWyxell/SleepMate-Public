@@ -600,8 +600,10 @@ def main() -> int:
         require(page.locator("#smDailyModeSwitchHost").count() == 1, "daily peer-mode switch host missing/duplicated")
         page.wait_for_function("() => window.__smAcceptanceO2.dayCalls > 0")
         page.wait_for_function("() => document.getElementById('o2rDayDual')?._smO2Meta?.rows?.length >= 5")
-        require(page.locator("#spo2").inner_text().strip() == "96.4%", "daily SpO2 card did not hydrate the matched O2 median")
-        require(page.locator("#hr").inner_text().strip() == "64 bpm", "daily pulse card did not hydrate the requested median")
+        spo2_daily_text = page.locator("#spo2").inner_text().strip()
+        require(spo2_daily_text == "96,4%", f"daily SpO2 card did not hydrate the matched O2 median: {spo2_daily_text!r}")
+        hr_daily_text = page.locator("#hr").inner_text().strip()
+        require(hr_daily_text == "64,0", f"daily pulse card did not hydrate the requested median: {hr_daily_text!r}")
         night_text = page.locator("#smNightO2Card").inner_text()
         require("SpO₂" in night_text and "Pulzus" in night_text and "Medián" in night_text, f"night O2 card is missing requested median summary: {night_text!r}")
         require(all(word not in night_text for word in ("Minimum", "T90", "ODI3", "ODI4")), f"night O2 card still contains detailed metrics: {night_text!r}")
@@ -664,7 +666,7 @@ def main() -> int:
         )
         page.wait_for_function("n => window.__smAcceptanceO2.dayCalls > n", arg=day_calls_before)
         page.wait_for_function("() => document.getElementById('o2rDayAvg')?.textContent.includes('93')")
-        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='94.6%' && document.getElementById('hr')?.textContent.trim()==='67 bpm'")
+        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='94,6%' && document.getElementById('hr')?.textContent.trim()==='67,0'")
         require("94" in page.locator("#smNightO2Card").inner_text() and "67" in page.locator("#smNightO2Card").inner_text(), "SleepSync invalidation did not refresh the night O2 medians")
 
         progress("matched O2 disappearance restores core oximetry and return reapplies medians")
@@ -678,9 +680,9 @@ def main() -> int:
             }"""
         )
         page.wait_for_function("n => window.__smAcceptanceO2.dayCalls > n", arg=disappear_calls)
-        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='91%' && document.getElementById('hr')?.textContent.trim()==='58 bpm'")
+        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='91%' && document.getElementById('hr')?.textContent.trim()==='58'")
         require(page.locator("#spo2").inner_text().strip() == "91%", "daily SpO2 card stayed stale after matched O2 data disappeared")
-        require(page.locator("#hr").inner_text().strip() == "58 bpm", "daily pulse card stayed stale after matched O2 data disappeared")
+        require(page.locator("#hr").inner_text().strip() == "58", "daily pulse card stayed stale after matched O2 data disappeared")
 
         return_calls = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
         page.evaluate(
@@ -691,9 +693,9 @@ def main() -> int:
             }"""
         )
         page.wait_for_function("n => window.__smAcceptanceO2.dayCalls > n", arg=return_calls)
-        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='94.6%' && document.getElementById('hr')?.textContent.trim()==='67 bpm'")
-        require(page.locator("#spo2").inner_text().strip() == "94.6%", "daily SpO2 median did not return when matched O2 data returned")
-        require(page.locator("#hr").inner_text().strip() == "67 bpm", "daily pulse median did not return when matched O2 data returned")
+        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='94,6%' && document.getElementById('hr')?.textContent.trim()==='67,0'")
+        require(page.locator("#spo2").inner_text().strip() == "94,6%", "daily SpO2 median did not return when matched O2 data returned")
+        require(page.locator("#hr").inner_text().strip() == "67,0", "daily pulse median did not return when matched O2 data returned")
 
         page.locator("#focusViewBtn").click()
         page.wait_for_function('() => document.querySelector(\'.overview-card[data-key="o2_spo2"]\') && document.querySelector(\'.overview-card[data-key="o2_hr"]\')')
