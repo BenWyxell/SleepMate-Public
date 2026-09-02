@@ -27,9 +27,6 @@ APP_VERSION = _runtime_app_version()
 # The v5.3.4 acceptance suite intentionally keeps validating the retained
 # frontend generation marker (frontend-v534 / UI_VERSION=5.3.4). The visible
 # application version, however, must follow the canonical packaged runtime.
-# Patch only those two legacy sidebar expectations in the ephemeral CI checkout
-# before importing the regression suite; all v5.3.4 frontend-generation gates
-# remain unchanged.
 _ACCEPTANCE_PATH = Path(__file__).with_name("v534_browser_acceptance.py")
 _acceptance_source = _ACCEPTANCE_PATH.read_text(encoding="utf-8")
 _sidebar_expectations = (
@@ -46,6 +43,34 @@ for old, new in _sidebar_expectations:
     if old not in _acceptance_source:
         raise RuntimeError(f"Legacy browser acceptance contract changed unexpectedly: {old}")
     _acceptance_source = _acceptance_source.replace(old, new, 1)
+
+# A stale cache is normally present before a new service worker activates.
+# The legacy regression test created its synthetic stale cache after the current
+# worker was already active and then performed only a normal reload, which cannot
+# re-run the activate cleanup. Unregister the current worker after seeding the
+# synthetic cache so the reload exercises a genuine install/activate recovery.
+_stale_seed = """        page.evaluate(
+            \"\"\"async () => {
+                const c = await caches.open('sleepmate-shell-v5.2.16-acceptance-stale');
+                await c.put('/acceptance-old-shell', new Response('<html>old</html>'));
+            }\"\"\"
+        )
+        page.reload(wait_until=\"domcontentloaded\", timeout=20_000)
+"""
+_stale_reactivation = """        page.evaluate(
+            \"\"\"async () => {
+                const c = await caches.open('sleepmate-shell-v5.2.16-acceptance-stale');
+                await c.put('/acceptance-old-shell', new Response('<html>old</html>'));
+                const reg = await navigator.serviceWorker.getRegistration();
+                if (!reg) throw new Error('active service worker registration missing before recovery test');
+                if (!(await reg.unregister())) throw new Error('failed to unregister service worker before recovery test');
+            }\"\"\"
+        )
+        page.reload(wait_until=\"domcontentloaded\", timeout=20_000)
+"""
+if _stale_seed not in _acceptance_source:
+    raise RuntimeError("Legacy stale-cache recovery contract changed unexpectedly.")
+_acceptance_source = _acceptance_source.replace(_stale_seed, _stale_reactivation, 1)
 
 # Inject the canonical application version next to the retained v5.3.4 UI
 # generation constant. This file mutation exists only in the Actions checkout.
@@ -116,8 +141,6 @@ def _navigation_safe_wait_runtime(page: Page, **kwargs) -> None:
         try:
             page.wait_for_load_state("domcontentloaded", timeout=5_000)
         except Exception:
-            # A service-worker client.navigate can replace the document again;
-            # the bounded readiness retry below remains the authoritative gate.
             pass
         page.wait_for_timeout(250)
         return _ORIGINAL_WAIT_RUNTIME(page, **kwargs)
