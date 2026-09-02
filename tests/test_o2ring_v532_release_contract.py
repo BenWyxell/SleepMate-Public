@@ -18,8 +18,9 @@ def test_current_shell_activates_only_v534_post_release_owner():
     assert "o2ring-v532.js" not in shell and "frontend-v533.js" not in shell
 def test_current_user_requested_surfaces_are_present():
     runtime=read("web/o2ring.js")
-    for marker in ("switchMode","smO2FocusDual","smStackO2Dual","sm-o2-overlay-select","smNightO2Card","smDashboardO2V534","o2rTrendSpo2","smO2QuickBar","SpO₂ + pulzus – élő"):
+    for marker in ("switchMode","O2_FOCUS_DEFS","o2_spo2","o2_hr","card.className='overview-card sm-o2-focus-mini'","function o2CoreSignal(key)","smStackO2Dual","sm-o2-overlay-select","smNightO2Card","smDashboardO2V534","o2rTrendSpo2","smO2QuickBar","SpO₂ + pulzus – élő"):
         assert marker in runtime
+    assert "smO2FocusDual" not in runtime and "smO2FocusSpo2" not in runtime and "smO2FocusHr" not in runtime
 def test_reports_keep_batched_cpap_overlap_data():
     runtime=read("web/o2ring.js");backend=read("cpap/o2ring_v532.py")
     assert "/api/o2ring/day-batch?days=" in runtime
