@@ -63,7 +63,7 @@ def test_acceptance_p0_live_o2_only_paints_when_visible_and_batch_refills_on_ret
         "function closeLiveStream()",
         "async function resumeLive()",
         "R.liveResumePromise",
-        "await refillLive()",
+        "await refillLive(since)",
         "if(o2PageVisible())openLiveStream()",
         "/api/o2ring/live-buffer?since=",
         "R.liveRaf=requestAnimationFrame(()=>{R.liveRaf=0;drawLive()})",
@@ -239,3 +239,20 @@ def test_acceptance_active_frontend_avoids_aggressive_polling_and_duplicate_runt
     assert "o2ring-v532.js" not in shell
     assert "o2ring-polish-core.js" not in shell
     assert "install_o2ring_runtime_v534" in shell
+
+
+def test_acceptance_o2_trends_live_handoff_and_hover_redraw_are_gap_safe():
+    js = read("web/o2ring.js")
+    for marker in (
+        "function chartGap(rows,trendGap=false)",
+        "medianDelta(rows,null)*3.2",
+        "trendGap:true",
+        "hoverRaf:new Map()",
+        "function scheduleGroupRedraw(group)",
+        "R.hoverRaf.delete(group)",
+        "const since=R.live.at(-1)?.timestamp||0",
+        "openLiveStream();await refillLive(since)",
+        "function closeMobileO2Drawer()",
+    ):
+        assert marker in js
+    assert js.count("trendGap:true") >= 2

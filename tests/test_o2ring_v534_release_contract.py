@@ -60,9 +60,9 @@ def test_v534_live_chart_is_visibility_scoped_and_batch_restored():
         "function updateLiveLifecycle()",
         "function closeLiveStream()",
         "/api/o2ring/live-buffer?since=",
-        "async function refillLive()",
+        "async function refillLive(since=null)",
         "R.liveResumePromise",
-        "await refillLive()",
+        "await refillLive(since)",
         "if(o2PageVisible())openLiveStream()",
     ):
         assert marker in js
