@@ -102,10 +102,20 @@ def test_browser_acceptance_fixture_has_single_live_rows_declaration():
 
 
 def test_release_tree_has_no_v535_one_shot_patch_helpers():
+    forbidden_names = {
+        '_v535_round3_patch.py',
+        '_v535_round3_prepare.py',
+        '_v535_round3_contract_align.py',
+        '_v535_fix_browser_fixture.py',
+        'v535_stability_followup_patch.py',
+        '_v535_round3_patch.yml',
+        '_v535_fix_browser_fixture.yml',
+        'v535-stability-followup-patch.yml',
+    }
     leftovers = [
         p.relative_to(ROOT).as_posix()
         for p in ROOT.rglob('*')
-        if p.is_file() and p.name.startswith('_v535_')
+        if p.is_file() and (p.name.startswith('_v535_') or p.name in forbidden_names)
     ]
     assert leftovers == []
 
@@ -126,3 +136,11 @@ def test_stability_trends_break_missing_nights_and_use_date_axis():
     assert "tooltipLabel:ts=>`${date(ts)} ${clock(ts)}`" in JS
     assert "Dashboard O2 trend bridged a missing night" in BROWSER
     assert "O2 trend X-axis did not render dates" in BROWSER
+
+
+def test_stability_live_return_opens_stream_before_bounded_refill():
+    resume = JS[JS.index('async function resumeLive()'):JS.index('function updateLiveLifecycle()')]
+    assert resume.index('openLiveStream()') < resume.index('await refillLive(since)')
+    assert 'if(R.liveResumePromise)return R.liveResumePromise' in resume
+    assert "return;mergeLive(x.rows||[]);applied=true" in JS
+    assert 'Live O2 only runs while visible and batch-refills on return' in BROWSER
