@@ -249,6 +249,8 @@ def test_acceptance_o2_trends_live_handoff_and_hover_redraw_are_gap_safe():
         "trendGap:true",
         "hoverRaf:new Map()",
         "function scheduleGroupRedraw(group)",
+        "const seen=new Set()",
+        "!seen.has(fn)",
         "R.hoverRaf.delete(group)",
         "const since=R.live.at(-1)?.timestamp||0",
         "openLiveStream();await refillLive(since)",
