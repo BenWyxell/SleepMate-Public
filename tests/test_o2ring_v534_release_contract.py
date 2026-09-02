@@ -173,7 +173,9 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
     ):
         assert marker in js
     assert "shadowBlur" not in js
-    assert "if(e)e.textContent='—'" in bootstrap
+    assert "function fixLatestLoading()" in bootstrap
+    assert "Befejezve" in bootstrap
+    assert "e.textContent='—'" in bootstrap
 
 
 def test_v534_service_workers_only_activate_current_o2_frontend_generation():
