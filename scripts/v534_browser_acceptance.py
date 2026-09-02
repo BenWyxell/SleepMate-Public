@@ -169,6 +169,13 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
             matches:[{cpap_start:now-3600,cpap_end:now-2940,overlap_seconds:660,cpap_coverage_percent:96}],
             summary:summary(95.8,93,65.2,42,1.4,.7,96.4,64.0), samples:dailySamples
           };
+          const flowSignal={
+            key:'flow',unit:'L/min',
+            series:[{
+              start:new Date(dailySamples[0].timestamp*1000).toISOString(),
+              points:dailySamples.map((r,i)=>[r.timestamp-dailySamples[0].timestamp,[0.3,-0.25,0.4,-0.15,0.2][i]])
+            }]
+          };
           const batchOffsets=[0,1,2,4,5];
           const batchRows=batchOffsets.map((offset,i) => {
             const ts=now-(5-offset)*86400;
@@ -181,7 +188,7 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
           window.__smAcceptanceO2 = {
             liveRows,
             bufferCalls:0,
-            dailyDay,daily,batchRows,dayCalls:0,statusCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
+            dailyDay,daily,flowSignal,batchRows,dayCalls:0,statusCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
             trendRows:[0,1,2,4,5].map((offset,i) => ({
               start_ts:now-(5-offset)*86400,
               summary:summary(96.2+i*.15,91+i%2,63+i,30+i*8,1.0+i*.2,.5+i*.1)
@@ -265,6 +272,7 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
             if (url.pathname === `/api/day/${f.dailyDay}/stats`) {
               return jsonResponse({apnea_duration:'0:00',rows:[{key:'pressure',title:'Nyomás',unit:'cmH2O',min:6,median:8,p95:10,p995:11,max:12}]});
             }
+            if (url.pathname === `/api/day/${f.dailyDay}/signal/flow`) return jsonResponse(f.flowSignal);
             if (url.pathname === '/api/o2ring/live-buffer') {
               f.bufferCalls++;
               const since = Number(url.searchParams.get('since') || 0);
@@ -596,6 +604,21 @@ def main() -> int:
         page.wait_for_function("() => document.getElementById('o2rDayDual')?._smO2Meta?.rows?.length >= 5")
         require("96" in page.locator("#spo2").inner_text(), "daily SpO2 card did not hydrate the matched O2 median")
         require("64" in page.locator("#hr").inner_text(), "daily pulse card did not hydrate the matched O2 median")
+        page.evaluate("""async () => {
+          const f=window.__smAcceptanceO2;
+          f._matchedDaily=f.daily;
+          f.daily={day:f.dailyDay,available:false,auto_match:true,matches:[],summary:null,samples:[]};
+          await window.SleepMateO2Ring.refresh();
+        }""")
+        require(page.locator("#spo2").inner_text().strip() == "Nincs adat", "daily SpO2 card stayed stale after matched O2 data disappeared")
+        require(page.locator("#hr").inner_text().strip() == "Nincs adat", "daily pulse card stayed stale after matched O2 data disappeared")
+        page.evaluate("""async () => {
+          const f=window.__smAcceptanceO2;
+          f.daily=f._matchedDaily;
+          await window.SleepMateO2Ring.refresh();
+        }""")
+        require("96" in page.locator("#spo2").inner_text(), "daily SpO2 median did not return when matched O2 data returned")
+        require("64" in page.locator("#hr").inner_text(), "daily pulse median did not return when matched O2 data returned")
         night_text = page.locator("#smNightO2Card").inner_text()
         require("SpO₂" in night_text and "Pulzus" in night_text and "Medián" in night_text, f"night O2 card is missing requested median summary: {night_text!r}")
         require(all(word not in night_text for word in ("Minimum", "T90", "ODI3", "ODI4")), f"night O2 card still contains detailed metrics: {night_text!r}")
@@ -1016,7 +1039,23 @@ def main() -> int:
         require(abs(geometry["leftA"] - geometry["leftB"]) <= 1.5, f"mobile O2 X origins differ: {geometry}")
         require(abs(geometry["widthA"] - geometry["widthB"]) <= 1.5, f"mobile O2 plot widths differ: {geometry}")
 
+        progress("iPhone landscape Oximetria geometry")
+        page.set_viewport_size({"width": 844, "height": 390})
+        page.wait_for_timeout(180)
+        assert_no_horizontal_overflow(page, "Oximetria iPhone landscape")
+        landscape_geometry = page.evaluate(
+            """() => {
+                const a=document.getElementById('o2rLiveSpo2Chart')?.getBoundingClientRect();
+                const b=document.getElementById('o2rLiveHrChart')?.getBoundingClientRect();
+                return a&&b?{leftA:a.left,leftB:b.left,widthA:a.width,widthB:b.width}:null;
+            }"""
+        )
+        require(landscape_geometry is not None, "landscape live O2 canvases missing")
+        require(abs(landscape_geometry["leftA"] - landscape_geometry["leftB"]) <= 1.5, f"landscape O2 X origins differ: {landscape_geometry}")
+        require(abs(landscape_geometry["widthA"] - landscape_geometry["widthB"]) <= 1.5, f"landscape O2 plot widths differ: {landscape_geometry}")
+
         progress("iPhone portrait/landscape O2Ring settings through the mobile category selector")
+        page.set_viewport_size({"width": 390, "height": 844})
         navigate(page, "settings")
         page.wait_for_timeout(250)
         page.locator("#settingsCategorySelect").select_option("display")

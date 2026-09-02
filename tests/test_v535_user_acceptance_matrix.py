@@ -150,3 +150,23 @@ def test_request_05_edge_compares_o2_hero_to_real_core_hero_width():
     assert "spo2_hero_width" in BROWSER
     assert "Focus SpO2 hero line does not match normal hero line width" in BROWSER
     assert "Focus SpO2 hero line is thicker than normal" not in BROWSER
+
+
+def test_request_01_restores_core_oximetry_when_ring_match_disappears():
+    assert "applyOximetryVisibility(state.summary)" in JS
+    assert "daily SpO2 card stayed stale after matched O2 data disappeared" in BROWSER
+    assert "daily pulse card stayed stale after matched O2 data disappeared" in BROWSER
+    assert "daily SpO2 median did not return when matched O2 data returned" in BROWSER
+
+
+def test_request_05_edge_fixture_loads_real_core_flow_signal_path():
+    assert "flowSignal" in BROWSER
+    assert "/signal/flow" in BROWSER
+    assert "state.selectedSignal==='flow' && state.mainSignal?.series?.length" in BROWSER
+
+
+def test_mobile_oximetry_landscape_is_behaviorally_covered():
+    assert "iPhone landscape Oximetria geometry" in BROWSER
+    assert "Oximetria iPhone landscape" in BROWSER
+    assert "landscape O2 X origins differ" in BROWSER
+    assert "landscape O2 plot widths differ" in BROWSER
