@@ -10,17 +10,17 @@ let lastO2Status=null,lastLiveNavEnabled=null,settingsNormalizeRaf=0;
 
 function normalizePwaSettings(){
   const tabs=q('.settings-inner-tabs'),sel=id('settingsCategorySelect'),push=tabs?.querySelector('[data-settings-tab="push"]'),pwa=tabs?.querySelector('[data-settings-tab="pwa"]'),pushPanel=q('[data-settings-panel="push"]'),pwaPanel=id('smPwaSettingsPanel');
-  setText(push,'PWA');
+  if(push&&push.textContent!=='PWA')push.textContent='PWA';
   pwa?.remove();
-  if(sel){const keep=[...sel.options].find(o=>o.value==='push');setText(keep,'PWA');for(const o of [...sel.options].filter(o=>o.value==='pwa'))o.remove()}
+  if(sel){const keep=[...sel.options].find(o=>o.value==='push');if(keep&&keep.textContent!=='PWA')keep.textContent='PWA';for(const o of [...sel.options].filter(o=>o.value==='pwa'))o.remove()}
   if(pushPanel&&pwaPanel&&!pushPanel.contains(pwaPanel)){
     pwaPanel.classList.remove('settings-tab-panel','panel');pwaPanel.removeAttribute('data-settings-panel');pushPanel.prepend(pwaPanel);
   }
 }
 function normalizeO2Settings(){
   const tab=q('[data-settings-tab="display"]'),panel=q('[data-settings-panel="display"]'),sel=id('settingsCategorySelect');
-  setText(tab,'O2Ring');
-  if(sel){const o=[...sel.options].find(x=>x.value==='display');setText(o,'O2Ring')}
+  if(tab&&tab.textContent!=='O2Ring')tab.textContent='O2Ring';
+  if(sel){const o=[...sel.options].find(x=>x.value==='display');if(o&&o.textContent!=='O2Ring')o.textContent='O2Ring'}
   if(panel){panel.classList.add('sm-o2-settings-panel');const h=panel.querySelector(':scope > .panel-head h3');setText(h,'O2Ring');const sub=panel.querySelector(':scope > .panel-head span');setText(sub,'O2Ring integráció, Bluetooth, automatikus kapcsolódás, illesztés és készülékbeállítások.')}
   installAdvancedO2Settings();
 }
@@ -93,7 +93,7 @@ async function saveO2Toggles(){
 function captureO2Toggle(e){if(!['smO2Enabled','smO2Ble','smO2AutoConnect','smO2AutoSync'].includes(e.target?.id))return;e.stopImmediatePropagation();saveO2Toggles()}
 
 function fixLatestLoading(){
-  setText(id('latestStatus'),'—');
+  const status=id('latestStatus');if(status&&status.textContent!=='—')status.textContent='—';
   setText(id('latestSessions'),'—');
 }
 function syncLatestSessionCard(){
