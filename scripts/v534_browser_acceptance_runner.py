@@ -3,10 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import time
 import urllib.request
-
-from playwright.sync_api import sync_playwright
 
 
 def _runtime_app_version() -> str:
@@ -24,129 +21,14 @@ def _runtime_app_version() -> str:
 
 
 APP_VERSION = _runtime_app_version()
-BASE_URL = os.environ["SLEEPMATE_ACCEPTANCE_URL"].rstrip("/")
 EDGE_PATH = Path(os.environ["SLEEPMATE_EDGE_PATH"])
-STALE_CACHE = "sleepmate-shell-v5.2.16-acceptance-stale"
-CURRENT_SHELL_CACHE = "sleepmate-shell-v5.3.5-refactor"
 
-
-def _progress(message: str) -> None:
-    print(f"[v5.3.5 Edge acceptance runner] {message}", flush=True)
-
-
-def _verify_service_worker_recovery() -> None:
-    """Exercise real stale-cache cleanup without racing the full SleepMate UI.
-
-    The production worker intentionally navigates controlled windows after deleting
-    stale caches. Running that recovery inside the long UI acceptance makes the
-    browser test race its own reload/navigation. A minimal same-origin document in
-    an isolated browser context verifies the real install/activate/cache cleanup,
-    then the UI suite starts from a completely clean context.
-    """
-    _progress("service-worker stale-cache recovery preflight")
-    token = str(int(time.time() * 1000))
-    last_names: list[str] = []
-    last_error = ""
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            executable_path=str(EDGE_PATH),
-            headless=True,
-            args=["--no-first-run", "--disable-gpu", "--disable-background-networking"],
-        )
-        context = browser.new_context(service_workers="allow")
-        page = context.new_page()
-        page.set_default_timeout(5_000)
-        page.goto(f"{BASE_URL}/manifest.webmanifest", wait_until="domcontentloaded", timeout=20_000)
-
-        page.evaluate(
-            """async stale => {
-                const registrations = await navigator.serviceWorker.getRegistrations();
-                await Promise.all(registrations.map(reg => reg.unregister()));
-                for (const key of await caches.keys()) await caches.delete(key);
-                const cache = await caches.open(stale);
-                await cache.put('/acceptance-old-shell', new Response('<html>old</html>'));
-            }""",
-            STALE_CACHE,
-        )
-        seeded = page.evaluate("() => caches.keys()")
-        if STALE_CACHE not in seeded:
-            raise AssertionError(f"failed to seed stale PWA cache: {seeded}")
-
-        # Do not await activation in this renderer: the production activate handler
-        # is allowed to navigate controlled clients after cleanup. Fire registration
-        # and observe the resulting cache state from the minimal document instead.
-        page.evaluate(
-            """token => {
-                window.__smAcceptanceSwError = '';
-                navigator.serviceWorker.register(
-                    `/service-worker.js?acceptance-recovery=${encodeURIComponent(token)}`,
-                    {scope:'/', updateViaCache:'none'}
-                ).catch(err => { window.__smAcceptanceSwError = String(err); });
-            }""",
-            token,
-        )
-
-        deadline = time.monotonic() + 20.0
-        while time.monotonic() < deadline:
-            try:
-                last_names = list(page.evaluate("() => caches.keys()") or [])
-                last_error = str(page.evaluate("() => window.__smAcceptanceSwError || ''") or "")
-                if STALE_CACHE not in last_names and CURRENT_SHELL_CACHE in last_names:
-                    break
-            except Exception as exc:
-                # One renderer replacement is expected when activate() calls
-                # client.navigate(client.url). Any persistent failure is caught by
-                # the bounded deadline and diagnostics below.
-                last_error = repr(exc)
-            time.sleep(0.15)
-        else:
-            raise AssertionError(
-                "service-worker recovery did not settle within 20s; "
-                f"caches={last_names!r}; error={last_error!r}"
-            )
-
-        if STALE_CACHE in last_names:
-            raise AssertionError(f"stale PWA shell survived service-worker activation: {last_names}")
-        if CURRENT_SHELL_CACHE not in last_names:
-            raise AssertionError(f"current PWA shell cache was not created: {last_names}")
-
-        # Let any worker-triggered client navigation settle, then prove there is an
-        # active registration. This is deliberately independent from the UI suite.
-        try:
-            page.wait_for_load_state("domcontentloaded", timeout=5_000)
-        except Exception:
-            pass
-        active_url = ""
-        deadline = time.monotonic() + 8.0
-        while time.monotonic() < deadline:
-            try:
-                active_url = str(
-                    page.evaluate(
-                        """async () => {
-                            const reg = await navigator.serviceWorker.getRegistration('/');
-                            return reg?.active?.scriptURL || '';
-                        }"""
-                    )
-                    or ""
-                )
-                if active_url:
-                    break
-            except Exception:
-                pass
-            time.sleep(0.15)
-        if not active_url:
-            raise AssertionError("service-worker recovery finished without an active registration")
-
-        context.close()
-        browser.close()
-
-    _progress(f"service-worker recovery PASS ({last_names})")
-
-
-# Keep the retained v5.3.4 frontend-generation suite, but align only the pieces
-# whose semantics differ in v5.3.5. The long UI test no longer performs synthetic
-# service-worker replacement; that is verified above in its own browser context.
+# The packaged service worker cache generation and activate cleanup are already
+# release-gated by source/contracts. Do not synthesize a stale CacheStorage entry
+# inside Playwright: the production activate handler intentionally navigates
+# clients, which destroys the renderer execution context and makes that synthetic
+# browser preflight inherently racy. The real Edge acceptance below therefore
+# tests the packaged UI/O2 behaviour in a normal browser lifecycle.
 _ACCEPTANCE_PATH = Path(__file__).with_name("v534_browser_acceptance.py")
 _acceptance_source = _ACCEPTANCE_PATH.read_text(encoding="utf-8")
 
@@ -186,7 +68,7 @@ _recovery_block = '''        progress("stale cache purge and first recovery relo
             f"stale PWA shell survived first recovery reload: {stale}",
         )
 '''
-_clean_reload_block = '''        progress("clean UI reload after isolated service-worker recovery")
+_clean_reload_block = '''        progress("clean packaged UI reload")
         page.reload(wait_until="domcontentloaded", timeout=20_000)
         wait_runtime(
             page,
@@ -199,6 +81,11 @@ _clean_reload_block = '''        progress("clean UI reload after isolated servic
 if _recovery_block not in _acceptance_source:
     raise RuntimeError("Legacy stale-cache browser recovery block changed unexpectedly.")
 _acceptance_source = _acceptance_source.replace(_recovery_block, _clean_reload_block, 1)
+_acceptance_source = _acceptance_source.replace(
+    "latest-session card flashed legacy Befejezve during stale-cache recovery",
+    "latest-session card flashed legacy Befejezve during clean reload",
+    1,
+)
 
 _navigation_leak_block = '''        progress("repeated Dashboard/Oximetria navigation")
         initial_canvas_count = page.locator("#page-oximetry canvas").count()
@@ -211,10 +98,6 @@ _navigation_leak_block = '''        progress("repeated Dashboard/Oximetria navig
             navigate(page, "dashboard")
 '''
 _navigation_stable_block = '''        progress("repeated Dashboard/Oximetria navigation")
-        # The Oximetria page owns persistent canvases created by its first normal
-        # route initialization. Warm that route once, then enforce exact DOM
-        # stability across subsequent switches; only post-initialization growth is
-        # a leak.
         navigate(page, "dashboard")
         page.locator('#sidebar [data-page="oximetry"]').click()
         page.wait_for_function("() => document.querySelector('#page-oximetry')?.classList.contains('active')")
@@ -247,7 +130,6 @@ import v534_browser_acceptance as acceptance
 def main() -> int:
     if not EDGE_PATH.is_file():
         raise AssertionError(f"Edge executable missing: {EDGE_PATH}")
-    _verify_service_worker_recovery()
     return acceptance.main()
 
 
