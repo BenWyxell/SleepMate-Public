@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import urllib.request
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
@@ -12,9 +13,22 @@ BASE_URL = os.environ["SLEEPMATE_ACCEPTANCE_URL"].rstrip("/")
 EDGE_PATH = Path(os.environ["SLEEPMATE_EDGE_PATH"])
 
 
+def progress(message: str) -> None:
+    print(f"[v5.3.4 Edge acceptance] {message}", flush=True)
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def api_json(path: str) -> dict:
+    req = urllib.request.Request(
+        f"{BASE_URL}{path}",
+        headers={"Accept": "application/json", "Cache-Control": "no-store"},
+    )
+    with urllib.request.urlopen(req, timeout=5) as response:
+        return json.load(response)
 
 
 def runtime_snapshot(
@@ -25,57 +39,19 @@ def runtime_snapshot(
     request_failures: list[str] | None = None,
     http_errors: list[str] | None = None,
 ) -> dict:
-    """Capture enough browser state to distinguish a stale assertion from a real boot failure."""
+    """Return diagnostics without executing JS in a renderer that may already be hung."""
     try:
-        browser_state = page.evaluate(
-            """() => {
-                const shell=document.querySelector('.hidden-until-ready');
-                const splash=document.getElementById('startupSplash');
-                const error=document.getElementById('error');
-                const scripts=[...document.scripts].map(s=>({
-                    id:s.id||'',
-                    src:s.src||'(inline)',
-                    readyState:s.readyState||''
-                }));
-                const resources=performance.getEntriesByType('resource')
-                    .filter(x=>x.initiatorType==='script'||x.initiatorType==='link')
-                    .map(x=>({name:x.name,initiatorType:x.initiatorType,duration:Math.round(x.duration)}))
-                    .slice(-80);
-                return {
-                    url:location.href,
-                    title:document.title,
-                    readyState:document.readyState,
-                    shellExists:!!shell,
-                    shellClass:shell?.className||null,
-                    splashClass:splash?.className||null,
-                    bodyClass:document.body?.className||'',
-                    globals:{
-                        navigate:typeof window.navigate,
-                        SleepMateV530:!!window.SleepMateV530,
-                        SleepMateFrontendV534:!!window.SleepMateFrontendV534,
-                        SleepMateO2Ring:!!window.SleepMateO2Ring,
-                        bootStarted:!!window.__sleepmateBootStarted,
-                        stableEngine130:!!window.__sleepmateStableEngine130
-                    },
-                    uiMeta:document.querySelector('meta[name="sleepmate-ui-version"]')?.content||null,
-                    sidebarVersion:document.getElementById('sidebarVersion')?.textContent?.trim()||null,
-                    visibleError:error&&!error.classList.contains('hidden')?{
-                        title:document.getElementById('errorTitle')?.textContent||'',
-                        message:document.getElementById('errorMessage')?.textContent||'',
-                        technical:document.getElementById('errorTechnical')?.textContent||''
-                    }:null,
-                    scripts,
-                    resources
-                };
-            }"""
-        )
-    except Exception as exc:  # pragma: no cover - only used when the page itself is broken
-        browser_state = {"snapshot_error": repr(exc), "url": page.url}
-    browser_state["pageErrors"] = list(page_errors or [])
-    browser_state["consoleErrors"] = list(console_errors or [])
-    browser_state["requestFailures"] = list(request_failures or [])
-    browser_state["httpErrors"] = list(http_errors or [])
-    return browser_state
+        current_url = page.url
+    except Exception as exc:  # pragma: no cover - only used for a dead target
+        current_url = f"<unavailable: {exc!r}>"
+    return {
+        "url": current_url,
+        "rendererSnapshot": "skipped after readiness timeout to avoid deadlocking on page.evaluate",
+        "pageErrors": list(page_errors or []),
+        "consoleErrors": list(console_errors or []),
+        "requestFailures": list(request_failures or []),
+        "httpErrors": list(http_errors or []),
+    }
 
 
 def wait_runtime(
@@ -136,6 +112,7 @@ def main() -> int:
     http_errors: list[str] = []
     live_stream_requests: list[str] = []
 
+    progress(f"starting packaged Edge against {BASE_URL}")
     with sync_playwright() as p:
         browser = p.chromium.launch(
             executable_path=str(EDGE_PATH),
@@ -147,6 +124,7 @@ def main() -> int:
             service_workers="allow",
         )
         page = context.new_page()
+        page.set_default_timeout(5_000)
         page.on("pageerror", lambda exc: page_errors.append(str(exc)))
         page.on(
             "console",
@@ -173,7 +151,7 @@ def main() -> int:
             else None,
         )
 
-        # First real browser boot: this is deliberately not a static DOM check.
+        progress("first real browser boot")
         page.goto(f"{BASE_URL}/#dashboard", wait_until="domcontentloaded", timeout=20_000)
         wait_runtime(
             page,
@@ -182,6 +160,7 @@ def main() -> int:
             request_failures=request_failures,
             http_errors=http_errors,
         )
+        progress("runtime ready on first load")
 
         meta = page.locator('meta[name="sleepmate-ui-version"]').get_attribute("content")
         require(meta == VERSION, f"wrong UI generation meta: {meta}")
@@ -194,8 +173,7 @@ def main() -> int:
             "PWA live O2 navigation label missing",
         )
 
-        # Seed a deliberately stale cache. The v5.3.4 bootstrap must purge it on
-        # a normal reload without requiring a second/third user refresh.
+        progress("stale cache purge and first recovery reload")
         page.evaluate(
             """async () => {
                 const c = await caches.open('sleepmate-shell-v5.2.16-acceptance-stale');
@@ -217,7 +195,7 @@ def main() -> int:
         )
         require(page.locator("#sidebarVersion").inner_text().strip() == f"v{VERSION}", "reload restored stale UI version")
 
-        # Repeated Dashboard <-> Oximetria navigation must remain single-owned.
+        progress("repeated Dashboard/Oximetria navigation")
         initial_canvas_count = page.locator("#page-oximetry canvas").count()
         for _ in range(8):
             navigate(page, "dashboard")
@@ -227,8 +205,7 @@ def main() -> int:
             require(page.locator("#page-oximetry canvas").count() == initial_canvas_count, "O2 chart DOM leaked during route switching")
             navigate(page, "dashboard")
 
-        # The three Dashboard daily mode controls never become Back buttons and
-        # can be switched repeatedly even when this clean CI state has no therapy day.
+        progress("Focus/All charts/Oximetria repeated mode switching")
         for _ in range(6):
             for control in ("focusViewBtn", "stackViewBtn", "o2rDailyBtn"):
                 page.evaluate("id => document.getElementById(id)?.click()", control)
@@ -236,7 +213,7 @@ def main() -> int:
         require(page.locator("#stackViewBtn").inner_text().strip() == "Összes grafikon", "All charts button text mutated")
         require(page.locator("#o2rDailyBtn").inner_text().strip() == "Oximetria", "Oximetria mode mutated into navigation/back")
 
-        # Oximetria tabs can be switched repeatedly without duplicate mounts or JS errors.
+        progress("Oximetria Live/Recordings/Trends repeated switching")
         page.locator('#sidebar [data-page="oximetry"]').click()
         page.wait_for_function("() => document.querySelector('#page-oximetry')?.classList.contains('active')")
         for _ in range(5):
@@ -246,8 +223,7 @@ def main() -> int:
         require(page.locator("#page-oximetry").count() == 1, "Oximetria tab switching duplicated page")
         require(page.locator("#page-oximetry canvas").count() == initial_canvas_count, "Oximetria tab switching leaked charts")
 
-        # Opening Live O2 is allowed to start one live stream; after leaving the
-        # view, no new background stream should be spawned.
+        progress("hidden Live O2 lifecycle")
         page.locator('[data-o2r-tab="live"]').click()
         page.wait_for_timeout(500)
         before_leave = len(live_stream_requests)
@@ -258,7 +234,7 @@ def main() -> int:
             "hidden Dashboard state spawned additional live O2 streams",
         )
 
-        # Settings source-level merge must also hold after actual browser hydration.
+        progress("settings hydration and toggle persistence")
         navigate(page, "settings")
         page.wait_for_timeout(500)
         require(page.locator('[data-settings-tab="pwa"]').count() == 0, "legacy separate PWA settings tab returned")
@@ -271,19 +247,16 @@ def main() -> int:
         require(page.locator("#smO2Master").count() == 1, "O2Ring master settings missing/duplicated")
         require(page.locator("#smO2AdvancedV534").count() == 1, "O2Ring advanced settings missing/duplicated")
 
-        # The auto-match switch must persist on the first interaction and survive hydration.
         auto_match = page.locator("#smO2AutoMatch")
         current = auto_match.is_checked()
         auto_match.set_checked(not current)
         page.wait_for_timeout(450)
-        persisted = page.evaluate(
-            """async () => (await (await fetch('/api/o2ring/settings',{cache:'no-store'})).json()).o2ring_auto_match"""
-        )
+        persisted = api_json("/api/o2ring/settings").get("o2ring_auto_match")
         require(bool(persisted) is (not current), "O2 auto-match toggle did not persist on first interaction")
         auto_match.set_checked(current)
         page.wait_for_timeout(450)
 
-        # iPhone-sized PWA acceptance: no horizontal overflow, common O2 X geometry.
+        progress("iPhone portrait Oximetria geometry")
         page.set_viewport_size({"width": 390, "height": 844})
         page.locator('#sidebar [data-page="oximetry"]').click(force=True)
         page.locator('[data-o2r-tab="live"]').click()
@@ -300,7 +273,7 @@ def main() -> int:
         require(abs(geometry["leftA"] - geometry["leftB"]) <= 1.5, f"mobile O2 X origins differ: {geometry}")
         require(abs(geometry["widthA"] - geometry["widthB"]) <= 1.5, f"mobile O2 plot widths differ: {geometry}")
 
-        # Settings must remain usable as a true one-column mobile layout.
+        progress("iPhone portrait/landscape O2Ring settings")
         navigate(page, "settings")
         page.locator('[data-settings-tab="display"]').click()
         page.wait_for_timeout(200)
@@ -310,7 +283,6 @@ def main() -> int:
         )
         require(" " not in columns.strip(), f"mobile O2 settings are not one-column: {columns}")
 
-        # Landscape is part of the responsive acceptance contract as well.
         page.set_viewport_size({"width": 844, "height": 390})
         page.wait_for_timeout(120)
         assert_no_horizontal_overflow(page, "O2Ring settings iPhone landscape")
@@ -318,12 +290,10 @@ def main() -> int:
         browser.close()
 
     require(not page_errors, "browser page errors: " + " | ".join(page_errors))
-    # Ignore Chromium's own optional-resource console chatter only if it does not
-    # originate from SleepMate JS. In the acceptance build we expect none.
     require(not console_errors, "browser console errors: " + " | ".join(console_errors))
     require(not request_failures, "browser request failures: " + " | ".join(request_failures))
     require(not http_errors, "browser HTTP errors: " + " | ".join(http_errors))
-    print("v5.3.4 real Edge/PWA acceptance smoke: PASS")
+    progress("PASS")
     return 0
 
 
