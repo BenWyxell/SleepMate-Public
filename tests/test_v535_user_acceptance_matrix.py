@@ -73,6 +73,7 @@ def test_11_daily_statistics_contains_spo2_and_pulse_min_median_max():
     assert "row('spo2','SpO₂ (O2Ring)'" in JS
     assert "row('hr','Pulzus (O2Ring)'" in JS
     assert 'Daily Statistics missing pulse min/median/max' in BROWSER
+    assert 'Daily Statistics did not use refreshed minimum SpO2' in BROWSER
 
 def test_12_oximetry_top_navigation_is_one_row_after_sync():
     install = JS[JS.index('function installPage()'):JS.index('function closeMobileO2Drawer()')]

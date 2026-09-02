@@ -909,7 +909,7 @@ def main() -> int:
         page.wait_for_function("() => document.querySelectorAll('#statsBody tr[data-sm-o2-stat]').length===2")
         o2_stats = page.evaluate("""() => Object.fromEntries([...document.querySelectorAll('#statsBody tr[data-sm-o2-stat]')].map(tr=>[tr.dataset.smO2Stat,[...tr.cells].map(td=>td.textContent.trim())]))""")
         require('spo2' in o2_stats and 'hr' in o2_stats, f"Daily Statistics missing O2 rows: {o2_stats}")
-        require('93,0%' in o2_stats['spo2'][1] or '93.0%' in o2_stats['spo2'][1], f"Daily Statistics missing minimum SpO2: {o2_stats}")
+        require('90,0%' in o2_stats['spo2'][1] or '90.0%' in o2_stats['spo2'][1], f"Daily Statistics did not use refreshed minimum SpO2: {o2_stats}")
         require('94,6%' in o2_stats['spo2'][2] or '94.6%' in o2_stats['spo2'][2], f"Daily Statistics missing median SpO2: {o2_stats}")
         require(o2_stats['spo2'][5] != '–', f"Daily Statistics missing maximum SpO2: {o2_stats}")
         require(o2_stats['hr'][1] != '–' and ('67,0 bpm' in o2_stats['hr'][2] or '67.0 bpm' in o2_stats['hr'][2]) and o2_stats['hr'][5] != '–', f"Daily Statistics missing pulse min/median/max: {o2_stats}")
