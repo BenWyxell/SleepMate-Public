@@ -221,7 +221,7 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
 def test_v534_service_workers_only_activate_current_o2_frontend_generation():
     for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         sw = read(path)
-        assert "sleepmate-shell-v5.3.4-refactor" in sw
+        assert "sleepmate-shell-v5.3.5-refactor" in sw
         assert "/o2ring-v534.css?v=5.3.4" in sw
         assert "/frontend-v534.js?v=5.3.4" in sw
         assert "'/o2ring.js'" in sw

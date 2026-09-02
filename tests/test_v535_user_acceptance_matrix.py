@@ -15,6 +15,8 @@ HTML = read('web/index.html')
 DOMAIN = read('cpap/oximetry.py')
 BROWSER = read('scripts/v534_browser_acceptance.py')
 RELEASE_NOTES = read('RELEASE_NOTES.md')
+SW = read('web/service-worker.js')
+SW_BASE = read('web/service-worker-v508-base.js')
 
 def test_01_daily_spo2_and_pulse_cards_use_matched_medians():
     assert 'function hydrateDailyO2Metrics()' in JS
@@ -184,3 +186,11 @@ def test_release_identity_is_v535():
     section = RELEASE_NOTES.split('\n---\n', 1)[0]
     assert 'Release build: **5.3.5**.' in section
     assert 'Kiadási csatorna: **stable**.' in section
+
+
+def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():
+    for worker in (SW, SW_BASE):
+        assert "const CACHE='sleepmate-shell-v5.3.5-refactor';" in worker
+        assert "const API_CACHE='sleepmate-api-v5.3.5-refactor';" in worker
+        assert "const UI_VERSION='5.3.4';" in worker
+        assert '/frontend-v534.js?v=5.3.4' in worker

@@ -23,8 +23,8 @@ def test_acceptance_p0_single_frontend_owner_and_stale_pwa_recovery():
     assert "frontend-v534.js" in shell
     assert "o2ring-v534.css" in shell
     for worker in (sw, base):
-        assert "sleepmate-shell-v5.3.4-refactor" in worker
-        assert "sleepmate-api-v5.3.4-refactor" in worker
+        assert "sleepmate-shell-v5.3.5-refactor" in worker
+        assert "sleepmate-api-v5.3.5-refactor" in worker
         assert "/o2ring.js" in worker
         assert "/frontend-v534.js?v=5.3.4" in worker
         assert "/o2ring-v534.css?v=5.3.4" in worker
