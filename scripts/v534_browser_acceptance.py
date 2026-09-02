@@ -251,6 +251,8 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
 
 def hover_canvas(page: Page, canvas_id: str, expected_labels: tuple[str, ...]) -> str:
     canvas = page.locator(f"#{canvas_id}")
+    canvas.scroll_into_view_if_needed()
+    page.wait_for_timeout(60)
     box = canvas.bounding_box()
     require(box is not None and box["width"] > 40 and box["height"] > 40, f"{canvas_id}: canvas is not visible")
     page.mouse.move(box["x"] + box["width"] * 0.68, box["y"] + box["height"] * 0.46)
@@ -269,6 +271,8 @@ def hover_canvas(page: Page, canvas_id: str, expected_labels: tuple[str, ...]) -
 
 def zoom_canvas(page: Page, canvas_id: str) -> tuple[list[float], list[float]]:
     canvas = page.locator(f"#{canvas_id}")
+    canvas.scroll_into_view_if_needed()
+    page.wait_for_timeout(60)
     box = canvas.bounding_box()
     require(box is not None and box["width"] > 40, f"{canvas_id}: zoom target is not visible")
     before = page.evaluate(
