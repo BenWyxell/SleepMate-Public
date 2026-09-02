@@ -1,3 +1,36 @@
+# SleepMate 5.3.5
+
+A SleepMate 5.3.5 a v5.3.4 O2Ring/PWA stabilitási körére épülő célzott felület- és adatmegjelenítési javítókiadás.
+
+## Dashboard és napi nézet
+
+- A SpO₂ és Pulzus kártyák a CPAP-idővel átfedő O2Ring adatok mediánját mutatják, magyar számformátummal.
+- A Fókusznézetben két normál O₂ mini kártya marad; mindkettő a közös hero grafikonra nyílik.
+- Az O₂ overlay jobb oldali SpO₂/HR skálát, pontos időpontú hovert és `Alapnézet` kikapcsolt állapotot használ.
+- A Legutóbbi alvás kártya elsődlegesen a teljes terápiás/alvási időt mutatja, az Oximetriai összegzés pedig stabilan frissül.
+
+## Jelentések és éjszakai értékelés
+
+- A kiválasztott napok táblázata kompaktabb lett; a Napi statisztika SpO₂ és Pulzus minimum/medián/maximum értékeket mutat.
+- SleepSync invalidáció után a Jelentések az aktuális, CPAP-idővel illesztett O2Ring summary értékeket használják.
+- Az Éjszaka értékelése Oximetria kártyája csak SpO₂- és Pulzus-mediánt tartalmaz, normál grid-méretben.
+
+## Oximetria és PWA stabilitás
+
+- A Dashboard, Kapcsolódás, Szinkron, Élő O₂ monitor, Felvételek és Trendek egyetlen felső gombsorban jelennek meg; a külön nagy Állapot kártya megszűnt.
+- Az O₂ grafikonok pontos HH:MM:SS hovert, crosshairt, zoom/pan/pinch/touch kezelést és gap-helyes vonalrajzolást használnak.
+- A Live O₂ csak látható Élő nézetben dolgozik; elhagyáskor a stream lezár, visszatéréskor bounded refill után folytatódik.
+- Az első PWA-megnyitás, stale-cache helyreállítás, ismételt navigáció és iPhone portrait/landscape geometria regresszióteszttel védett.
+
+## Kiadási validáció
+
+A v5.3.5 kiadási kapuja ugyanazon exact commiton ellenőrzi a source contractokat, a Windows x64 programfa buildet, a magyar WiX MSI-t, a valódi install/API/uninstall smoke-testet, a VERIFIED hash/manifeszt/ZIP/MSI identity-t és a valódi Microsoft Edge packaged acceptance-et.
+
+Kiadási csatorna: **stable**.
+Release build: **5.3.5**.
+API: **19**.
+
+---
 # SleepMate 5.3.0
 
 A SleepMate 5.3.0 a 5.2.20 stabil publikus alapjára épülő nagy funkcionális kiadás. Bevezeti az opcionális O2Ring oximetriai integrációt, a CPAP- és oximetriai adatok közös idővonalas elemzését, valamint az Aurora/PWA felületfrissítést úgy, hogy az O2Ring funkció kikapcsolt állapotban ne változtassa meg a hagyományos SleepMate használatát.
