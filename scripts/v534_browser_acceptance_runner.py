@@ -1,16 +1,33 @@
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
+import urllib.request
 
 from playwright.sync_api import Page
 
-from cpap.version import APP_VERSION
 
+def _runtime_app_version() -> str:
+    base_url = os.environ["SLEEPMATE_ACCEPTANCE_URL"].rstrip("/")
+    req = urllib.request.Request(
+        f"{base_url}/api/version",
+        headers={"Accept": "application/json", "Cache-Control": "no-store"},
+    )
+    with urllib.request.urlopen(req, timeout=5) as response:
+        payload = json.load(response)
+    version = str(payload.get("version") or "").strip()
+    if not version:
+        raise RuntimeError("Packaged runtime did not report a canonical application version.")
+    return version
+
+
+APP_VERSION = _runtime_app_version()
 
 # The v5.3.4 acceptance suite intentionally keeps validating the retained
 # frontend generation marker (frontend-v534 / UI_VERSION=5.3.4). The visible
-# application version, however, must follow the canonical app version. Patch
-# only those two legacy sidebar expectations in the ephemeral CI checkout
+# application version, however, must follow the canonical packaged runtime.
+# Patch only those two legacy sidebar expectations in the ephemeral CI checkout
 # before importing the regression suite; all v5.3.4 frontend-generation gates
 # remain unchanged.
 _ACCEPTANCE_PATH = Path(__file__).with_name("v534_browser_acceptance.py")
