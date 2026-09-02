@@ -31,6 +31,7 @@ class OximetrySummary:
     spo2_average: float | None
     spo2_median: float | None
     spo2_minimum: int | None
+    spo2_maximum: int | None
     heart_rate_average: float | None
     heart_rate_median: float | None
     heart_rate_minimum: int | None
@@ -180,6 +181,7 @@ def summarize_samples(samples: Sequence[OximetrySample], *, start_ts: float, end
         spo2_average=round(sum(spo2) / len(spo2), 2) if spo2 else None,
         spo2_median=round(float(median(spo2)), 2) if spo2 else None,
         spo2_minimum=min(spo2) if spo2 else None,
+        spo2_maximum=max(spo2) if spo2 else None,
         heart_rate_average=round(sum(heart_rate) / len(heart_rate), 2) if heart_rate else None,
         heart_rate_median=round(float(median(heart_rate)), 2) if heart_rate else None,
         heart_rate_minimum=min(heart_rate) if heart_rate else None,

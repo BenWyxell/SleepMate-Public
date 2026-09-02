@@ -92,18 +92,10 @@ async function saveO2Toggles(){
 }
 function captureO2Toggle(e){if(!['smO2Enabled','smO2Ble','smO2AutoConnect','smO2AutoSync'].includes(e.target?.id))return;e.stopImmediatePropagation();saveO2Toggles()}
 
-function fixLatestLoading(){
-  const status=id('latestStatus');if(status&&status.textContent!=='—')status.textContent='—';
-  setText(id('latestSessions'),'—');
-}
-function syncLatestSessionCard(){
-  const status=id('latestStatus'),sessions=id('latestSessions');if(!status||!sessions)return;
-  let latest=null;try{latest=state?.dashboardOverview?.latest||null}catch{}
-  if(!latest){setText(status,'—');setText(sessions,'—');return}
-  const count=Array.isArray(latest.sessions)?latest.sessions.length:null;
-  setText(status,count==null?'—':String(count));
-  setText(sessions,count==null?'—':'szakasz');
-}
+function latestSummary(){let latest=null;try{latest=state?.dashboardOverview?.latest||null}catch{}return latest?.summary||latest||null}
+function latestDuration(summary){const seconds=Number(summary?.therapy_seconds);if(Number.isFinite(seconds)&&seconds>=0){const mins=Math.round(seconds/60);return `${Math.floor(mins/60)}:${String(mins%60).padStart(2,'0')}`}const usage=String(summary?.usage||'');return /^\d+:\d{2}/.test(usage)?usage.slice(0,5):'—'}
+function fixLatestLoading(){const status=id('latestStatus');if(status&&status.textContent!=='—')status.textContent='—';setText(id('latestSessions'),'—')}
+function syncLatestSessionCard(){const status=id('latestStatus'),sessions=id('latestSessions');if(!status||!sessions)return;const summary=latestSummary();if(!summary){setText(status,'—');setText(sessions,'—');return}const count=Array.isArray(summary.sessions)?summary.sessions.length:null;setText(status,latestDuration(summary));setText(sessions,count==null?'teljes terápiás idő':`${count} szakasz`)}
 function hookOverviewLoading(){
   try{
     if(typeof loadDashboardOverview==='function'&&!loadDashboardOverview.__smLoading534){

@@ -79,7 +79,7 @@ replace_literal(
 replace_literal(
     sidebar_app_js,
     "$('#latestStatus').textContent='Befejezve';$('#latestSessions').textContent=`${latest.sessions?.length||0} szakasz`;",
-    "$('#latestStatus').textContent=String(latest.sessions?.length||0);$('#latestSessions').textContent='szakasz';",
+    "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0);$('#latestSessions').textContent=`${latest.sessions?.length||0} szakasz`;",
 )
 
 replace_exact(

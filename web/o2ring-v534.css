@@ -17,3 +17,8 @@
 
 /* v5.3.4 persistent peer-mode switch */
 .sm-daily-mode-switch-row{display:flex;justify-content:flex-end;align-items:center;min-width:0;margin:0 0 10px;overflow-x:auto;padding-bottom:2px}.sm-daily-mode-switch-row .view-switch{flex:0 0 auto;margin:0}@media(max-width:600px){.sm-daily-mode-switch-row{justify-content:flex-start}}
+
+
+/* v5.3.5 report + night-card polish */
+.sm-report-days-compact>.panel-head{padding:8px 10px 3px!important;margin:0 0 5px!important}.sm-report-days-compact>.panel-head h3{font-size:12px!important}.sm-report-days-compact>.panel-head span{font-size:9px!important}.sm-report-days-compact .report-days-table.clean-fixed-table{table-layout:auto!important;min-width:1080px!important}.sm-report-days-compact .report-days-table th,.sm-report-days-compact .report-days-table td{padding:6px 8px!important;line-height:1.15!important;white-space:nowrap!important;font-size:10px!important}.sm-report-days-compact .report-days-table th{font-size:9px!important}
+#nightEvalList .sm-night-o2-card{margin:0!important;width:auto!important;max-width:none!important;min-height:82px!important;background:#101923!important;border:0!important;border-radius:10px!important;box-shadow:none!important}#nightEvalList .sm-night-o2-card .night-fact-icon{background:rgba(85,216,255,.13);color:#55d8ff}

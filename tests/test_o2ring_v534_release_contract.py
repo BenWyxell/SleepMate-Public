@@ -202,7 +202,9 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
     assert "shadowBlur" not in js
     assert "function fixLatestLoading()" in bootstrap
     assert "function syncLatestSessionCard()" in bootstrap
-    assert "latest.sessions" in bootstrap
+    assert "latest?.summary||latest" in bootstrap
+    assert "latestDuration(summary)" in bootstrap
+    assert "summary.sessions" in bootstrap
     assert "status.textContent='—'" in bootstrap
     assert "Befejezve" not in bootstrap
 

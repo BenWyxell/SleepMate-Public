@@ -29,10 +29,10 @@ def test_v534_packaging_rejects_obsolete_o2_runtime_assets():
 
 def test_v534_packaging_replaces_legacy_latest_session_status_flash():
     # The legacy text remains only as the exact replacement needle in the build
-    # recipe. The generated packaged app must replace it with session count + label.
+    # recipe. The generated packaged app must replace it with total therapy duration.
     assert "textContent='Befejezve'" in SPEC
-    assert "textContent=String(latest.sessions?.length||0)" in SPEC
-    assert "textContent='szakasz'" in SPEC
+    assert "secondsToHM(latest.therapy_seconds||0)" in SPEC
+    assert "${latest.sessions?.length||0} szakasz" in SPEC
 
 
 def test_v534_invalidation_sse_resumes_with_standard_event_ids():
