@@ -23,6 +23,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - Live, recording, trend, daily Dashboard, Fókusz, Összes grafikon and Dashboard summary O₂ charts expose an exact HH:MM:SS hover crosshair/tooltip with the value of each displayed series.
 - O₂ chart zoom/pan interactions work with mouse/touch interaction contracts and reset cleanly; the packaged Edge gate must exercise the shared two-finger pinch handler with touch pointer events rather than relying only on source markers.
 - Pointer-based browser acceptance must interact with an actually visible chart target (scrolling an off-screen canvas into the viewport as a user would) instead of forcing events onto hidden/off-screen controls.
+- Interactive O₂ canvases inside the Összes grafikon stack must override the legacy CPAP base-canvas `pointer-events:none` rule; SpO₂, pulse and combined Stack O₂ charts must all remain real pointer/touch targets and pass packaged hover interaction.
 - The daily Dashboard O₂ canvases zoom synchronously, while Fókusz and Összes grafikon retain their own zoom ranges when switching between the peer modes.
 - Crosshair redraw is requestAnimationFrame-coalesced to avoid pointer-move render storms, and synchronized canvases sharing one redraw function invoke that function at most once per frame.
 - High-frequency SpO₂ / pulse charts must split the actually rendered canvas path across a long no-data interval; no line may visually bridge an O₂ gap merely because valid samples exist on both sides.
@@ -55,6 +56,6 @@ A release may only be created from the same commit that passes:
 2. exact-SHA Windows portable build,
 3. Hungarian MSI build and real install/smoke test,
 4. VERIFIED release-set hash/identity checks,
-5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, persistent peer-mode switching, two-finger pinch, rendered gap/continuity behaviour, transient latest-session status history and SleepSync invalidation behaviour.
+5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, persistent peer-mode switching, Stack O₂ pointer/touch input, two-finger pinch, rendered gap/continuity behaviour, transient latest-session status history and SleepSync invalidation behaviour.
 
 A source-level marker or a green test with no O₂ data is not sufficient proof for a behavioural acceptance item.
