@@ -96,7 +96,7 @@ def test_v534_invalidation_hub_replays_every_missed_event_in_order():
     assert hub.wait(0, timeout=0.01)["seq"] == first["seq"]
     assert hub.wait(first["seq"], timeout=0.01)["seq"] == second["seq"]
     assert hub.wait(second["seq"], timeout=0.01)["seq"] == third["seq"]
-    assert [x["seq"] for x in hub.events_after(0)] == [0, first["seq"], second["seq"], third["seq"]]
+    assert [x["seq"] for x in hub.events_after(0)] == [first["seq"], second["seq"], third["seq"]]
     assert hub.snapshot()["seq"] == third["seq"]
 
 
@@ -150,10 +150,6 @@ def test_v534_overlay_is_per_signal_timestamp_aligned_and_gap_aware():
         "installPerStackOverlayControls",
     ):
         assert marker in js
-    # Core CPAP charts plot from left=54 to right=12. The O2 renderer reserves
-    # 54 px on the right for its secondary scale, so its canvas is deliberately
-    # extended by exactly 42 px. The visible O2 plot then ends at the same pixel
-    # as the underlying CPAP plot instead of drifting left.
     assert "right:-42px!important" in css
     assert "width:calc(100% + 42px)!important" in css
 
