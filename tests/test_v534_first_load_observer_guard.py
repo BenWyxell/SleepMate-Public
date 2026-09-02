@@ -25,6 +25,9 @@ def test_v534_latest_session_card_has_idempotent_dom_ownership():
     assert "function watchLatestSessionCard()" in front
     assert "new MutationObserver(()=>syncLatestSessionCard())" in front
     assert "status&&status.textContent!=='—'" in front
-    assert "latest.sessions" in front
-    assert "setText(status,count==null?'—':String(count))" in front
+    assert "latest?.summary||latest" in front
+    assert "function latestDuration(summary)" in front
+    assert "Array.isArray(summary.sessions)" in front
+    assert "setText(status,latestDuration(summary))" in front
+    assert "`${count} szakasz`" in front
     assert "Befejezve" not in front
