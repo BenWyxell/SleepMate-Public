@@ -61,7 +61,9 @@ def test_v534_live_chart_is_visibility_scoped_and_batch_restored():
         "function closeLiveStream()",
         "/api/o2ring/live-buffer?since=",
         "async function refillLive()",
-        "await refillLive();openLiveStream()",
+        "R.liveResumePromise",
+        "await refillLive()",
+        "if(o2PageVisible())openLiveStream()",
     ):
         assert marker in js
     assert "class _LiveBuffer" in stream
