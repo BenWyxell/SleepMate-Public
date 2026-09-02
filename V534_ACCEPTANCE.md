@@ -18,6 +18,7 @@ This branch is not releasable until the following user-facing behaviours are val
 - Leaving Oximetria closes the live SSE, aborts any in-flight live-buffer refill and does not perform live-buffer refill work in the background; route departure itself must disable Live immediately, even before the outgoing page loses its active DOM class.
 - Returning to Oximetria restores the missed interval with one bounded batch request and resumes the live stream without a hand-off gap.
 - Intentional lifecycle closure of `/api/o2ring/live-stream` may surface in Edge as `net::ERR_ABORTED`; packaged acceptance may ignore only that exact Live SSE abort, while every other browser request failure remains release-blocking.
+- O₂/SleepSync invalidation SSE reconnects must resume from the greater of the explicit `after` cursor and the browser-standard `Last-Event-ID`; every invalidation frame must carry its own SSE `id`, retained replay must stay bounded and ordered, and a normal backend restart must seed a sequence newer than the previous runtime instead of rewinding the PWA cursor.
 - Background SleepSync/O2 invalidation remains event-driven so completed therapy imports can update the relevant views without frontend polling.
 
 ## O₂ charts
@@ -55,7 +56,7 @@ This branch is not releasable until the following user-facing behaviours are val
 
 A release may only be created from the same commit that passes:
 
-1. source/contracts and syntax checks,
+1. source/contracts and syntax checks, including the resumable invalidation SSE contract,
 2. exact-SHA Windows portable build,
 3. Hungarian MSI build and real install/smoke test,
 4. VERIFIED release-set hash/identity checks,
