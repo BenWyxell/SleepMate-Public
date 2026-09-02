@@ -67,7 +67,7 @@ jobs:
             row="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=100" | jq -c '[.workflow_runs[] | select(.name == "Windows release + Hungarian MSI + verified publish" and .event == "workflow_dispatch" and .head_sha == env.GITHUB_SHA)] | sort_by(.created_at) | last // empty')"
             if [[ -n "$row" ]]; then
               id="$(jq -r '.id' <<<"$row")"
-              status="$(jq -r '.status')"
+              status="$(jq -r '.status' <<<"$row")"
               conclusion="$(jq -r '.conclusion // ""' <<<"$row")"
               echo "Windows run $id: $status / $conclusion"
               if [[ "$status" == completed ]]; then
