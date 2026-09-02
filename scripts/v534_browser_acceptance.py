@@ -164,6 +164,13 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
             {timestamp:now-3000,t:600,spo2:93,heart_rate:70,motion:1,valid:true},
             {timestamp:now-2940,t:660,spo2:95,heart_rate:65,motion:0,valid:true},
           ];
+          const flowSignal = {
+            key:'flow', unit:'L/min',
+            series:[{
+              start:new Date((now-3600)*1000).toISOString(),
+              points:[[0,0],[60,11],[120,-7],[240,8],[360,-10],[480,6],[600,-5],[660,0]]
+            }]
+          };
           const daily = {
             day:dailyDay, available:true, auto_match:true,
             matches:[{cpap_start:now-3600,cpap_end:now-2940,overlap_seconds:660,cpap_coverage_percent:96}],
@@ -180,7 +187,7 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
           window.__smAcceptanceO2 = {
             liveRows,
             bufferCalls:0,
-            dailyDay,daily,batchRows,dayCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
+            dailyDay,daily,flowSignal,batchRows,dayCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
             trendRows:[0,1,2,3,4].map(i => ({
               start_ts:now-(4-i)*86400,
               summary:summary(96.2+i*.15,91+i%2,63+i,30+i*8,1.0+i*.2,.5+i*.1)
@@ -260,6 +267,9 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
               return nativeFetch(input, init);
             }
             const f = window.__smAcceptanceO2;
+            if (url.pathname === `/api/day/${f.dailyDay}/signal/flow`) {
+              return jsonResponse(f.flowSignal);
+            }
             if (url.pathname === `/api/day/${f.dailyDay}/stats`) {
               return jsonResponse({apnea_duration:'0:00',rows:[{key:'pressure',title:'Nyomás',unit:'cmH2O',min:6,median:8,p95:10,p995:11,max:12}]});
             }
@@ -567,7 +577,8 @@ def main() -> int:
               d.value=f.dailyDay;
               const a=f.daily.samples[0].timestamp*1000,b=f.daily.samples.at(-1).timestamp*1000;
               state.days=[f.dailyDay];state.currentDay=f.dailyDay;state.full=[a,b];state.view=[a,b];
-              state.summary={day:f.dailyDay,ahi:0,therapy_seconds:(b-a)/1000,usage:'00:11:00',counts:{OA:0,CA:0,H:0,UA:0,RERA:0},events:[],sessions:[{start:new Date(a).toISOString(),end:new Date(b).toISOString(),duration_s:(b-a)/1000}],integrity:{complete:true,edf_files:1,problems:[]}};
+              state.settings={...state.settings,show_spo2:true,show_hr:true};
+              state.summary={day:f.dailyDay,ahi:0,therapy_seconds:(b-a)/1000,usage:'00:11:00',counts:{OA:0,CA:0,H:0,UA:0,RERA:0},events:[],sessions:[{start:new Date(a).toISOString(),end:new Date(b).toISOString(),duration_s:(b-a)/1000}],oximetry:{spo2_median:91,pulse_median:58},integrity:{complete:true,edf_files:1,problems:[]}};
               buildOverviewGrid();buildStackedGrid();renderNightEvaluation(state.summary,{rows:[]},{prescriptions:[]});
               document.getElementById('dashboardOverviewView')?.classList.add('hidden');
               document.getElementById('dashboardDailyView')?.classList.remove('hidden');
@@ -589,7 +600,7 @@ def main() -> int:
         require(page.locator("#smDailyModeSwitchHost").count() == 1, "daily peer-mode switch host missing/duplicated")
         page.wait_for_function("() => window.__smAcceptanceO2.dayCalls > 0")
         page.wait_for_function("() => document.getElementById('o2rDayDual')?._smO2Meta?.rows?.length >= 5")
-        require(page.locator("#spo2").inner_text().strip() == "96.4%", "daily SpO2 card did not hydrate the requested median")
+        require(page.locator("#spo2").inner_text().strip() == "96.4%", "daily SpO2 card did not hydrate the matched O2 median")
         require(page.locator("#hr").inner_text().strip() == "64 bpm", "daily pulse card did not hydrate the requested median")
         night_text = page.locator("#smNightO2Card").inner_text()
         require("SpO₂" in night_text and "Pulzus" in night_text and "Medián" in night_text, f"night O2 card is missing requested median summary: {night_text!r}")
@@ -655,6 +666,34 @@ def main() -> int:
         page.wait_for_function("() => document.getElementById('o2rDayAvg')?.textContent.includes('93')")
         page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='94.6%' && document.getElementById('hr')?.textContent.trim()==='67 bpm'")
         require("94" in page.locator("#smNightO2Card").inner_text() and "67" in page.locator("#smNightO2Card").inner_text(), "SleepSync invalidation did not refresh the night O2 medians")
+
+        progress("matched O2 disappearance restores core oximetry and return reapplies medians")
+        disappear_calls = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
+        page.evaluate(
+            """() => {
+              const f=window.__smAcceptanceO2;
+              f.savedMatchedDaily=structuredClone(f.daily);
+              f.daily={...f.daily,available:false,summary:null,matches:[],samples:[]};
+              f.emitInvalidation('sleepsync-completed');
+            }"""
+        )
+        page.wait_for_function("n => window.__smAcceptanceO2.dayCalls > n", arg=disappear_calls)
+        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='91%' && document.getElementById('hr')?.textContent.trim()==='58 bpm'")
+        require(page.locator("#spo2").inner_text().strip() == "91%", "daily SpO2 card stayed stale after matched O2 data disappeared")
+        require(page.locator("#hr").inner_text().strip() == "58 bpm", "daily pulse card stayed stale after matched O2 data disappeared")
+
+        return_calls = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
+        page.evaluate(
+            """() => {
+              const f=window.__smAcceptanceO2;
+              f.daily=structuredClone(f.savedMatchedDaily);
+              f.emitInvalidation('sleepsync-completed');
+            }"""
+        )
+        page.wait_for_function("n => window.__smAcceptanceO2.dayCalls > n", arg=return_calls)
+        page.wait_for_function("() => document.getElementById('spo2')?.textContent.trim()==='94.6%' && document.getElementById('hr')?.textContent.trim()==='67 bpm'")
+        require(page.locator("#spo2").inner_text().strip() == "94.6%", "daily SpO2 median did not return when matched O2 data returned")
+        require(page.locator("#hr").inner_text().strip() == "67 bpm", "daily pulse median did not return when matched O2 data returned")
 
         page.locator("#focusViewBtn").click()
         page.wait_for_function('() => document.querySelector(\'.overview-card[data-key="o2_spo2"]\') && document.querySelector(\'.overview-card[data-key="o2_hr"]\')')
@@ -753,9 +792,19 @@ def main() -> int:
         page.evaluate(
             """() => {
               const f=window.__smAcceptanceO2;
-              state.dashboardOverview={rows:f.batchRows.map(r=>({day:r.day}))};
+              state.dashboardOverview={rows:[{day:f.batchRows.at(-1).day}]};
               document.getElementById('dashboardDailyView')?.classList.add('hidden');
               document.getElementById('dashboardOverviewView')?.classList.remove('hidden');
+            }"""
+        )
+        page.evaluate("() => window.SleepMateO2Ring.refresh()")
+        page.wait_for_function("() => document.getElementById('smDashO2Trend')?._smO2Meta?.rows?.length === 1")
+        require(page.locator("#smDashO2Avg").inner_text().strip() != "—", "Dashboard O2 summary disappeared with one matched night")
+
+        page.evaluate(
+            """() => {
+              const f=window.__smAcceptanceO2;
+              state.dashboardOverview={rows:f.batchRows.map(r=>({day:r.day}))};
             }"""
         )
         page.evaluate("() => window.SleepMateO2Ring.refresh()")
@@ -763,6 +812,25 @@ def main() -> int:
         require(page.locator("#smDashO2Avg").inner_text().strip() != "—", "Dashboard O2 aggregate did not hydrate from matched nights")
         hover_canvas(page, "smDashO2Trend", ("SpO₂",))
         hover_canvas(page, "smDashHrTrend", ("Pulzus",))
+
+        page.evaluate(
+            """() => {
+              const f=window.__smAcceptanceO2;
+              f.pathRecords=[];f.canvasText=[];
+              state.dashboardOverview={rows:[f.batchRows[0],f.batchRows[1],f.batchRows[3],f.batchRows[4]].map(r=>({day:r.day}))};
+            }"""
+        )
+        page.evaluate("() => window.SleepMateO2Ring.refresh()")
+        page.wait_for_function("() => document.getElementById('smDashO2Trend')?._smO2Meta?.rows?.length === 4")
+        missing_night_paths = page.evaluate(
+            """() => window.__smAcceptanceO2.pathRecords.filter(x =>
+              x.id==='smDashO2Trend' && x.lines>0 &&
+              ['#55d8ff','rgb(85, 216, 255)'].includes(String(x.style).toLowerCase())
+            )"""
+        )
+        require(len(missing_night_paths) >= 2, f"Dashboard O2 trend bridged a missing night: {missing_night_paths}")
+        dashboard_date_labels = page.evaluate("() => window.__smAcceptanceO2.canvasText.filter(x=>x.id==='smDashO2Trend').map(x=>x.text)")
+        require(any(x.count('.') >= 2 and ':' not in x for x in dashboard_date_labels), f"O2 trend X-axis did not render dates: {dashboard_date_labels}")
 
         page.evaluate(
             """() => {
@@ -783,6 +851,7 @@ def main() -> int:
             "ids => Object.fromEntries(ids.map(id => [id, window.__smO2ListenerCounts[id] || 0]))",
             persistent_daily_ids,
         )
+        mode_day_calls_before = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
         for _ in range(6):
             for control in ("focusViewBtn", "stackViewBtn", "o2rDailyBtn"):
                 page.evaluate("id => document.getElementById(id)?.click()", control)
@@ -791,6 +860,8 @@ def main() -> int:
             persistent_daily_ids,
         )
         require(daily_listener_after == daily_listener_before, f"daily O2 chart listeners leaked across peer-mode switching: {daily_listener_before} -> {daily_listener_after}")
+        mode_day_calls_after = page.evaluate("() => window.__smAcceptanceO2.dayCalls")
+        require(mode_day_calls_after == mode_day_calls_before, f"peer-mode switching force-refetched daily O2 data: {mode_day_calls_before} -> {mode_day_calls_after}")
         require(page.locator("#smDailyModeSwitchHost").count() == 1, "daily peer-mode host duplicated during repeated switching")
         require(page.locator("#focusViewBtn").inner_text().strip() == "Fókusz nézet", "Focus button text mutated")
         require(page.locator("#stackViewBtn").inner_text().strip() == "Összes grafikon", "All charts button text mutated")
@@ -1001,9 +1072,20 @@ def main() -> int:
 
         page.set_viewport_size({"width": 844, "height": 390})
         page.wait_for_timeout(160)
+        progress("iPhone landscape Oximetria geometry")
         assert_no_horizontal_overflow(page, "Oximetria iPhone landscape")
         landscape_tabs = page.evaluate("() => [...document.querySelectorAll('#page-oximetry .o2r-hero-actions > button')].map(b=>({text:b.textContent.trim(),left:b.getBoundingClientRect().left,right:b.getBoundingClientRect().right,top:b.getBoundingClientRect().top}))")
         require(len(landscape_tabs) == 6 and max(x["right"] for x in landscape_tabs) <= 844 + 2, f"Oximetria landscape top controls overflow: {landscape_tabs}")
+        landscape_geometry = page.evaluate(
+            """() => {
+                const a=document.getElementById('o2rLiveSpo2Chart')?.getBoundingClientRect();
+                const b=document.getElementById('o2rLiveHrChart')?.getBoundingClientRect();
+                return a&&b?{leftA:a.left,leftB:b.left,widthA:a.width,widthB:b.width}:null;
+            }"""
+        )
+        require(landscape_geometry is not None, "landscape O2 canvases missing")
+        require(abs(landscape_geometry["leftA"] - landscape_geometry["leftB"]) <= 1.5, f"landscape O2 X origins differ: {landscape_geometry}")
+        require(abs(landscape_geometry["widthA"] - landscape_geometry["widthB"]) <= 1.5, f"landscape O2 plot widths differ: {landscape_geometry}")
 
         progress("iPhone portrait/landscape O2Ring settings through the mobile category selector")
         page.set_viewport_size({"width": 390, "height": 844})
