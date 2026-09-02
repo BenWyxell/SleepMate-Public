@@ -27,7 +27,7 @@ jobs:
           python-version: '3.13'
       - name: Install contract test runner
         run: python -m pip install --disable-pip-version-check pytest
-      - name: Verify v5.3.4 full refactor contracts
+      - name: Verify v5.3.4 full refactor and acceptance contracts
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -37,13 +37,15 @@ jobs:
           node --check web/frontend-v534.js
           node --check web/o2ring.js
           node --check web/sleepmate-v530.js
+          node --check web/first-run.js
           node --check web/o2ring-report-ui.js
           node --check web/service-worker.js
           node --check web/service-worker-v508-base.js
-          python -m pytest -q tests/test_o2ring_v534_release_contract.py
+          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py
           ! grep -Fq 'o2ring-v532.js", "sm-o2-v532-inline"' cpap/v530_features.py
           ! grep -Fq 'frontend-v533.js", "sm-frontend-v533-inline"' cpap/v530_features.py
           ! grep -Fq 'setInterval(' web/o2ring.js
+          ! grep -Fq 'setInterval(' web/frontend-v534.js
 
   official-windows:
     needs: contracts
@@ -65,7 +67,7 @@ jobs:
             row="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&per_page=100" | jq -c '[.workflow_runs[] | select(.name == "Windows release + Hungarian MSI + verified publish" and .event == "workflow_dispatch" and .head_sha == env.GITHUB_SHA)] | sort_by(.created_at) | last // empty')"
             if [[ -n "$row" ]]; then
               id="$(jq -r '.id' <<<"$row")"
-              status="$(jq -r '.status' <<<"$row")"
+              status="$(jq -r '.status')"
               conclusion="$(jq -r '.conclusion // ""' <<<"$row")"
               echo "Windows run $id: $status / $conclusion"
               if [[ "$status" == completed ]]; then
