@@ -12,7 +12,9 @@ def install_v530_features(app_module) -> None:
 
     v5.3.4 deliberately removes the layered v5.3.2/v5.3.3 O2 controllers from
     the active shell. The base ``o2ring.js`` is now the single O2 UI owner;
-    ``frontend-v534.js`` only owns general PWA/settings/cache normalization.
+    ``frontend-v534.js`` owns general PWA/settings/cache normalization and is
+    registered before the v5.3 navigation bootstrap so Dashboard load wrappers
+    are deterministic before O2Ring is dynamically mounted.
     """
     global _installed
     if _installed:
@@ -81,18 +83,24 @@ def install_v530_features(app_module) -> None:
                     scripts.append('<script src="/sleepmate-sleep-v524.js?v=5.2.6"></script>')
                 if "sleepmate-sleep-refresh-v5212.js" not in text:
                     scripts.append('<script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>')
+
+                # Frontend ownership is established before sleepmate-v530 starts
+                # its asynchronous O2 module loader. This guarantees that the
+                # Dashboard loading-state wrapper sits directly around the core
+                # loader, so the temporary legacy value can never survive across
+                # the later O2 network await and reach a painted frame.
+                frontend_path = app_module.WEB / "frontend-v534.js"
+                if frontend_path.is_file() and "sm-frontend-v534-inline" not in text:
+                    feature_js = frontend_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
+                    scripts.append(f'<script id="sm-frontend-v534-inline">{feature_js}</script>')
+
                 if "sleepmate-v530.js" not in text:
                     scripts.append(f'<script src="/sleepmate-v530.js?v={UI_VERSION}"></script>')
 
-                inline_features = (
-                    ("o2ring-data-management.js", "sm-o2-data-management-inline"),
-                    ("frontend-v534.js", "sm-frontend-v534-inline"),
-                )
-                for filename, element_id in inline_features:
-                    feature_path = app_module.WEB / filename
-                    if feature_path.is_file() and element_id not in text:
-                        feature_js = feature_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
-                        scripts.append(f'<script id="{element_id}">{feature_js}</script>')
+                data_management_path = app_module.WEB / "o2ring-data-management.js"
+                if data_management_path.is_file() and "sm-o2-data-management-inline" not in text:
+                    feature_js = data_management_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
+                    scripts.append(f'<script id="sm-o2-data-management-inline">{feature_js}</script>')
 
                 # Historical v532/v533 files remain in the source tree for old
                 # release reproducibility, but are intentionally not active here.
