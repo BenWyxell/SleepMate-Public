@@ -6,6 +6,7 @@ HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "web" / "style.css").read_text(encoding="utf-8")
 APP = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
 SW = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
+RECOVERY = (ROOT / "cpap" / "v530_features.py").read_text(encoding="utf-8")
 
 
 def test_vapid_subject_is_strict_py_vapid_compatible():
@@ -32,8 +33,16 @@ def test_ai_chat_does_not_ios_zoom_and_autogrows():
 
 
 def test_mobile5_cache_bust():
+    # Keep the frozen SleepSync compatibility marker, but require the active
+    # v5.3.3 recovery worker and the server-side bootstrap rewrite as well.
     assert 'sleepmate-shell-v5.2.14-ss131' in SW
-    assert 'style.css?v=5.0.0' in SW
-    assert 'app.js?v=5.0.0' in SW
+    assert "const UI_VERSION='5.3.3'" in SW
+    assert 'sleepmate-shell-v5.3.3-recovery' in SW
+    assert 'sleepmate-api-v5.3.3-recovery' in SW
+    assert '/style.css?v=5.3.3' in SW
+    assert '/app.js?v=5.3.3' in SW
     assert '/style.css?v=5.0.0' in HTML
     assert '/app.js?v=5.0.0' in HTML
+    assert "text.replace('/style.css?v=5.0.0', '/style.css?v=5.3.3')" in RECOVERY
+    assert "text.replace('/app.js?v=5.0.0', '/app.js?v=5.3.3')" in RECOVERY
+    assert 'X-SleepMate-UI-Version' in RECOVERY

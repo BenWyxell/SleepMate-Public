@@ -9,14 +9,14 @@ def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_v532_release_identity():
-    assert APP_VERSION == "5.3.2"
+def test_v533_release_identity():
+    assert APP_VERSION == "5.3.3"
     assert API_VERSION == 19
     assert BUILD_CHANNEL == "stable"
-    assert read("RELEASE_NOTES_5_3_2.md").startswith("# SleepMate 5.3.2\n")
+    assert read("RELEASE_NOTES_5_3_3.md").startswith("# SleepMate 5.3.3\n")
 
 
-def test_v532_packaged_pwa_keeps_all_o2_runtime_assets_network_first():
+def test_v533_packaged_pwa_keeps_all_o2_runtime_assets_network_first():
     base = read("web/service-worker-v508-base.js")
     live = read("web/service-worker.js")
     assets = (
@@ -28,12 +28,15 @@ def test_v532_packaged_pwa_keeps_all_o2_runtime_assets_network_first():
         "/o2ring-report-ui.js",
         "/o2ring-v532.css",
         "/o2ring-v532.js",
+        "/frontend-v533.css",
+        "/frontend-v533.js",
     )
     for asset in assets:
         assert asset in base
         assert asset in live
     assert "o2ring\\/(?:day|day-batch|trends)" in base
-    assert "sleepmate-shell-v5.3.2-o2" in live
+    assert "sleepmate-shell-v5.3.3-recovery" in live
+    assert "sleepmate-api-v5.3.3-recovery" in live
 
 
 def test_v532_shell_does_not_activate_legacy_interval_polish():
