@@ -243,12 +243,21 @@ if core_app.exists() and engine_app.exists():
         '/sleepmate-chart-v523.js',
         '/sleepmate-sleep-v524.js',
         '/sleepmate-sleep-refresh-v5212.js',
-        '/o2ring-v532.css',
-        '/o2ring-v532.js',
+        '/sleepmate-aurora.css',
+        '/sleepmate-v530.css',
+        '/sleepmate-v530.js',
+        '/o2ring.css',
+        '/o2ring.js',
+        '/o2ring-report-ui.js',
+        '/o2ring-v534.css',
+        '/frontend-v534.js',
     )
     for asset in protected_base_assets:
         if repr(asset) not in code_items:
             raise RuntimeError(f'proven service worker lost network-first asset: {asset}')
+    for obsolete in ('/o2ring-v532.css','/o2ring-v532.js','/frontend-v533.js'):
+        if repr(obsolete) in code_items:
+            raise RuntimeError(f'obsolete O2 frontend asset returned to active worker: {obsolete}')
     for asset in (
         '/mobile-boot-diagnostics.js',
         '/sleepsync-bootstrap.js',
