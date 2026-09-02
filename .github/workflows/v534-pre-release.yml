@@ -51,6 +51,8 @@ jobs:
     needs: contracts
     runs-on: ubuntu-latest
     timeout-minutes: 80
+    outputs:
+      run_id: ${{ steps.wait.outputs.run_id }}
     steps:
       - name: Dispatch official Windows verification on exact commit
         env:
@@ -59,6 +61,7 @@ jobs:
           set -euo pipefail
           gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/windows-release.yml/dispatches" -f ref="$GITHUB_REF_NAME"
       - name: Wait for exact-SHA VERIFIED Windows workflow
+        id: wait
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -73,6 +76,7 @@ jobs:
               if [[ "$status" == completed ]]; then
                 [[ "$conclusion" == success ]] || exit 1
                 gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/artifacts" --jq '.artifacts[].name' | grep -Fxq 'SleepMate-Windows-x64-VERIFIED-RELEASE'
+                echo "run_id=$id" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
             fi
@@ -80,3 +84,105 @@ jobs:
           done
           echo 'Timed out waiting for official Windows verification.' >&2
           exit 1
+
+  browser-acceptance:
+    needs: official-windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact acceptance source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify checkout identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:GITHUB_SHA) { throw "Acceptance checkout SHA mismatch: $actual != $env:GITHUB_SHA" }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install browser acceptance runner
+        run: python -m pip install --disable-pip-version-check playwright
+      - name: Download exact verified Windows release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SleepMate-Windows-x64-VERIFIED-RELEASE
+          path: verified-release
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ needs.official-windows.outputs.run_id }}
+      - name: Run real Edge acceptance against VERIFIED portable build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve APP_VERSION.' }
+
+          $metadataFile = Get-ChildItem -Path 'verified-release' -Filter 'release-metadata.json' -File -Recurse | Select-Object -First 1
+          if (-not $metadataFile) { throw 'VERIFIED artifact is missing release-metadata.json.' }
+          $metadata = Get-Content -Raw $metadataFile.FullName | ConvertFrom-Json
+          if (([string]$metadata.git_commit).Trim() -ne $env:GITHUB_SHA) {
+            throw "VERIFIED artifact SHA mismatch: $($metadata.git_commit) != $env:GITHUB_SHA"
+          }
+          if (([string]$metadata.version).Trim() -ne $version) {
+            throw "VERIFIED artifact version mismatch: $($metadata.version) != $version"
+          }
+
+          $zip = Get-ChildItem -Path 'verified-release' -Filter "SleepMate_v${version}_windows_x64.zip" -File -Recurse | Select-Object -First 1
+          if (-not $zip) { throw "VERIFIED portable ZIP for v$version is missing." }
+          $portableRoot = Join-Path $env:RUNNER_TEMP 'SleepMate-v534-verified-portable'
+          $stateDir = Join-Path $env:RUNNER_TEMP 'SleepMate-v534-browser-state'
+          Remove-Item $portableRoot -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $portableRoot -Force | Out-Null
+          Expand-Archive -Path $zip.FullName -DestinationPath $portableRoot -Force
+
+          $exe = Get-ChildItem -Path $portableRoot -Filter 'SleepMate.exe' -File -Recurse | Select-Object -First 1
+          if (-not $exe) { throw 'VERIFIED portable ZIP does not contain SleepMate.exe.' }
+          $buildInfoFile = Get-ChildItem -Path $portableRoot -Filter 'build_info.json' -File -Recurse | Select-Object -First 1
+          if (-not $buildInfoFile) { throw 'VERIFIED portable ZIP does not contain build_info.json.' }
+          $buildInfo = Get-Content -Raw $buildInfoFile.FullName | ConvertFrom-Json
+          if (([string]$buildInfo.git_commit).Trim() -ne $env:GITHUB_SHA) {
+            throw "Portable build_info SHA mismatch: $($buildInfo.git_commit) != $env:GITHUB_SHA"
+          }
+
+          $edge = @(
+            'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+            'C:\Program Files\Microsoft\Edge\Application\msedge.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $edge) { throw 'Microsoft Edge executable was not found on the Windows runner.' }
+
+          $env:SLEEPMATE_STATE_DIR = $stateDir
+          $port = 59896
+          $backend = Start-Process -FilePath $exe.FullName -ArgumentList @('--backend','--host','127.0.0.1','--port',"$port",'--no-browser') -PassThru
+          try {
+            $identity = $null
+            for ($i = 0; $i -lt 60; $i++) {
+              if ($backend.HasExited) { throw "VERIFIED SleepMate backend exited early with code $($backend.ExitCode)." }
+              try {
+                $identity = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/version" -TimeoutSec 2
+                break
+              } catch { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $identity) { throw 'VERIFIED SleepMate backend did not become healthy.' }
+            if (([string]$identity.version).Trim() -ne $version) {
+              throw "Runtime version mismatch: $($identity.version) != $version"
+            }
+
+            $onboardingBody = @{ action='complete'; step=6; choices=@{ remote_mode='local' } } | ConvertTo-Json -Depth 4
+            Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/onboarding/state" -Method Post -ContentType 'application/json' -Body $onboardingBody -TimeoutSec 5 | Out-Null
+            $o2Body = @{ o2ring_enabled=$true; o2ring_ble_enabled=$false; o2ring_auto_match=$true } | ConvertTo-Json
+            Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/o2ring/settings" -Method Post -ContentType 'application/json' -Body $o2Body -TimeoutSec 10 | Out-Null
+
+            $env:SLEEPMATE_ACCEPTANCE_URL = "http://127.0.0.1:$port"
+            $env:SLEEPMATE_EDGE_PATH = $edge
+            python scripts/v534_browser_acceptance.py
+            if ($LASTEXITCODE -ne 0) { throw "Browser acceptance failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            try { Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/system/shutdown" -Method Post -ContentType 'application/json' -Body '{}' -TimeoutSec 4 | Out-Null } catch {}
+            if (-not $backend.HasExited) {
+              if (-not $backend.WaitForExit(10000)) { Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue }
+            }
+          }
