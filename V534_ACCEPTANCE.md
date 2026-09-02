@@ -20,12 +20,13 @@ This branch is not releasable until the following user-facing behaviours are val
 ## O₂ charts
 
 - Live, recording, trend, daily Dashboard, Fókusz, Összes grafikon and Dashboard summary O₂ charts expose an exact HH:MM:SS hover crosshair/tooltip with the value of each displayed series.
-- O₂ chart zoom/pan interactions work with mouse/touch interaction contracts and reset cleanly.
+- O₂ chart zoom/pan interactions work with mouse/touch interaction contracts and reset cleanly; the packaged Edge gate must exercise the shared two-finger pinch handler with touch pointer events rather than relying only on source markers.
+- Pointer-based browser acceptance must interact with an actually visible chart target (scrolling an off-screen canvas into the viewport as a user would) instead of forcing events onto hidden/off-screen controls.
 - The daily Dashboard O₂ canvases zoom synchronously, while Fókusz and Összes grafikon retain their own zoom ranges when switching between the peer modes.
 - Crosshair redraw is requestAnimationFrame-coalesced to avoid pointer-move render storms, and synchronized canvases sharing one redraw function invoke that function at most once per frame.
 - High-frequency SpO₂ / pulse charts must split the actually rendered canvas path across a long no-data interval; no line may visually bridge an O₂ gap merely because valid samples exist on both sides.
-- Daily O₂ trend series use a day-scale gap policy so valid nightly points form continuous trend lines instead of being split by the high-frequency live-sample gap rule.
-- CPAP-aligned O₂ overlays use the same therapy time range and gap-aware timestamp alignment.
+- CPAP-aligned O₂ overlays must also split their actually rendered SpO₂ and pulse paths across a long O₂ no-data interval while remaining aligned to the therapy time range.
+- Daily/nightly O₂ trend series use a day-scale gap policy so valid consecutive nightly points form a continuous rendered trend path instead of being split by the high-frequency live-sample gap rule.
 - The per-chart CPAP O₂ overlay supports off / SpO₂ / pulse / both, persists the choice, displays independent SpO₂ and pulse scales, and shows exact-time O₂/HR hover data.
 
 ## Matching and automatic refresh
@@ -53,6 +54,6 @@ A release may only be created from the same commit that passes:
 2. exact-SHA Windows portable build,
 3. Hungarian MSI build and real install/smoke test,
 4. VERIFIED release-set hash/identity checks,
-5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, gap rendering and SleepSync invalidation behaviour.
+5. real Microsoft Edge acceptance against that VERIFIED portable artifact, including data-backed O₂ chart interactions, two-finger pinch, rendered gap/continuity behaviour and SleepSync invalidation behaviour.
 
 A source-level marker or a green test with no O₂ data is not sufficient proof for a behavioural acceptance item.
