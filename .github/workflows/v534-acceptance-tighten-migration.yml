@@ -1,0 +1,41 @@
+name: v5.3.4 one-shot acceptance tightening
+
+on:
+  push:
+    branches:
+      - v5.3.4-o2-full-refactor
+
+permissions:
+  contents: write
+
+jobs:
+  tighten:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require automatic mobile drawer close and self-remove migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/v534_browser_acceptance.py')
+          s=p.read_text(encoding='utf-8')
+          old='''        if page.locator("#sidebarScrim.active").count():\n            page.locator("#sidebarScrim.active").click()\n        page.locator('[data-o2r-tab="live"]').click()\n'''
+          new='''        page.wait_for_function("() => !document.getElementById('sidebar')?.classList.contains('mobile-open')")\n        require(page.locator("#sidebarScrim.active").count() == 0, "mobile Oximetria navigation did not close the drawer/scrim automatically")\n        page.locator('[data-o2r-tab="live"]').click()\n'''
+          if s.count(old)!=1:
+              raise SystemExit(f'Expected one mobile drawer fallback, found {s.count(old)}')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+          python -m py_compile scripts/v534_browser_acceptance.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/v534-acceptance-tighten-migration.yml
+          git add scripts/v534_browser_acceptance.py
+          git diff --cached --check
+          git commit -m 'Require automatic mobile Oximetria drawer close'
+          git push origin HEAD:v5.3.4-o2-full-refactor
