@@ -15,10 +15,8 @@ O2_CODE_ASSETS = (
     "/o2ring.css",
     "/o2ring.js",
     "/o2ring-report-ui.js",
-    "/o2ring-v532.css",
-    "/o2ring-v532.js",
-    "/frontend-v533.css",
-    "/frontend-v533.js",
+    "/o2ring-v534.css",
+    "/frontend-v534.js",
 )
 
 
@@ -27,11 +25,11 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
     sw = (root / "web" / "service-worker.js").read_text(encoding="utf-8")
 
     # Frozen compatibility markers remain visible, while active caches must be
-    # rotated to the v5.3.3 recovery generation.
+    # rotated to the v5.3.4 refactor generation.
     assert "sleepmate-shell-v5.2.14-ss131" in sw
     assert "sleepmate-api-v5.2.14-ss131" in sw
-    assert "sleepmate-shell-v5.3.3-recovery" in sw
-    assert "sleepmate-api-v5.3.3-recovery" in sw
+    assert "sleepmate-shell-v5.3.4-refactor" in sw
+    assert "sleepmate-api-v5.3.4-refactor" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw
@@ -50,8 +48,8 @@ def test_packaged_service_worker_base_precaches_same_sleep_feature():
     root = Path(__file__).resolve().parents[1]
     sw = (root / "web" / "service-worker-v508-base.js").read_text(encoding="utf-8")
     assert "sleepmate-shell-v5.2.14" in sw
-    assert "sleepmate-shell-v5.3.3" in sw
-    assert "sleepmate-api-v5.3.3" in sw
+    assert "sleepmate-shell-v5.3.4" in sw
+    assert "sleepmate-api-v5.3.4" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw

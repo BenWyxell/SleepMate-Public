@@ -226,9 +226,9 @@
   }
 
   function injectReopen(){
-    if($('#frSettingsReopen'))return true;const page=$('#page-settings');if(!page)return false;const box=document.createElement('section');box.id='frSettingsReopen';box.className='fr-settings-reopen';box.innerHTML='<b>Első beállítás varázsló</b><p>Újra végigvezet az adatforrás, SleepSync, távoli elérés, backup és AI alapbeállításain.</p><button type="button" class="fr-btn">Varázsló megnyitása</button>';box.querySelector('button').onclick=()=>open(true);page.appendChild(box);return true
+    const page=$('#page-settings'),system=$('[data-settings-panel="system"]');if(!page||!system)return false;const all=$$('.fr-settings-reopen').filter(x=>x.textContent.includes('Első beállítás varázsló'));let box=$('#frSettingsReopen')||all[0];for(const x of all)if(x!==box)x.remove();if(!box){box=document.createElement('section');box.className='fr-settings-reopen';box.innerHTML='<b>Első beállítás varázsló</b><p>Újra végigvezet az adatforrás, SleepSync, távoli elérés, backup és AI alapbeállításain.</p><button type="button" class="fr-btn">Varázsló megnyitása</button>'}box.id='frSettingsReopen';box.querySelector('button').onclick=()=>open(true);if(box.parentNode!==system)system.appendChild(box);return true
   }
 
   window.openSleepMateFirstRun=()=>open(true);
-  window.addEventListener('load',()=>{setTimeout(()=>open(false),650);let tries=0;const timer=setInterval(()=>{tries++;if(injectReopen()||tries>30)clearInterval(timer)},500)},{once:true});
+  window.addEventListener('load',()=>{setTimeout(()=>open(false),650);if(injectReopen())return;const page=$('#page-settings');if(!page)return;const observer=new MutationObserver(()=>{if(injectReopen())observer.disconnect()});observer.observe(page,{childList:true,subtree:true});setTimeout(()=>{observer.disconnect();injectReopen()},8000)},{once:true});
 })();

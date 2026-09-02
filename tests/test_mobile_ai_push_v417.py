@@ -33,16 +33,15 @@ def test_ai_chat_does_not_ios_zoom_and_autogrows():
 
 
 def test_mobile5_cache_bust():
-    # Keep the frozen SleepSync compatibility marker, but require the active
-    # v5.3.3 recovery worker and the server-side bootstrap rewrite as well.
     assert 'sleepmate-shell-v5.2.14-ss131' in SW
-    assert "const UI_VERSION='5.3.3'" in SW
-    assert 'sleepmate-shell-v5.3.3-recovery' in SW
-    assert 'sleepmate-api-v5.3.3-recovery' in SW
-    assert '/style.css?v=5.3.3' in SW
-    assert '/app.js?v=5.3.3' in SW
+    assert "const UI_VERSION='5.3.4'" in SW
+    assert 'sleepmate-shell-v5.3.4-refactor' in SW
+    assert 'sleepmate-api-v5.3.4-refactor' in SW
+    assert '/style.css?v=5.3.4' in SW
+    assert '/app.js?v=5.3.4' in SW
     assert '/style.css?v=5.0.0' in HTML
     assert '/app.js?v=5.0.0' in HTML
-    assert "text.replace('/style.css?v=5.0.0', '/style.css?v=5.3.3')" in RECOVERY
-    assert "text.replace('/app.js?v=5.0.0', '/app.js?v=5.3.3')" in RECOVERY
+    assert 'UI_VERSION = "5.3.4"' in RECOVERY
+    assert "text.replace('/style.css?v=5.0.0', f'/style.css?v={UI_VERSION}')" in RECOVERY
+    assert "text.replace('/app.js?v=5.0.0', f'/app.js?v={UI_VERSION}')" in RECOVERY
     assert 'X-SleepMate-UI-Version' in RECOVERY

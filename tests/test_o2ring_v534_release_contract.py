@@ -241,3 +241,34 @@ def test_v534_matching_keeps_split_segments_and_deduplicates_timestamp_points():
     assert {m["recording_id"] for m in result["matches"]} == {"part-a", "part-b"}
     timestamps = [round(row["timestamp"] * 1000) for row in result["samples"]]
     assert len(timestamps) == len(set(timestamps))
+
+
+def test_v534_sidebar_route_is_capture_owned_and_history_is_not_duplicated():
+    js=read("web/o2ring.js")
+    assert "#sidebar [data-page=\"oximetry\"]" in js
+    assert "stopImmediatePropagation();openOximetry(R.pageTab||'live')" in js
+    assert "if(location.hash!=='#oximetry')history.pushState" in js
+
+
+def test_v534_overlay_focus_selector_persists_the_current_signal_not_flow_only():
+    js=read("web/o2ring.js")
+    assert "e.currentTarget.dataset.signal||key" in js
+    assert "sm-o2-overlay:${key}" in js
+
+
+def test_v534_all_o2_charts_have_touch_pinch_pan_and_synchronized_trend_zoom():
+    js=read("web/o2ring.js")
+    for marker in ("function clampChartRange", "ctl.pinch", "ctl.pointers", "mode:e.pointerType==='touch'||e.shiftKey?'pan':'zoom'", "R.trendZoom", "syncGroup:'trends'", "R.dashboardTrendZoom", "syncGroup:'dash-o2'"):
+        assert marker in js
+
+
+def test_v534_source_settings_are_single_pwa_category_and_single_setup_wizard_card():
+    pwa=read("web/sleepmate-v530.js")
+    first=read("web/first-run.js")
+    assert "push.textContent='PWA'" in pwa
+    assert "legacy?.remove()" in pwa
+    assert "panel.removeAttribute('data-settings-panel')" in pwa
+    assert "dataset.settingsTab='pwa'" not in pwa
+    assert "system.appendChild(box)" in first
+    assert "for(const x of all)if(x!==box)x.remove()" in first
+    assert "setInterval(()=>{tries++" not in first
