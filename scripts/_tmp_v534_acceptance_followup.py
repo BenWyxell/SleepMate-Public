@@ -126,7 +126,11 @@ report_test = '''        require(page.locator("#o2rDailyBtn").inner_text().strip
             }"""
         )
         page.wait_for_function(
-            "day => document.querySelector(`#reportDaysBody tr[data-day=\"${day}\"] [data-sm-o2-cell=\"spo2avg\"]`)?.textContent.includes('92,7') || document.querySelector(`#reportDaysBody tr[data-day=\"${day}\"] [data-sm-o2-cell=\"spo2avg\"]`)?.textContent.includes('92.7')",
+            """day => {
+              const row=[...document.querySelectorAll('#reportDaysBody tr.report-row')].find(x=>x.dataset.day===day);
+              const text=row?.querySelector('[data-sm-o2-cell="spo2avg"]')?.textContent || '';
+              return text.includes('92,7') || text.includes('92.7');
+            }""",
             arg=report_day,
         )
         report_after = page.locator(f'#reportDaysBody tr[data-day="{report_day}"] [data-sm-o2-cell="spo2avg"]').inner_text().strip()
