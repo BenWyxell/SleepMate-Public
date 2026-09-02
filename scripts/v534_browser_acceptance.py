@@ -110,6 +110,20 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
         """
         (() => {
           const now = Math.floor(Date.now()/1000);
+          window.__smLatestStatusHistory=[];
+          const attachLatestStatusWatch=()=>{
+            const el=document.getElementById('latestStatus');
+            if(!el||el.__smAcceptanceWatched)return !!el;
+            el.__smAcceptanceWatched=true;
+            const record=()=>window.__smLatestStatusHistory.push(String(el.textContent||'').trim());
+            record();
+            new MutationObserver(record).observe(el,{childList:true,subtree:true,characterData:true});
+            return true;
+          };
+          if(!attachLatestStatusWatch()){
+            const rootObserver=new MutationObserver(()=>{if(attachLatestStatusWatch())rootObserver.disconnect()});
+            rootObserver.observe(document,{childList:true,subtree:true});
+          }
           const summary = (avg,min,hr,t90=0,odi3=1.2,odi4=.6) => ({
             spo2_average:avg, spo2_minimum:min, heart_rate_average:hr,
             t90_seconds:t90, odi3, odi4, coverage_percent:100
@@ -387,6 +401,11 @@ def main() -> int:
             http_errors=http_errors,
         )
         progress("runtime ready on first load")
+        first_status_history = page.evaluate("() => window.__smLatestStatusHistory || []")
+        require(
+            not any("Befejezve" in value for value in first_status_history),
+            f"latest-session card flashed legacy Befejezve during first boot: {first_status_history}",
+        )
 
         meta = page.locator('meta[name="sleepmate-ui-version"]').get_attribute("content")
         require(meta == VERSION, f"wrong UI generation meta: {meta}")
@@ -420,6 +439,11 @@ def main() -> int:
             f"stale PWA shell survived first recovery reload: {stale}",
         )
         require(page.locator("#sidebarVersion").inner_text().strip() == f"v{VERSION}", "reload restored stale UI version")
+        reload_status_history = page.evaluate("() => window.__smLatestStatusHistory || []")
+        require(
+            not any("Befejezve" in value for value in reload_status_history),
+            f"latest-session card flashed legacy Befejezve during stale-cache recovery: {reload_status_history}",
+        )
 
         progress("repeated Dashboard/Oximetria navigation")
         initial_canvas_count = page.locator("#page-oximetry canvas").count()
@@ -430,6 +454,12 @@ def main() -> int:
             require(page.locator("#page-oximetry").count() == 1, "Oximetria page duplicated during route switching")
             require(page.locator("#page-oximetry canvas").count() == initial_canvas_count, "O2 chart DOM leaked during route switching")
             navigate(page, "dashboard")
+
+        navigation_status_history = page.evaluate("() => window.__smLatestStatusHistory || []")
+        require(
+            not any("Befejezve" in value for value in navigation_status_history),
+            f"latest-session card flashed legacy Befejezve during repeated navigation: {navigation_status_history}",
+        )
 
         progress("data-backed Dashboard Oximetria/Focus/All charts and SleepSync invalidation")
         page.evaluate(
@@ -454,6 +484,13 @@ def main() -> int:
         )
         require(page.locator("#o2rDailyBtn").is_visible(), "daily Oximetria mode is not visible in the synthetic daily route")
         page.locator("#o2rDailyBtn").click()
+        require(
+            page.locator("#focusViewBtn").is_visible()
+            and page.locator("#stackViewBtn").is_visible()
+            and page.locator("#o2rDailyBtn").is_visible(),
+            "daily peer-mode controls disappeared after entering Oximetria",
+        )
+        require(page.locator("#smDailyModeSwitchHost").count() == 1, "daily peer-mode switch host missing/duplicated")
         page.wait_for_function("() => window.__smAcceptanceO2.dayCalls > 0")
         page.wait_for_function("() => document.getElementById('o2rDayDual')?._smO2Meta?.rows?.length >= 5")
         gap_paths = page.evaluate(
