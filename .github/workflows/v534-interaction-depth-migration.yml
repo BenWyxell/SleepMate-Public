@@ -1,0 +1,36 @@
+name: v5.3.4 one-shot interaction depth migration
+
+on:
+  push:
+    branches:
+      - v5.3.4-o2-full-refactor
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply pinch and O2 path acceptance depth
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/_tmp_v534_interaction_depth.py
+          python -m py_compile scripts/v534_browser_acceptance.py
+          grep -F 'two-finger pinch did not zoom' scripts/v534_browser_acceptance.py
+          grep -F 'CPAP O2 overlay bridged a long no-data gap' scripts/v534_browser_acceptance.py
+          grep -F 'nightly SpO2 trend was incorrectly split' scripts/v534_browser_acceptance.py
+          rm scripts/_tmp_v534_interaction_depth.py
+          rm .github/workflows/v534-interaction-depth-migration.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/v534_browser_acceptance.py scripts/_tmp_v534_interaction_depth.py .github/workflows/v534-interaction-depth-migration.yml
+          git diff --cached --check
+          git commit -m "Exercise pinch and O2 path continuity in packaged Edge"
+          git push origin HEAD:v5.3.4-o2-full-refactor
