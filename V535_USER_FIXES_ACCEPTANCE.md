@@ -19,3 +19,5 @@ A v5.3.5 javítási kör kizárólag akkor tekinthető késznek, ha ugyanazon ex
 15. PC-n az Éjszaka értékelése Oximetria kártya a normál grid-kártyákkal azonos méretű, nem teljes szélességű.
 
 A korábbi v5.3.4 stabilitási követelmények továbbra is kötelezőek: first-load/stale-cache PWA stabilitás, Live O₂ láthatósági lifecycle és bounded refill, SleepSync invalidáció, gap-helyes vonalrajzolás, crosshair/zoom/pinch/touch-pan, listener-stabilitás és exact-SHA artifact identity.
+
+Release-identitás: a végső candidate csak akkor tekinthető v5.3.5-nek, ha a kanonikus `cpap.version.APP_VERSION` pontosan `5.3.5`, a `RELEASE_NOTES.md` első kiadási szekciója `# SleepMate 5.3.5`, és az exact-SHA VERIFIED ZIP/MSI/runtime metadata ugyanezt a verziót és ugyanazt a commit SHA-t igazolja.
