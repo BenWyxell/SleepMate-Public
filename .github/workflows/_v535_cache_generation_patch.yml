@@ -1,0 +1,92 @@
+name: Align v5.3.5 PWA cache generation
+
+on:
+  push:
+    branches:
+      - v5.3.5-o2-dashboard-polish
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Align only release cache generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected exactly one {old!r}, found {text.count(old)}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once('web/service-worker.js', 'active caches are v5.3.4:', 'active caches are v5.3.5:')
+          for path in ('web/service-worker.js', 'web/service-worker-v508-base.js'):
+              replace_once(path, "const CACHE='sleepmate-shell-v5.3.4-refactor';", "const CACHE='sleepmate-shell-v5.3.5-refactor';")
+              replace_once(path, "const API_CACHE='sleepmate-api-v5.3.4-refactor';", "const API_CACHE='sleepmate-api-v5.3.5-refactor';")
+
+          p = Path('tests/test_v534_acceptance_matrix.py')
+          text = p.read_text(encoding='utf-8')
+          for old, new in (
+              ('sleepmate-shell-v5.3.4-refactor', 'sleepmate-shell-v5.3.5-refactor'),
+              ('sleepmate-api-v5.3.4-refactor', 'sleepmate-api-v5.3.5-refactor'),
+          ):
+              if text.count(old) != 1:
+                  raise SystemExit(f'{p}: expected one cache contract {old!r}, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+          p.write_text(text, encoding='utf-8')
+
+          p = Path('tests/test_o2ring_v534_release_contract.py')
+          text = p.read_text(encoding='utf-8')
+          old = 'sleepmate-shell-v5.3.4-refactor'
+          if text.count(old) != 1:
+              raise SystemExit(f'{p}: expected one cache contract {old!r}, found {text.count(old)}')
+          p.write_text(text.replace(old, 'sleepmate-shell-v5.3.5-refactor', 1), encoding='utf-8')
+
+          p = Path('tests/test_v535_user_acceptance_matrix.py')
+          text = p.read_text(encoding='utf-8')
+          if "SW = read('web/service-worker.js')" not in text:
+              anchor = "RELEASE_NOTES = read('RELEASE_NOTES.md')\n"
+              if text.count(anchor) != 1:
+                  raise SystemExit('Unable to place service-worker fixtures deterministically')
+              text = text.replace(anchor, anchor + "SW = read('web/service-worker.js')\nSW_BASE = read('web/service-worker-v508-base.js')\n", 1)
+          marker = 'def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():'
+          if marker not in text:
+              text += '''\n\ndef test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():\n    for worker in (SW, SW_BASE):\n        assert "const CACHE='sleepmate-shell-v5.3.5-refactor';" in worker\n        assert "const API_CACHE='sleepmate-api-v5.3.5-refactor';" in worker\n        assert "const UI_VERSION='5.3.4';" in worker\n        assert '/frontend-v534.js?v=5.3.4' in worker\n'''
+          p.write_text(text, encoding='utf-8')
+          PY
+      - name: Remove one-shot helper before validation
+        shell: bash
+        run: rm -f .github/workflows/_v535_cache_generation_patch.yml
+      - name: Validate complete source suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/service-worker.js
+          node --check web/service-worker-v508-base.js
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q
+      - name: Commit clean cache generation alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add web/service-worker.js web/service-worker-v508-base.js tests/test_v534_acceptance_matrix.py tests/test_o2ring_v534_release_contract.py tests/test_v535_user_acceptance_matrix.py .github/workflows/_v535_cache_generation_patch.yml
+          git diff --cached --quiet && { echo 'No cache generation changes to commit.' >&2; exit 1; }
+          git commit -m 'Use v5.3.5 PWA cache generation'
+          git push origin HEAD:v5.3.5-o2-dashboard-polish
