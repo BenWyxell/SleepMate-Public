@@ -33,7 +33,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python scripts/verify_public_source.py
           python scripts/verify_sleepsync_integration.py
-          python -m py_compile cpap/v530_features.py cpap/o2ring_runtime_v534.py cpap/o2ring_stream.py cpap/o2ring_v532.py cpap/o2ring_integration.py cpap/o2ring_ble.py sleepmate_main.py
+          python -m py_compile cpap/v530_features.py cpap/o2ring_runtime_v534.py cpap/o2ring_stream.py cpap/o2ring_v532.py cpap/o2ring_integration.py cpap/o2ring_ble.py sleepmate_main.py build/windows/SleepMate.spec
           node --check web/frontend-v534.js
           node --check web/o2ring.js
           node --check web/sleepmate-v530.js
@@ -41,7 +41,7 @@ jobs:
           node --check web/o2ring-report-ui.js
           node --check web/service-worker.js
           node --check web/service-worker-v508-base.js
-          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py
+          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py tests/test_v534_packaging_acceptance.py
           ! grep -Fq 'o2ring-v532.js", "sm-o2-v532-inline"' cpap/v530_features.py
           ! grep -Fq 'frontend-v533.js", "sm-frontend-v533-inline"' cpap/v530_features.py
           ! grep -Fq 'setInterval(' web/o2ring.js
