@@ -144,3 +144,9 @@ def test_stability_live_return_opens_stream_before_bounded_refill():
     assert 'if(R.liveResumePromise)return R.liveResumePromise' in resume
     assert "return;mergeLive(x.rows||[]);applied=true" in JS
     assert 'Live O2 only runs while visible and batch-refills on return' in BROWSER
+
+def test_request_05_edge_compares_o2_hero_to_real_core_hero_width():
+    assert "normal_hero_widths" in BROWSER
+    assert "spo2_hero_width" in BROWSER
+    assert "Focus SpO2 hero line does not match normal hero line width" in BROWSER
+    assert "Focus SpO2 hero line is thicker than normal" not in BROWSER

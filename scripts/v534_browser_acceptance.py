@@ -672,12 +672,21 @@ def main() -> int:
         }""")
         require(mini_geometry is not None and max(abs(mini_geometry["fw"]-mini_geometry["sw"]),abs(mini_geometry["fw"]-mini_geometry["hw"]),abs(mini_geometry["fh"]-mini_geometry["sh"]),abs(mini_geometry["fh"]-mini_geometry["hh"])) <= 2, f"Focus O2 mini charts do not match normal mini-chart geometry: {mini_geometry}")
 
+        page.locator('.overview-card[data-key="flow"]').click()
+        page.wait_for_function("() => state.selectedSignal==='flow' && state.mainSignal?.series?.length")
+        page.evaluate("() => { window.__smAcceptanceO2.pathRecords=[]; drawHeroBase(); }")
+        normal_hero_widths = page.evaluate("""() => window.__smAcceptanceO2.pathRecords.filter(x=>x.id==='heroBase' && ['#57c7ff','rgb(87, 199, 255)'].includes(String(x.style).toLowerCase()) && x.lines>0).map(x=>x.width)""")
+        require(bool(normal_hero_widths), f"normal CPAP hero line was not measurable: {normal_hero_widths}")
+
         page.locator('.overview-card[data-key="o2_spo2"]').click()
         page.wait_for_function("() => state.selectedSignal==='o2_spo2' && state.mainSignal?.series?.length")
         require(page.locator("#heroTitle").inner_text().strip() == "SpO₂", "SpO2 Focus mini did not open the normal hero chart")
         page.evaluate("() => { window.__smAcceptanceO2.pathRecords=[]; drawHeroBase(); }")
         hero_spo2_widths = page.evaluate("""() => window.__smAcceptanceO2.pathRecords.filter(x=>x.id==='heroBase' && ['#55d8ff','rgb(85, 216, 255)'].includes(String(x.style).toLowerCase()) && x.lines>0).map(x=>x.width)""")
-        require(bool(hero_spo2_widths) and max(hero_spo2_widths) <= 1.2, f"Focus SpO2 hero line is thicker than normal: {hero_spo2_widths}")
+        require(bool(hero_spo2_widths), f"Focus SpO2 hero line was not measurable: {hero_spo2_widths}")
+        normal_hero_width=max(normal_hero_widths)
+        spo2_hero_width=max(hero_spo2_widths)
+        require(abs(spo2_hero_width-normal_hero_width) <= 0.0001, f"Focus SpO2 hero line does not match normal hero line width: normal={normal_hero_widths}, SpO2={hero_spo2_widths}")
         require_drag_selection(page, "heroOverlay")
         page.evaluate("() => setView(state.full[0],state.full[1],false)")
 
