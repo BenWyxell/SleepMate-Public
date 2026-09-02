@@ -33,7 +33,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           python scripts/verify_public_source.py
           python scripts/verify_sleepsync_integration.py
-          python -m py_compile cpap/v530_features.py cpap/o2ring_runtime_v534.py cpap/o2ring_stream.py cpap/o2ring_v532.py cpap/o2ring_integration.py cpap/o2ring_ble.py sleepmate_main.py build/windows/SleepMate.spec
+          python -m py_compile cpap/v530_features.py cpap/o2ring_runtime_v534.py cpap/o2ring_stream.py cpap/o2ring_v532.py cpap/o2ring_integration.py cpap/o2ring_ble.py sleepmate_main.py build/windows/SleepMate.spec scripts/v534_browser_acceptance.py scripts/v534_browser_acceptance_runner.py
           node --check web/frontend-v534.js
           node --check web/o2ring.js
           node --check web/sleepmate-v530.js
@@ -177,7 +177,7 @@ jobs:
 
             $env:SLEEPMATE_ACCEPTANCE_URL = "http://127.0.0.1:$port"
             $env:SLEEPMATE_EDGE_PATH = $edge
-            python scripts/v534_browser_acceptance.py
+            python scripts/v534_browser_acceptance_runner.py
             if ($LASTEXITCODE -ne 0) { throw "Browser acceptance failed with exit code $LASTEXITCODE." }
           }
           finally {
