@@ -41,7 +41,7 @@ jobs:
           node --check web/o2ring-report-ui.js
           node --check web/service-worker.js
           node --check web/service-worker-v508-base.js
-          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py tests/test_v534_packaging_acceptance.py
+          python -m pytest -q tests/test_o2ring_v534_release_contract.py tests/test_v534_acceptance_matrix.py tests/test_v534_packaging_acceptance.py tests/test_v534_first_load_observer_guard.py
           ! grep -Fq 'o2ring-v532.js", "sm-o2-v532-inline"' cpap/v530_features.py
           ! grep -Fq 'frontend-v533.js", "sm-frontend-v533-inline"' cpap/v530_features.py
           ! grep -Fq 'setInterval(' web/o2ring.js
@@ -172,7 +172,7 @@ jobs:
 
             $onboardingBody = @{ action='complete'; step=6; choices=@{ remote_mode='local' } } | ConvertTo-Json -Depth 4
             Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/onboarding/state" -Method Post -ContentType 'application/json' -Body $onboardingBody -TimeoutSec 5 | Out-Null
-            $o2Body = @{ o2ring_enabled=$true; o2ring_ble_enabled=$false; o2ring_auto_match=$true } | ConvertTo-Json
+            $o2Body = @{ o2ring_enabled=$true; o2ring_ble_enabled=$true; o2ring_auto_connect=$false; o2ring_auto_sync=$false; o2ring_auto_match=$true } | ConvertTo-Json
             Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/o2ring/settings" -Method Post -ContentType 'application/json' -Body $o2Body -TimeoutSec 10 | Out-Null
 
             $env:SLEEPMATE_ACCEPTANCE_URL = "http://127.0.0.1:$port"
