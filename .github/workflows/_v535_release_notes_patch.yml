@@ -1,0 +1,122 @@
+name: Apply v5.3.5 release notes
+
+on:
+  push:
+    branches:
+      - v5.3.5-o2-dashboard-polish
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Prepend v5.3.5 release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          from cpap.version import APP_VERSION
+
+          if APP_VERSION != '5.3.5':
+              raise SystemExit(f'APP_VERSION must be 5.3.5 before release notes patch, got {APP_VERSION!r}')
+
+          p = Path('RELEASE_NOTES.md')
+          old = p.read_text(encoding='utf-8')
+          marker = '# SleepMate 5.3.5'
+          if marker in old:
+              raise SystemExit('v5.3.5 release notes already exist; refusing duplicate prepend')
+
+          section = '''# SleepMate 5.3.5
+
+A SleepMate 5.3.5 a v5.3.4 O2Ring/PWA stabilitási körére épülő célzott felület- és adatmegjelenítési javítókiadás. A kiadás fő célja, hogy a CPAP-idővel ténylegesen átfedő O2Ring adatok a Dashboardon, a napi nézetekben, a Jelentésekben és az Oximetria felületen következetesen, azonos idővonalon és stabil PWA-viselkedéssel jelenjenek meg.
+
+## Dashboard és részletes napi nézet
+
+- A Részletes napi nézet SpO₂ és Pulzus kártyája a CPAP-idővel átfedő O2Ring minták mediánját mutatja, magyar számformátummal.
+- A Fókusznézetben pontosan két normál O₂ mini kártya jelenik meg: SpO₂ és Pulzus; nincs külön nagy SpO₂+Pulzus blokk.
+- A SpO₂/Pulzus mini kártyák a normál közös hero grafikonra nyílnak, nem különálló, eltérő méretű rajzterületre.
+- Az oximetriás görbék vonalvastagsága és interakciója a normál SleepMate grafikonokkal azonos érzetű; a húzás közbeni kijelölés látható.
+- Az Összes grafikon nézet CPAP-grafikonjain az O₂ overlay külön jobb oldali SpO₂/HR skálát kap, pontos időpontú hoverrel és aktuális SpO₂/Pulzus értékekkel.
+- Az overlay kikapcsolt állapotának neve `Alapnézet`.
+- A Dashboard Legutóbbi alvás kártyája a teljes terápiás/alvási időt mutatja elsődleges értékként; a szakaszszám másodlagos információ marad.
+- Az Oximetriai összegzés stabilan megjelenik, egyetlen illesztett éjszakánál is valódi adatot rajzol, és SleepSync invalidáció után frissül.
+
+## Jelentések és éjszakai értékelés
+
+- A Jelentések → A kiválasztott időszak napjai táblázat kompaktabb fejlécet és sormagasságot kapott.
+- A Jelentések → Napi statisztika külön SpO₂ és Pulzus minimum, medián és maximum értékeket mutat.
+- SleepSync/invalidation után a Jelentések az aktuálisan frissített, CPAP-idővel illesztett O2Ring summary értékeket használják, nem korábbi cache-értéket.
+- Az Éjszaka értékelése Oximetria kártyája csak a SpO₂- és Pulzus-mediánt tartja meg; Minimum, T90, ODI3 és ODI4 nem jelenik meg ezen a kártyán.
+- PC-n az Oximetria éjszakai kártya a normál grid-kártyákkal azonos méretű, nem teljes szélességű.
+
+## Oximetria felület
+
+- A Dashboard, Kapcsolódás, Szinkron, Élő O₂ monitor, Felvételek és Trendek egyetlen felső gombsorba kerültek, ebben a sorrendben.
+- A külön nagy Állapot kártya megszűnt; az állapot kompaktan a keresés/kapcsolat terület alatt jelenik meg.
+- Az Élő, Felvételek és Trendek grafikonjai pontos HH:MM:SS hover tooltipet, közös crosshairt, zoomot/pant/pinch-et és touch-kezelést használnak.
+- A napi és trendgörbék nem kötik össze hamisan a hiányzó O₂-időszakokat; a napi trend tengelye dátumorientált.
+
+## PWA, Live O₂ és stabilitás
+
+- Javult az első PWA-megnyitás és stale-cache helyreállítás: nincs szükség kézi frissítésre, és nem maradhat önfenntartó DOM/MutationObserver ciklus.
+- A Live O₂ nagy grafikonjai csak akkor frissülnek, amikor az Oximetria → Élő nézet valóban látható.
+- Más nézetre váltva az élő stream lezár, nincs háttérben új stream vagy buffer-refill; visszatéréskor egyszeri bounded refill után folytatódik az élő stream.
+- A napi peer-mode váltás nem force-refetcheli feleslegesen ugyanazt az O₂ napot.
+- A status timer uninstall után nem tudja újraindítani saját háttérpollingját.
+- Az O₂ chart listenerek és canvasok ismételt navigáció/módváltás mellett sem duplikálódhatnak.
+- A mobil/PWA Oximetria és O2Ring beállítások iPhone 390×844 portré és 844×390 fekvő nézetben horizontális túlcsordulás nélkül működnek.
+
+## Kiadási validáció
+
+A v5.3.5 release-candidate ugyanazon exact commiton teljesítette a source contractokat, a Windows x64 programfa buildet, a magyar WiX MSI buildet és payload-ellenőrzést, a valódi MSI telepítés / backend API / eltávolítás smoke-testet, a VERIFIED hash/manifeszt/ZIP/MSI identity kaput, valamint a valódi Microsoft Edge packaged acceptance-et. Az Edge acceptance külön lefedi a first-load/stale-cache helyreállítást, Dashboard/Oximetria/SleepSync viselkedést, Live O₂ lifecycle-t, crosshair/zoom interakciókat, Reports O₂ frissülést és mobil portrait/landscape geometriát.
+
+Kiadási csatorna: **stable**.
+Release build: **5.3.5**.
+API: **19**.
+
+---
+
+'''
+          p.write_text(section + old, encoding='utf-8')
+          PY
+      - name: Remove one-shot workflow before validation
+        shell: bash
+        run: rm -f .github/workflows/_v535_release_notes_patch.yml
+      - name: Validate release readiness contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from cpap.version import APP_VERSION
+          from pathlib import Path
+          assert APP_VERSION == '5.3.5'
+          text = Path('RELEASE_NOTES.md').read_text(encoding='utf-8')
+          assert text.startswith('# SleepMate 5.3.5\n')
+          assert 'Release build: **5.3.5**.' in text.split('\n---\n', 1)[0]
+          PY
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q \
+            tests/test_release_version_contract.py \
+            tests/test_v535_polish_contract.py \
+            tests/test_v535_user_acceptance_matrix.py
+      - name: Commit durable release readiness update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add RELEASE_NOTES.md .github/workflows/_v535_release_notes_patch.yml
+          git diff --cached --quiet && { echo 'No release readiness changes to commit.' >&2; exit 1; }
+          git commit -m 'Add SleepMate 5.3.5 release notes'
+          git push origin HEAD:v5.3.5-o2-dashboard-polish
