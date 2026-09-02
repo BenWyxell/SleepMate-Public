@@ -76,6 +76,11 @@ replace_literal(
     "ind.classList.add('refreshing');ind.querySelector('b').textContent='Adatok ellenőrzése…';refreshData()",
     "ind.classList.add('refreshing');ind.querySelector('b').textContent='Adatok ellenőrzése…';setTimeout(()=>{if(state.pullRefreshing)resetPullRefreshUi()},1100);refreshData()",
 )
+replace_literal(
+    sidebar_app_js,
+    "$('#latestStatus').textContent='Befejezve';$('#latestSessions').textContent=`${latest.sessions?.length||0} szakasz`;",
+    "$('#latestStatus').textContent=String(latest.sessions?.length||0);$('#latestSessions').textContent='szakasz';",
+)
 
 replace_exact(
     'index.html',
