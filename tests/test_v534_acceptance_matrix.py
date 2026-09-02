@@ -69,6 +69,7 @@ def test_acceptance_p0_live_o2_only_paints_when_visible_and_batch_refills_on_ret
         "R.liveRaf=requestAnimationFrame(()=>{R.liveRaf=0;drawLive()})",
     ):
         assert marker in js
+    assert "function o2PageVisible(){return document.visibilityState==='visible'&&location.hash.startsWith('#oximetry')" in js
     assert "class _LiveBuffer" in stream
     assert 'path == "/api/o2ring/live-buffer"' in stream
     assert "service.manager.add_listener(BUFFER.append_snapshot)" in stream
