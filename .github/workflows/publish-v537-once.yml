@@ -111,14 +111,20 @@ jobs:
           verifier.write_text(v, encoding='utf-8')
 
           # Keep the standalone release note and the top RELEASE_NOTES section
-          # byte-consistent, including the legacy release-identity marker still
+          # byte-consistent, including legacy release identity markers still
           # asserted by the full public release test suite.
           release_note = Path('release-notes/v5.3.7.md')
           latest = release_note.read_text(encoding='utf-8').rstrip()
           build_line = 'Release build: **5.3.7**.'
+          channel_line = 'Kiadási csatorna: **stable**.'
           if build_line not in latest:
               latest = latest.replace('# SleepMate 5.3.7\n', '# SleepMate 5.3.7\n\n' + build_line + '\n', 1)
-              release_note.write_text(latest + '\n', encoding='utf-8')
+          if channel_line not in latest:
+              if build_line in latest:
+                  latest = latest.replace(build_line + '\n', build_line + '\n' + channel_line + '\n', 1)
+              else:
+                  latest = latest.replace('# SleepMate 5.3.7\n', '# SleepMate 5.3.7\n\n' + channel_line + '\n', 1)
+          release_note.write_text(latest + '\n', encoding='utf-8')
 
           notes = Path('RELEASE_NOTES.md')
           current = notes.read_text(encoding='utf-8')
@@ -143,6 +149,7 @@ jobs:
           grep -Fq "bootAttempts<80" web/sleepsync-polish.js
           grep -Fq "SLEEPMATE_SHELL_READY" scripts/verify_sleepsync_integration.py
           grep -Fq "Release build: **${VERSION}**." RELEASE_NOTES.md
+          grep -Fq "Kiadási csatorna: **stable**." RELEASE_NOTES.md
           grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
           echo "Release source: $TARGET_SHA"
 
