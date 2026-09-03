@@ -71,6 +71,53 @@ jobs:
               text = path.read_text(encoding='utf-8')
               path.write_text(text.replace('5.3.6', '5.3.7'), encoding='utf-8')
 
+          # Keep the event-driven SleepSync cold-start fix, but retain a bounded
+          # bootstrap retry so a ready event that races DOM insertion cannot leave
+          # the module permanently half-loaded on PWA first paint.
+          polish = Path('web/sleepsync-polish.js')
+          text = polish.read_text(encoding='utf-8')
+          if 'let bootAttempts=0;' not in text:
+              text = text.replace('  let initialized=false;\n', '  let initialized=false;\n  let bootAttempts=0;\n', 1)
+          old_boot = """  function boot(){
+    ensureHydrationModule();
+    if(initialized)return;
+    bindUi();
+  }
+"""
+          new_boot = """  function boot(){
+    ensureHydrationModule();
+    if(initialized)return;
+    if(bindUi())return;
+    if(bootAttempts<80){
+      bootAttempts++;
+      setTimeout(boot,100);
+    }
+  }
+"""
+          if old_boot in text:
+              text = text.replace(old_boot, new_boot, 1)
+          elif new_boot not in text:
+              raise SystemExit('Unexpected SleepSync boot source state')
+          polish.write_text(text, encoding='utf-8')
+
+          targeted = Path('tests/test_v536_targeted_fixes.py')
+          t = targeted.read_text(encoding='utf-8')
+          marker = '    assert "user-scalable=no" not in html\n'
+          if 'assert "bootAttempts<80" in polish' not in t:
+              addition = """
+
+
+def test_sleepsync_cold_start_keeps_bounded_bootstrap_fallback():
+    polish = read("web/sleepsync-polish.js")
+    assert "bootAttempts<80" in polish
+    assert "setTimeout(boot,100)" in polish
+    assert "sleepmate:sleepsync-ready" in polish
+"""
+              if marker not in t:
+                  raise SystemExit('Unexpected targeted test source state')
+              t = t.replace(marker, marker + addition, 1)
+          targeted.write_text(t, encoding='utf-8')
+
           notes = Path('RELEASE_NOTES.md')
           current = notes.read_text(encoding='utf-8')
           if not current.startswith('# SleepMate 5.3.7\n'):
@@ -78,7 +125,7 @@ jobs:
               notes.write_text(latest + '\n\n---\n' + current, encoding='utf-8')
           PY
 
-          git add cpap/version.py web/service-worker.js web/service-worker-v508-base.js RELEASE_NOTES.md release-notes/v5.3.7.md tests/test_mobile_ai_push_v417.py tests/test_o2ring_v532_release_contract.py tests/test_o2ring_v534_release_contract.py tests/test_pwa_sleep_shell_v526.py tests/test_v534_acceptance_matrix.py tests/test_v535_user_acceptance_matrix.py tests/test_release_version_contract.py
+          git add cpap/version.py web/service-worker.js web/service-worker-v508-base.js web/sleepsync-polish.js RELEASE_NOTES.md release-notes/v5.3.7.md tests/test_mobile_ai_push_v417.py tests/test_o2ring_v532_release_contract.py tests/test_o2ring_v534_release_contract.py tests/test_pwa_sleep_shell_v526.py tests/test_v534_acceptance_matrix.py tests/test_v535_user_acceptance_matrix.py tests/test_release_version_contract.py tests/test_v536_targeted_fixes.py
           if ! git diff --cached --quiet; then
             git commit -m "Finalize SleepMate 5.3.7 release identity"
             git push origin "$SOURCE_BRANCH"
@@ -89,6 +136,7 @@ jobs:
           [[ "$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')" == "$VERSION" ]]
           grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-refactor';" web/service-worker.js
           grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-refactor';" web/service-worker-v508-base.js
+          grep -Fq "bootAttempts<80" web/sleepsync-polish.js
           grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
           echo "Release source: $TARGET_SHA"
 
