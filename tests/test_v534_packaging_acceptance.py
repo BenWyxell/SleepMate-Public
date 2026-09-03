@@ -5,6 +5,7 @@ import cpap.o2ring_runtime_v534 as o2_runtime
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
 RUNTIME = (ROOT / "cpap" / "o2ring_runtime_v534.py").read_text(encoding="utf-8")
+APP_CORE = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
 
 
 def test_v534_packaging_requires_current_o2_frontend_assets():
@@ -27,12 +28,13 @@ def test_v534_packaging_rejects_obsolete_o2_runtime_assets():
     assert "obsolete O2 frontend asset returned to active worker" in SPEC
 
 
-def test_v534_packaging_replaces_legacy_latest_session_status_flash():
-    # The legacy text remains only as the exact replacement needle in the build
-    # recipe. The generated packaged app must replace it with total therapy duration.
-    assert "textContent='Befejezve'" in SPEC
-    assert "secondsToHM(latest.therapy_seconds||0)" in SPEC
-    assert "${latest.sessions?.length||0} szakasz" in SPEC
+def test_v534_packaging_uses_direct_latest_session_duration_fix():
+    # The current app-core already renders total therapy duration, so the
+    # packager must not depend on a brittle legacy "Befejezve" rewrite.
+    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in APP_CORE
+    assert "$('#latestSessions').textContent=`${latest.sessions?.length||0} szakasz`" in APP_CORE
+    assert "$('#latestStatus').textContent='Befejezve'" not in APP_CORE
+    assert "$('#latestStatus').textContent='Befejezve'" not in SPEC
 
 
 def test_v534_invalidation_sse_resumes_with_standard_event_ids():
