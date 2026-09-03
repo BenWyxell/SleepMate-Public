@@ -1,0 +1,174 @@
+name: Publish SleepMate 5.3.7 once
+
+on:
+  push:
+    branches:
+      - release-v5.3.7-helper
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sleepmate-v5.3.7-one-shot-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      VERSION: 5.3.7
+      TAG: v5.3.7
+      SOURCE_BRANCH: release-v5.3.7-source
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout publication helper
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Finalize exact 5.3.7 release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$SOURCE_BRANCH"
+          git checkout -B "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          version_file = Path('cpap/version.py')
+          text = version_file.read_text(encoding='utf-8')
+          old = 'APP_VERSION = "5.3.6"'
+          new = 'APP_VERSION = "5.3.7"'
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('Unexpected APP_VERSION source state')
+          version_file.write_text(text, encoding='utf-8')
+
+          for path in (Path('web/service-worker.js'), Path('web/service-worker-v508-base.js')):
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('active caches are v5.3.6', 'active caches are v5.3.7')
+              text = text.replace("sleepmate-shell-v5.3.6-refactor", "sleepmate-shell-v5.3.7-refactor")
+              text = text.replace("sleepmate-api-v5.3.6-refactor", "sleepmate-api-v5.3.7-refactor")
+              path.write_text(text, encoding='utf-8')
+
+          replace_files = [
+              Path('tests/test_mobile_ai_push_v417.py'),
+              Path('tests/test_o2ring_v532_release_contract.py'),
+              Path('tests/test_o2ring_v534_release_contract.py'),
+              Path('tests/test_pwa_sleep_shell_v526.py'),
+              Path('tests/test_v534_acceptance_matrix.py'),
+              Path('tests/test_v535_user_acceptance_matrix.py'),
+              Path('tests/test_release_version_contract.py'),
+          ]
+          for path in replace_files:
+              text = path.read_text(encoding='utf-8')
+              path.write_text(text.replace('5.3.6', '5.3.7'), encoding='utf-8')
+
+          notes = Path('RELEASE_NOTES.md')
+          current = notes.read_text(encoding='utf-8')
+          if not current.startswith('# SleepMate 5.3.7\n'):
+              latest = Path('release-notes/v5.3.7.md').read_text(encoding='utf-8').rstrip()
+              notes.write_text(latest + '\n\n---\n' + current, encoding='utf-8')
+          PY
+
+          git add cpap/version.py web/service-worker.js web/service-worker-v508-base.js RELEASE_NOTES.md release-notes/v5.3.7.md tests/test_mobile_ai_push_v417.py tests/test_o2ring_v532_release_contract.py tests/test_o2ring_v534_release_contract.py tests/test_pwa_sleep_shell_v526.py tests/test_v534_acceptance_matrix.py tests/test_v535_user_acceptance_matrix.py tests/test_release_version_contract.py
+          if ! git diff --cached --quiet; then
+            git commit -m "Finalize SleepMate 5.3.7 release identity"
+            git push origin "$SOURCE_BRANCH"
+          fi
+
+          TARGET_SHA="$(git rev-parse HEAD)"
+          echo "TARGET_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+          [[ "$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')" == "$VERSION" ]]
+          grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-refactor';" web/service-worker.js
+          grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-refactor';" web/service-worker-v508-base.js
+          grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
+          echo "Release source: $TARGET_SHA"
+
+      - name: Build and fully verify exact release source
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/branches/$SOURCE_BRANCH" --jq '.commit.sha')"
+          [[ "$ACTUAL" == "$TARGET_SHA" ]] || { echo "Release source moved: $ACTUAL" >&2; exit 1; }
+
+          gh workflow run windows-release.yml --ref "$SOURCE_BRANCH"
+          RUN_ID=''
+          for i in $(seq 1 90); do
+            RUN_ID="$(gh run list --workflow windows-release.yml --branch "$SOURCE_BRANCH" --event workflow_dispatch --limit 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$TARGET_SHA\") | .databaseId" | head -n1)"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 2
+          done
+          [[ -n "$RUN_ID" ]] || { echo 'Dispatched verification run was not found.' >&2; exit 1; }
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          gh run watch "$RUN_ID" --exit-status
+
+      - name: Download VERIFIED release artifact
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.verify.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          mkdir -p release-staging
+          gh run download "$RUN_ID" --name SleepMate-Windows-x64-VERIFIED-RELEASE --dir release-staging
+          cd release-staging
+          sha256sum -c SHA256SUMS.txt
+          test -s "SleepMate_Setup_v${VERSION}.msi"
+          test -s "SleepMate_Setup_v${VERSION}.msi.sha256"
+          test -s "SleepMate_v${VERSION}_windows_x64.zip"
+          test -s sleepmate-update.json
+          test -s release-metadata.json
+
+      - name: Create, verify and publish GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish >/tmp/existing.json 2>/dev/null; then
+            DRAFT="$(jq -r '.isDraft' /tmp/existing.json)"
+            TARGET="$(jq -r '.targetCommitish' /tmp/existing.json)"
+            [[ "$TARGET" == "$TARGET_SHA" ]] || { echo "Existing $TAG targets $TARGET, expected $TARGET_SHA" >&2; exit 1; }
+            if [[ "$DRAFT" == 'false' ]]; then
+              echo "$TAG is already published from the expected commit."
+              exit 0
+            fi
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "SleepMate ${VERSION} — PWA stabilitás, AI elemzés és O2Ring finomítások" --notes-file "release-notes/v${VERSION}.md"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$TARGET_SHA" --title "SleepMate ${VERSION} — PWA stabilitás, AI elemzés és O2Ring finomítások" --notes-file "release-notes/v${VERSION}.md" --draft
+          fi
+
+          gh release upload "$TAG" release-staging/* --repo "$GITHUB_REPOSITORY" --clobber
+
+          mapfile -t actual < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          expected=(
+            SHA256SUMS.txt
+            "SleepMate_Setup_v${VERSION}.msi"
+            "SleepMate_Setup_v${VERSION}.msi.sha256"
+            "SleepMate_v${VERSION}_windows_x64.zip"
+            build-msi-toolchain.txt
+            msi-inventory.txt
+            release-metadata.json
+            sleepmate-update.json
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          [[ "$(printf '%s\n' "${actual[@]}")" == "$(printf '%s\n' "${expected_sorted[@]}")" ]] || {
+            echo 'Release asset set mismatch.' >&2
+            printf 'actual: %s\n' "${actual[*]}" >&2
+            printf 'expected: %s\n' "${expected_sorted[*]}" >&2
+            exit 1
+          }
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,tagName,targetCommitish,url > /tmp/published.json
+          [[ "$(jq -r '.isDraft' /tmp/published.json)" == 'false' ]]
+          [[ "$(jq -r '.tagName' /tmp/published.json)" == "$TAG" ]]
+          [[ "$(jq -r '.targetCommitish' /tmp/published.json)" == "$TARGET_SHA" ]]
+          cat /tmp/published.json
