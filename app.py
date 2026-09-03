@@ -120,6 +120,10 @@ def load_config() -> dict:
         "port_mode": "auto",
         "show_spo2": False,
         "show_hr": False,
+        "ai_luna_visible": True,
+        "ai_milo_visible": True,
+        "ai_prompting_enabled": False,
+        "pwa_bottom_nav_labels": {},
         "auto_scan_enabled": True,
         "auto_scan_mode": "interval",
         "auto_scan_interval_minutes": 30,
@@ -151,6 +155,17 @@ def load_config() -> dict:
             loaded = json.loads(p.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 defaults.update(loaded)
+                # The separate Luna/Milo switches are additive. Older settings
+                # without these keys retain the previously visible UI default.
+                for key, fallback in (
+                    ("ai_luna_visible", True),
+                    ("ai_milo_visible", True),
+                    ("ai_prompting_enabled", False),
+                ):
+                    value = loaded.get(key, fallback)
+                    defaults[key] = value if isinstance(value, bool) else fallback
+                if not isinstance(loaded.get("pwa_bottom_nav_labels", {}), dict):
+                    defaults["pwa_bottom_nav_labels"] = {}
                 # v5.2.20+: the update origin is product-owned, not a user setting.
                 defaults["update_github_repo"] = "BenWyxell/SleepMate-Public"
                 # v3.5+: the web backend stays local-only; remote access is via
@@ -1023,7 +1038,7 @@ class Handler(BaseHTTPRequestHandler):
             self._ai_log("HIBA", "provider_test_error", "AI kapcsolat teszt váratlan hibával leállt.", {**dbg, "request_id": request_id, "response_ms": ms, "error_type": type(exc).__name__, "error": str(exc)})
             raise
 
-    def _live_analysis_stream(self, data: dict):
+    def _prepare_analysis_prompt(self, data: dict) -> dict:
         provider = str(data.get("provider") or "gemini").lower()
         analysis_type = str(data.get("analysis_type") or "night")
         month = str(data.get("month") or "").strip()
@@ -1036,15 +1051,56 @@ class Handler(BaseHTTPRequestHandler):
             analysis_key = "comparison:" + ":".join(parts)
         else:
             analysis_key = analysis_type + ((":" + month) if analysis_type == "month" and month else "")
-        sig = self._ai_dataset_signature()
-        ok, reason = self.ai_store.can_analyze(analysis_key, sig)
-        if not ok:
-            raise ValueError(reason)
         if analysis_type == "comparison":
             safe_payload, meta = build_comparison_payload(self.dataset, self.patient_store, comparison)
         else:
             safe_payload, meta = build_safe_payload(self.dataset, self.patient_store, analysis_type, month)
         system_prompt, user_prompt = analysis_prompts(analysis_type, safe_payload)
+        return {
+            "provider": provider,
+            "analysis_type": analysis_type,
+            "analysis_key": analysis_key,
+            "safe_payload": safe_payload,
+            "meta": meta,
+            "system_prompt": system_prompt,
+            "user_prompt": user_prompt,
+        }
+
+    def _analysis_prompt_export(self, data: dict) -> dict:
+        prepared = self._prepare_analysis_prompt(data)
+        full_prompt = (
+            "[RENDSZERINSTRUKCIÓ]\n" + prepared["system_prompt"]
+            + "\n\n[FELHASZNÁLÓI PROMPT]\n" + prepared["user_prompt"]
+        )
+        meta = prepared["meta"]
+        stamp = str(meta.get("period_end") or datetime.now().date().isoformat())
+        kind = {
+            "night": "napi_elemzes", "week": "heti_elemzes", "month": "havi_elemzes",
+            "full_period": "teljes_idoszak", "comparison": "idoszak_osszehasonlitas",
+        }[prepared["analysis_type"]]
+        return {
+            "ok": True,
+            "analysis_type": prepared["analysis_type"],
+            "analysis_key": prepared["analysis_key"],
+            "period": meta,
+            "prompt_version": PROMPT_VERSION,
+            "prompt": full_prompt,
+            "filename": f"SleepMate_{kind}_{stamp}_prompt.txt",
+        }
+
+    def _live_analysis_stream(self, data: dict):
+        prepared = self._prepare_analysis_prompt(data)
+        provider = prepared["provider"]
+        analysis_type = prepared["analysis_type"]
+        analysis_key = prepared["analysis_key"]
+        safe_payload = prepared["safe_payload"]
+        meta = prepared["meta"]
+        system_prompt = prepared["system_prompt"]
+        user_prompt = prepared["user_prompt"]
+        sig = self._ai_dataset_signature()
+        ok, reason = self.ai_store.can_analyze(analysis_key, sig)
+        if not ok:
+            raise ValueError(reason)
         selected_provider = provider
         actual_provider = selected_provider
         fallback_used = False
@@ -1414,6 +1470,11 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/ai/config":
                 data = self._read_json_body(max_bytes=200_000)
                 return self._json({"ok": True, **self.ai_store.save_provider_config(data)})
+            if path == "/api/ai/prompt":
+                if not bool(load_config().get("ai_prompting_enabled", False)):
+                    return self._json({"error": "Az AI promptolás nincs bekapcsolva."}, 403)
+                data = self._read_json_body(max_bytes=300_000)
+                return self._json(self._analysis_prompt_export(data))
             if path == "/api/ai/analysis-stream":
                 data = self._read_json_body(max_bytes=300_000)
                 return self._live_analysis_stream(data)

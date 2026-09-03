@@ -104,6 +104,11 @@ def _day_key(value: Any) -> str:
 
 def _enrich_standard_payload(payload: dict[str, Any], service) -> dict[str, Any]:
     if not service.settings().get("o2ring_enabled"):
+        for row in payload.get("days") or []:
+            if isinstance(row, dict):
+                row.pop("oximetry", None)
+        if isinstance(payload.get("aggregate"), dict):
+            payload["aggregate"].pop("oximetry", None)
         return payload
 
     o2_rows: list[dict[str, Any]] = []
@@ -158,6 +163,7 @@ def _comparison_period_aggregate(service, dataset, start: Any, end: Any) -> dict
 
 def _enrich_comparison_payload(payload: dict[str, Any], service, dataset, comparison: dict[str, Any]) -> dict[str, Any]:
     if not service.settings().get("o2ring_enabled"):
+        payload.pop("oximetry_comparison", None)
         return payload
 
     period_a = _comparison_period_aggregate(service, dataset, comparison.get("a_start"), comparison.get("a_end"))

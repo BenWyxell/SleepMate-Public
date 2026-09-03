@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+import os
+from pathlib import Path
 import threading
 import urllib.parse
 from typing import Any
 
 from .o2ring_ble import O2RingBLEManager
+from .o2ring_export import export_o2ring_data
 from .o2ring_lifecycle import start_reliably, stop_and_wait
 from .o2ring_vld import parse_vld
 from .oximetry import OximetrySample, OximetryStore, match_recording_to_cpap, summarize_samples
@@ -29,6 +32,7 @@ DEFAULTS = {
     "o2ring_show_motion": False,
     "o2ring_spo2_reference": 90,
     "o2ring_spo2_secondary_reference": 88,
+    "o2ring_export_dir": "",
 }
 
 
@@ -38,6 +42,7 @@ class O2RingService:
         self.store = OximetryStore(app_module.STATE_BASE / "private")
         self._lock = threading.RLock()
         self._known_source_names: set[str] = set()
+        self._last_export_folder: Path | None = None
         # This must happen before the BLE manager is allowed to start. Deleted
         # O2Ring sessions can still remain in ring memory; treating persisted
         # tombstones as known at construction time closes the restart race where
@@ -123,6 +128,8 @@ class O2RingService:
     def settings(self) -> dict[str, Any]:
         cfg = dict(DEFAULTS)
         cfg.update({k: v for k, v in self.app.load_config().items() if k in DEFAULTS})
+        if not str(cfg.get("o2ring_export_dir") or "").strip():
+            cfg["o2ring_export_dir"] = str(self.app.STATE_BASE / "private" / "o2ring_exports")
         return cfg
 
     def save_settings(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -148,6 +155,8 @@ class O2RingService:
         current.update(update)
         self.app.save_config(update)
         self.manager.set_preferred_device(current.get("o2ring_preferred_address"))
+        if not current.get("o2ring_auto_sync", True):
+            self.manager.cancel_auto_sync()
 
         if self._ble_should_run(current):
             start_reliably(self.manager, sync_on_start=bool(current.get("o2ring_auto_sync", True)))
@@ -156,6 +165,48 @@ class O2RingService:
             # reconnect or write another VLD into local state.
             stop_and_wait(self.manager)
         return self.settings()
+
+    def prepare_export_sync(self, timeout: float = 8.0) -> dict[str, Any]:
+        """Try one ordinary sync before export, without ever blocking BLE work."""
+        live = self.manager.snapshot()
+        attempted = bool(live.get("connected") and not live.get("measuring"))
+        if not attempted:
+            return {"sync_attempted": False, "sync_completed": True}
+        self.manager.request_sync()
+        completed = self.manager.wait_for_sync(max(0.0, min(15.0, float(timeout))))
+        return {"sync_attempted": True, "sync_completed": bool(completed)}
+
+    def export_all(self, *, destination: str | None = None,
+                   sync_before: bool = True, sync_timeout: float = 8.0) -> dict[str, Any]:
+        if destination is not None:
+            destination = str(destination).strip()
+            if not destination:
+                raise ValueError("Válassz exportálási mappát.")
+            self.save_settings({"o2ring_export_dir": destination})
+        export_dir = str(self.settings().get("o2ring_export_dir") or "").strip()
+        if not export_dir:
+            raise ValueError("Válassz exportálási mappát.")
+        sync = self.prepare_export_sync(sync_timeout) if sync_before else {
+            "sync_attempted": False, "sync_completed": True,
+        }
+        result = export_o2ring_data(self.store, export_dir)
+        self._last_export_folder = Path(result["folder"]).resolve()
+        result.update(sync)
+        if sync.get("sync_attempted") and not sync.get("sync_completed"):
+            result["warning"] = (
+                "A gyűrű szinkronizálása most nem fejeződött be. Az export a jelenleg "
+                "rendelkezésre álló lezárt mérésekből elkészült."
+            )
+        return result
+
+    def open_last_export_folder(self) -> dict[str, Any]:
+        folder = self._last_export_folder
+        if folder is None or not folder.is_dir():
+            raise ValueError("Nincs megnyitható O2Ring exportmappa.")
+        if os.name != "nt" or not hasattr(os, "startfile"):
+            raise RuntimeError("A mappa automatikus megnyitása ezen a platformon nem érhető el.")
+        os.startfile(str(folder))  # type: ignore[attr-defined]
+        return {"ok": True, "folder": str(folder)}
 
     def forget_device(self) -> dict[str, Any]:
         """Explicitly forget the selected ring without deleting historical data."""
@@ -337,6 +388,26 @@ def install_o2ring_integration(app_module) -> None:
                 start_reliably(service.manager, sync_on_start=False)
                 service.manager.request_sync()
                 return self._json({"ok": True, "message": "O2Ring szinkron kérése elindult."})
+            except Exception as exc:
+                return self._json({"error": str(exc)}, 409)
+        if path == "/api/o2ring/export-sync":
+            try:
+                data = self._read_json_body(max_bytes=10_000)
+                return self._json(service.prepare_export_sync(float(data.get("timeout") or 8.0)))
+            except Exception as exc:
+                return self._json({"error": str(exc)}, 409)
+        if path == "/api/o2ring/export":
+            try:
+                data = self._read_json_body(max_bytes=100_000)
+                return self._json(service.export_all(
+                    destination=data.get("export_dir"),
+                    sync_before=bool(data.get("sync_before", True)),
+                ))
+            except Exception as exc:
+                return self._json({"error": str(exc)}, 400)
+        if path == "/api/o2ring/open-export-folder":
+            try:
+                return self._json(service.open_last_export_folder())
             except Exception as exc:
                 return self._json({"error": str(exc)}, 409)
         if path == "/api/o2ring/forget-device":

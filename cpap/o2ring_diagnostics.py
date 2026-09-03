@@ -116,7 +116,10 @@ def safe_o2ring_diagnostics(service) -> dict[str, Any]:
 def _diag_level(diag: dict[str, Any]) -> tuple[str, str]:
     if not diag.get("feature_enabled"):
         return "OK", "Az O2Ring integráció ki van kapcsolva."
-    if diag.get("ble_enabled") and not diag.get("ble_dependency_available"):
+    # In frozen Windows builds the BLE module can already be loaded even when
+    # importlib cannot resolve a source spec. A running manager thread is the
+    # stronger runtime signal and must not create a false support warning.
+    if diag.get("ble_enabled") and not diag.get("ble_dependency_available") and not diag.get("runtime_thread_running"):
         return "WARN", "Az O2Ring aktív, de a Windows BLE-függőség nem érhető el."
     if diag.get("ble_enabled") and not diag.get("remembered_device"):
         return "WARN", "Az O2Ring aktív, de még nincs megjegyzett gyűrű."

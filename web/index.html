@@ -1,8 +1,13 @@
 <!doctype html>
-<html lang="hu">
+<html lang="hu" class="sm-o2-disabled">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    /* Mark phone-class renderers before CSS is parsed, so expensive animated
+       effects never get a first frame on mobile web or installed PWA. */
+    (()=>{try{const standalone=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;const coarse=matchMedia('(pointer: coarse)').matches;const mobileUa=navigator.userAgentData?.mobile===true||/iPhone|iPod|Android.+Mobile/i.test(navigator.userAgent||'');const shortSide=Math.min(screen.width||innerWidth,screen.height||innerHeight);const phone=mobileUa||(coarse&&shortSide<=600);document.documentElement.classList.toggle('sm-phone-ui',phone);document.documentElement.classList.toggle('sm-phone-pwa',phone&&standalone)}catch{}})();
+  </script>
   <title>SleepMate</title>
   <link rel="icon" type="image/png" href="/assets/pwa-192.png">
   <link rel="preload" as="image" href="/assets/sleepmate-splash-v410.webp" type="image/webp" fetchpriority="high">
@@ -12,6 +17,9 @@
   <meta name="theme-color" content="#0b1730">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="preload" as="script" href="/app-engine119.js?v=130">
+  <link rel="preload" as="script" href="/app-core.js?v=5.0.8">
+  <link rel="preload" as="style" href="/sleepsync.css?v=engine-2">
   <link rel="stylesheet" href="/style.css?v=5.0.0">
 </head>
 <body>
@@ -674,6 +682,12 @@
 
         <section class="panel ai-settings-panel settings-tab-panel" data-settings-panel="ai">
           <div class="panel-head"><div><h3>AI szolgáltatók</h3><span>Az API-kulcsok titkosítva kerülnek a helyi privát adattárba. A SleepMate kizárólag az itt elmentett kulcsokat használja; Windows környezeti változókat nem olvas. Luna a Google Gemini API-t, Milo a Groq API-t használja; az alapfunkciók AI nélkül is működnek.</span></div><span class="security-pill">🔒 titkosított tárolás</span></div>
+          <div class="ai-feature-settings" aria-label="AI felületi funkciók">
+            <label class="setting-toggle"><input id="settingAiLunaVisible" type="checkbox" checked><span><b>Luna megjelenítése</b><small>A Luna indítási lehetőségét kapcsolja. A Gemini-integrációt és a mentett beállításokat nem törli.</small></span></label>
+            <label class="setting-toggle"><input id="settingAiMiloVisible" type="checkbox" checked><span><b>Milo megjelenítése</b><small>A Milo indítási lehetőségét kapcsolja. A Groq-integrációt és a mentett beállításokat nem törli.</small></span></label>
+            <label class="setting-toggle"><input id="settingAiPromptingEnabled" type="checkbox"><span><b>AI promptolás</b><small>A kiválasztott kiértékelés teljes, másolható promptjának megjelenítése külső AI használatához. Luna és Milo működésétől független.</small></span></label>
+            <p id="aiFeatureSettingsStatus" class="muted" role="status"></p>
+          </div>
           <div class="ai-settings-grid">
             <article class="ai-setting-provider gemini"><div class="ai-setting-head"><span class="ai-avatar gemini-avatar"><i></i></span><div><b>Luna</b><small>Google Gemini</small></div><span id="geminiConfiguredBadge" class="provider-config-badge">Nincs API-kulcs</span></div><label class="form-field"><span>Megjelenített név</span><input id="settingGeminiName" type="text" value="Luna"></label><label class="form-field"><span>Modell</span><select id="settingGeminiModel">
 <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
@@ -902,6 +916,19 @@
       <div id="reportPdfStatus" class="report-pdf-status"><span class="status-dot"></span><span>Készen áll a generálásra.</span></div>
       <div class="modal-actions"><button id="reportPdfCancel" type="button">Mégse</button><button id="reportPdfPreview" type="button">Előnézet</button><button id="reportPdfSave" class="primary hidden" type="button" disabled>Mentés a Fájlokba</button><button id="reportPdfGenerate" class="primary" type="button">PDF generálása</button></div>
     </div>
+  </div>
+</div>
+<div id="aiPromptModal" class="modal hidden ai-prompt-modal" role="dialog" aria-modal="true" aria-labelledby="aiPromptModalTitle">
+  <div class="modal-card ai-prompt-card">
+    <div class="modal-head"><div><span class="ai-kicker">Külső AI export</span><h2 id="aiPromptModalTitle">Teljes AI prompt</h2><p id="aiPromptMeta" class="muted"></p></div><button id="aiPromptClose" class="icon-action" type="button" aria-label="Bezárás">×</button></div>
+    <pre id="aiPromptContent" class="ai-prompt-content" tabindex="0" aria-label="Teljes AI prompt"></pre>
+    <div class="ai-prompt-actions">
+      <button id="aiPromptCopy" class="primary" type="button">Másolás vágólapra</button>
+      <button id="aiPromptDownload" type="button">Letöltés TXT fájlban</button>
+      <button id="aiPromptChatGpt" type="button">ChatGPT megnyitása</button>
+      <button id="aiPromptGemini" type="button">Gemini megnyitása</button>
+    </div>
+    <p id="aiPromptStatus" class="muted" role="status"></p>
   </div>
 </div>
 <div id="aiPrintModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiPrintModalTitle">

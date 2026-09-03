@@ -110,12 +110,15 @@ def test_standard_ai_payload_gets_only_cpap_overlap_aggregates():
     validate_safe_payload(out)
 
 
-def test_o2_master_off_leaves_existing_ai_payload_untouched():
+def test_o2_master_off_removes_stale_oximetry_from_ai_payload():
     service = FakeService(enabled=False)
-    payload = {"aggregate": {}, "days": [{"date": "2026-09-01", "ahi": 1.0}]}
-    before = json.dumps(payload, sort_keys=True)
+    payload = {
+        "aggregate": {"oximetry": {"spo2_minimum": 88}},
+        "days": [{"date": "2026-09-01", "ahi": 1.0, "oximetry": {"spo2_average": 96}}],
+    }
     out = _enrich_standard_payload(payload, service)
-    assert json.dumps(out, sort_keys=True) == before
+    assert "oximetry" not in out["aggregate"]
+    assert "oximetry" not in out["days"][0]
     assert service.calls == []
 
 
