@@ -4,6 +4,7 @@
   const dayNames={monday:'Hétfő',tuesday:'Kedd',wednesday:'Szerda',thursday:'Csütörtök',friday:'Péntek',saturday:'Szombat',sunday:'Vasárnap'};
   let lastStatus=null;
   let initialized=false;
+  let bootAttempts=0;
 
   const esc=(value)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const fmtTime=(raw)=>{
@@ -262,7 +263,11 @@
   function boot(){
     ensureHydrationModule();
     if(initialized)return;
-    bindUi();
+    if(bindUi())return;
+    if(bootAttempts<80){
+      bootAttempts++;
+      setTimeout(boot,100);
+    }
   }
 
   document.addEventListener('click',event=>{

@@ -81,3 +81,10 @@ def test_ios_pwa_label_input_uses_non_zooming_font_size_without_viewport_hack():
     html = read("web/index.html")
     assert ".sm-pwa-label-field input{min-height:40px;font-size:16px!important}" in css
     assert "user-scalable=no" not in html
+
+
+def test_sleepsync_cold_start_keeps_bounded_bootstrap_fallback():
+    polish = read("web/sleepsync-polish.js")
+    assert "bootAttempts<80" in polish
+    assert "setTimeout(boot,100)" in polish
+    assert "sleepmate:sleepsync-ready" in polish
