@@ -45,8 +45,8 @@ def main() -> int:
     out = Path(args.out_dir).resolve(); out.mkdir(parents=True, exist_ok=True)
     if not (program / 'SleepMate.exe').is_file():
         raise SystemExit('SleepMate.exe missing from program directory')
-    if not (program / 'SleepMateUpdater.exe').is_file():
-        raise SystemExit('SleepMateUpdater.exe missing from program directory')
+    if not (program / 'Updater' / 'SleepMateUpdater.exe').is_file():
+        raise SystemExit('Updater/SleepMateUpdater.exe missing from program directory')
 
     ver = version()
     commit = git_commit()

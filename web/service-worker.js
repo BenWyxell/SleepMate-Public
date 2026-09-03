@@ -1,7 +1,7 @@
 // Long-lived SleepSync compatibility markers only; active caches are v5.3.7:
 // sleepmate-shell-v5.2.14-ss131 / sleepmate-api-v5.2.14-ss131
 const UI_VERSION='5.3.4';
-const CACHE='sleepmate-shell-v5.3.7-refactor';
+const CACHE='sleepmate-shell-v5.3.7-o2-hydration-1';
 const SHELL_CACHE=CACHE;
 const API_CACHE='sleepmate-api-v5.3.7-refactor';
 const SHELL=['/','/index.html','/style.css?v=5.3.4','/app.js?v=5.3.4','/app-engine119.js?v=130','/app-core.js?v=5.0.8','/sleepsync.css?v=engine-2','/sleepsync-base.css?v=engine-2','/sleepsync-override.css?v=engine-2','/sleepsync-stability.css?v=engine-2','/sleepsync-polish.css?v=130','/sleepsync-notice.css?v=130','/sleepsync-polish.js?v=130','/sleepsync-hydration-v529.js?v=131','/sleepsync-mobile-v5213.css','/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14','/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12','/sleepmate-aurora.css?v=5.3.4','/sleepmate-v530.css?v=5.3.4','/sleepmate-v530.js?v=5.3.4','/o2ring.css?v=5.3.4','/o2ring.js?v=5.3.4','/o2ring-report-ui.js?v=5.3.4','/o2ring-v534.css?v=5.3.4','/frontend-v534.js?v=5.3.4','/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp','/assets/sleepsync-aurora.svg','/assets/sleepsync-mark.svg','/assets/sleepsync-logo.webp','/assets/sidebar-aurora-line.svg?v=122'];
@@ -9,8 +9,8 @@ const CODE_ASSETS=new Set(['/style.css','/app.js','/app-engine119.js','/app-core
 const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|sleep-analysis|system\/status|logs\/diagnostics|o2ring\/(?:day|day-batch|trends))/;
 async function cacheShellAsset(cache,url){const controller=typeof AbortController==='function'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),3500):null;try{const response=await fetch(url,{cache:'no-store',signal:controller?.signal});if(response.ok)await cache.put(url,response.clone())}catch{}finally{if(timer)clearTimeout(timer)}}
 async function precache(){const cache=await caches.open(SHELL_CACHE);await Promise.all(SHELL.map(url=>cacheShellAsset(cache,url)))}
-self.addEventListener('install',event=>event.waitUntil(precache().then(()=>self.skipWaiting())));
-self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys();const stale=keys.filter(k=>![SHELL_CACHE,API_CACHE].includes(k));await Promise.all(stale.map(k=>caches.delete(k)));await self.clients.claim();const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)client.postMessage({type:'SLEEPMATE_SHELL_READY',uiVersion:UI_VERSION})})()));
+self.addEventListener('install',event=>event.waitUntil((async()=>{await precache();await self.skipWaiting()})()));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys();const stale=keys.filter(k=>![SHELL_CACHE,API_CACHE].includes(k));await Promise.all(stale.map(k=>caches.delete(k)));const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)client.postMessage({type:'SLEEPMATE_SHELL_READY',uiVersion:UI_VERSION})})()));
 function backendUnavailable(r){return !!r&&[502,503,504].includes(Number(r.status))}
 async function boundedFetch(req,timeout=5000){const controller=typeof AbortController==='function'?new AbortController():null,timer=controller?setTimeout(()=>controller.abort(),timeout):null;try{return await fetch(req,{cache:'no-store',signal:controller?.signal})}finally{if(timer)clearTimeout(timer)}}
 function apiCacheKey(req){const u=new URL(req.url);u.searchParams.delete('_');u.searchParams.delete('_live');u.searchParams.delete('_sleep');return new Request(u.toString(),{method:'GET',headers:{Accept:req.headers.get('Accept')||'application/json'}})}

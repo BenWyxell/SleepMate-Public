@@ -156,7 +156,7 @@ jobs:
           $version = (& python -c "from cpap.version import APP_VERSION; print(APP_VERSION)").Trim()
           if ($LASTEXITCODE -ne 0) { throw "Reading APP_VERSION failed: $LASTEXITCODE" }
           if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMate.exe')) { throw 'SleepMate.exe missing from MSI input.' }
-          if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMateUpdater.exe')) { throw 'SleepMateUpdater.exe missing from MSI input.' }
+          if (-not (Test-Path 'ci-input\dist\SleepMate\Updater\SleepMateUpdater.exe')) { throw 'Updater/SleepMateUpdater.exe missing from MSI input.' }
           if (-not (Test-Path 'ci-input\dist\SleepMate\SleepMate.ico')) { throw 'SleepMate.ico missing from MSI input.' }
           New-Item -ItemType Directory -Force -Path 'build\windows\msi','release' | Out-Null
           python .\scripts\generate_msi_wxs.py `
@@ -186,6 +186,12 @@ jobs:
 
           $hash = (Get-FileHash $msi -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $(Split-Path $msi -Leaf)" | Set-Content -Path "${msi}.sha256" -Encoding ascii
+
+          python .\tools\build_msi_update_manifest.py `
+            --msi $msi `
+            --output .\release\sleepmate-update.json `
+            --min-version 4.2.2
+          if ($LASTEXITCODE -ne 0) { throw "MSI update manifest generation failed: $LASTEXITCODE" }
 
       - name: Inspect MSI payload by administrative extraction
         shell: powershell
@@ -218,6 +224,7 @@ jobs:
           path: |
             release/SleepMate_Setup_v*.msi
             release/SleepMate_Setup_v*.msi.sha256
+            release/sleepmate-update.json
             release/msi-inventory.txt
             build/windows/msi/SleepMate.generated.wxs
             build/windows/msi/SleepMate-Legal.rtf
@@ -360,7 +367,7 @@ jobs:
           name: SleepMate-Windows-x64-UNSIGNED-CI
           path: |
             ci-input/release/SleepMate_v*_windows_x64.zip
-            ci-input/release/sleepmate-update.json
+            ci-msi/release/sleepmate-update.json
             ci-msi/release/SleepMate_Setup_v*.msi
             ci-msi/release/SleepMate_Setup_v*.msi.sha256
             ci-msi/release/msi-inventory.txt
@@ -462,15 +469,15 @@ jobs:
               return h.hexdigest()
 
           manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-          expected_asset = f'SleepMate_v{version}_windows_x64.zip'
+          expected_asset = f'SleepMate_Setup_v{version}.msi'
           checks = {
               'format': manifest.get('format') == 'sleepmate-update',
               'version': str(manifest.get('version', '')).strip() == version,
               'asset': manifest.get('asset') == expected_asset,
-              'sha256': manifest.get('sha256') == digest(portable),
-              'package_type': manifest.get('package_type') == 'windows-x64-program-tree',
+              'sha256': manifest.get('sha256') == digest(Path(os.environ['MSI'])),
+              'package_type': manifest.get('package_type') == 'windows-msi-x64',
               'git_commit': manifest.get('git_commit') == sha,
-              'requires_installer': manifest.get('requires_installer') is False,
+              'requires_installer': manifest.get('requires_installer') is True,
           }
           failed = [name for name, ok in checks.items() if not ok]
           if failed:
@@ -479,7 +486,7 @@ jobs:
           top = f'SleepMate_v{version}/'
           required = {
               top + 'SleepMate.exe',
-              top + 'SleepMateUpdater.exe',
+              top + 'Updater/SleepMateUpdater.exe',
               top + 'SleepMate.ico',
               top + 'LICENSE',
               top + 'PRIVACY.md',

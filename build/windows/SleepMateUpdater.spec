@@ -20,9 +20,8 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='SleepMateUpdater',
     debug=False,
     bootloader_ignore_signals=False,
@@ -36,4 +35,13 @@ exe = EXE(
     entitlements_file=None,
     icon=str(ROOT / 'SleepMate.ico'),
     version=str(ROOT / 'build' / 'windows' / 'version_info.generated.txt'),
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='SleepMateUpdater',
 )

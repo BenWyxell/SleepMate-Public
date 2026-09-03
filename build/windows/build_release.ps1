@@ -143,7 +143,7 @@ if ($BuiltExeFileVersion -notlike "$AppVersion*") {
   throw "SleepMate.exe FileVersion mismatch: expected $AppVersion.x, got $BuiltExeFileVersion"
 }
 
-$BuiltUpdater = Get-Item 'build\windows\updater-dist\SleepMateUpdater.exe'
+$BuiltUpdater = Get-Item 'build\windows\updater-dist\SleepMateUpdater\SleepMateUpdater.exe'
 $BuiltUpdaterProductVersion = Normalize-VersionString $BuiltUpdater.VersionInfo.ProductVersion
 $BuiltUpdaterFileVersion = Normalize-VersionString $BuiltUpdater.VersionInfo.FileVersion
 if ($BuiltUpdaterProductVersion -ne $AppVersion) {
@@ -153,7 +153,7 @@ if ($BuiltUpdaterFileVersion -notlike "$AppVersion*") {
   throw "SleepMateUpdater.exe FileVersion mismatch: expected $AppVersion.x, got $BuiltUpdaterFileVersion"
 }
 
-Copy-Item $BuiltUpdater.FullName dist\SleepMate\SleepMateUpdater.exe -Force
+Copy-Item 'build\windows\updater-dist\SleepMateUpdater' 'dist\SleepMate\Updater' -Recurse -Force
 Copy-Item SleepMate.ico dist\SleepMate\SleepMate.ico -Force
 Copy-Item build_info.json dist\SleepMate\build_info.json -Force
 Copy-Item build\windows\installed.marker dist\SleepMate\installed.marker -Force

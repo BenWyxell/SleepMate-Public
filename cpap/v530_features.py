@@ -52,8 +52,11 @@ def install_v530_features(app_module) -> None:
                 if 'name="sleepmate-ui-version"' not in text:
                     head_assets.append(f'<meta name="sleepmate-ui-version" content="{UI_VERSION}">')
                 if 'name="sleepmate-o2ring-enabled"' not in text:
-                    enabled = bool(app_module.load_config().get("o2ring_enabled", False))
-                    head_assets.append(f'<meta name="sleepmate-o2ring-enabled" content="{1 if enabled else 0}">')
+                    # The HTML shell is cached by the PWA and may outlive the
+                    # configuration value that existed when it was fetched.
+                    # Never bake a user setting into that shared shell: the
+                    # no-store O2 status endpoint is the canonical state source.
+                    head_assets.append('<meta name="sleepmate-o2ring-enabled" content="unknown">')
                 if "sleepmate-aurora.css" not in text:
                     head_assets.append(f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={UI_VERSION}">')
                 if "sleepmate-v530.css" not in text:

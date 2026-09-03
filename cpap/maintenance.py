@@ -11,6 +11,7 @@ import tempfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import zipfile
@@ -103,17 +104,17 @@ class UpdateSecretStore:
 
 
 class GitHubUpdateManager:
-    """Versioned GitHub Releases updater with pre-update backup and rollback staging.
+    """Versioned GitHub Releases updater with verified MSI installation.
 
     Release contract:
       - asset `sleepmate-update.json`
-      - a ZIP named by manifest.asset (normally SleepMate_vX.Y.Z.zip)
+      - an MSI named exactly `SleepMate_Setup_vX.Y.Z.msi`
       - manifest contains format/version/min_version/sha256/asset
 
-    The updater never applies an unverified ZIP. The running process only stages
-    and validates. A separate update_worker.py performs the file swap after the
-    current backend shuts down, then waits for a startup health marker. If the new
-    version does not boot, the worker restores the complete previous program tree.
+    The updater never starts an unverified package. The running process only
+    downloads, validates and backs up user state. A small onedir coordinator
+    waits for SleepMate to exit and delegates the transactional program-file
+    replacement to Windows Installer instead of editing executables itself.
     """
     def __init__(self, base: Path, log=None, state_base: Path | None = None):
         self.base = base.resolve()
@@ -286,6 +287,9 @@ class GitHubUpdateManager:
     def _download_asset(self, asset_url: str, destination: Path) -> None:
         if not asset_url:
             raise RuntimeError("A GitHub release asset URL hiányzik.")
+        parsed = urllib.parse.urlparse(asset_url)
+        if parsed.scheme.lower() != "https":
+            raise RuntimeError("A SleepMate frissítési asset csak HTTPS kapcsolaton tölthető le.")
         data = self._request(asset_url, accept="application/octet-stream", timeout=120)
         destination.parent.mkdir(parents=True, exist_ok=True)
         tmp = destination.with_suffix(destination.suffix + ".tmp")
@@ -325,6 +329,22 @@ class GitHubUpdateManager:
         if not m:
             raise RuntimeError("A frissítési csomag verziója nem olvasható.")
         return m.group(1).strip()
+
+    @staticmethod
+    def _validate_msi_package(path: Path, target_version: str, manifest: dict[str, Any]) -> None:
+        expected_name = f"SleepMate_Setup_v{target_version}.msi"
+        if path.name != expected_name:
+            raise RuntimeError(f"A frissítési MSI neve nem a várt release asset: {expected_name}")
+        if str(manifest.get("package_type") or "") != "windows-msi-x64":
+            raise RuntimeError("A frissítési manifest nem Windows MSI csomagot jelöl.")
+        if manifest.get("requires_installer") is not True:
+            raise RuntimeError("A frissítési manifestből hiányzik a kötelező Windows Installer jelölés.")
+        # MSI files use the OLE Compound File header. This is not a signature,
+        # but rejects a renamed HTML/ZIP/executable before Windows Installer is
+        # ever started; SHA-256 remains the cryptographic integrity check.
+        with path.open("rb") as source:
+            if source.read(8) != bytes.fromhex("D0CF11E0A1B11AE1"):
+                raise RuntimeError("A letöltött csomag nem érvényes MSI konténer.")
 
     def _snapshot_program(self, target: Path, version: str) -> dict[str, Any]:
         target.mkdir(parents=True, exist_ok=True)
@@ -412,18 +432,72 @@ class GitHubUpdateManager:
             if _version_tuple(APP_VERSION) < _version_tuple(min_version):
                 raise RuntimeError(f"Ez a frissítés legalább SleepMate {min_version} verziót igényel.")
             asset_name = str(manifest.get("asset") or f"SleepMate_v{target_version}.zip")
+            if Path(asset_name).name != asset_name:
+                raise RuntimeError("A frissítési manifest érvénytelen asset nevet tartalmaz.")
             expected_hash = str(manifest.get("sha256") or "").lower().strip()
             if len(expected_hash) != 64:
                 raise RuntimeError("A frissítési manifestből hiányzik az érvényes SHA-256 hash.")
             asset = next((a for a in (release.get("assets") or []) if a.get("name") == asset_name), None)
             if not asset:
                 raise RuntimeError(f"A GitHub release-ből hiányzik a manifestben megadott csomag: {asset_name}")
-            zip_path = work / asset_name
+            package_path = work / asset_name
             if progress: progress(15, "Frissítés letöltése", f"{asset_name} letöltése…")
-            self._download_asset(str(asset.get("url") or ""), zip_path)
-            actual_hash = _sha256(zip_path)
+            self._download_asset(str(asset.get("url") or ""), package_path)
+            actual_hash = _sha256(package_path)
             if actual_hash.lower() != expected_hash:
                 raise RuntimeError("A letöltött frissítési csomag SHA-256 ellenőrzése sikertelen.")
+
+            if str(manifest.get("package_type") or "") == "windows-msi-x64":
+                self._validate_msi_package(package_path, target_version, manifest)
+                if progress: progress(30, "Csomag ellenőrzése", "A hitelesített MSI frissítési szerződés ellenőrzése kész.")
+
+                # User data still receives the same full safety backup. Program
+                # files are no longer snapshotted or manually replaced: MSI's
+                # transactional rollback owns that responsibility.
+                pre_dir = self.private / "pre_update_backups"
+                pre_dir.mkdir(parents=True, exist_ok=True)
+                backup_path = pre_dir / f"SleepMate_pre_update_{APP_VERSION}_to_{target_version}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+                if progress: progress(55, "Biztonsági mentés", "Teljes rendszerbackup készítése frissítés előtt…")
+                create_full_backup(self.state_base, data_dir, config, backup_path)
+                self._cleanup_files(pre_dir, "SleepMate_pre_update_*.zip", 5)
+
+                marker = self.runtime / "update_boot_ok.json"
+                try: marker.unlink()
+                except FileNotFoundError: pass
+                installer_log = self.runtime / f"msi-{target_version}-{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                plan = {
+                    "format": "sleepmate-update-plan",
+                    "install_kind": "msi",
+                    "created_at": _now(),
+                    "from_version": APP_VERSION,
+                    "to_version": target_version,
+                    "app_dir": str(self.base),
+                    "installer_path": str(package_path),
+                    "installer_sha256": expected_hash,
+                    "pre_update_backup": str(backup_path),
+                    "health_marker": str(marker),
+                    "old_pid": os.getpid(),
+                    "port": int(port),
+                    "tray_pid": self._read_tray_pid(),
+                    "launch_vbs": str(self.base / "SleepMate.vbs"),
+                    "launcher_exe": str(self.base / "SleepMate.exe"),
+                    "state_dir": str(self.state_base),
+                    "worker_log": str(self.runtime / "update_worker.log"),
+                    "installer_log": str(installer_log),
+                    "timeout_seconds": 90,
+                }
+                plan_path = work / "update-plan.json"
+                plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+                self._save_state(last_install={"status": "prepared", "method": "windows-installer", "from": APP_VERSION, "to": target_version, "prepared_at": _now(), "backup": str(backup_path)}, last_error=None)
+                if progress: progress(100, "Frissítés előkészítve", f"SleepMate {target_version} csendes MSI telepítése készen áll.")
+                self._log("INFO", "MSI frissítés biztonságosan előkészítve.", {"from": APP_VERSION, "to": target_version, "asset": asset_name, "sha256": expected_hash, "backup": str(backup_path)})
+                return {"ok": True, "target_version": target_version, "plan": str(plan_path), "backup": str(backup_path), "install_method": "windows-installer"}
+
+            # Compatibility for historical portable/source update manifests.
+            # New official releases are generated as windows-msi-x64 above.
+            if str(manifest.get("package_type") or "") not in {"", "windows-x64-program-tree"}:
+                raise RuntimeError("A frissítési manifest ismeretlen csomagtípust tartalmaz.")
+            zip_path = package_path
             if progress: progress(30, "Csomag ellenőrzése", "Frissítési ZIP biztonságos kibontása…")
             extract_root = work / "package"
             extract_root.mkdir(parents=True, exist_ok=True)
@@ -484,14 +558,25 @@ class GitHubUpdateManager:
         if not plan.is_file():
             raise FileNotFoundError("A frissítési terv nem található.")
         flags = 0x08000000 if os.name == "nt" else 0
-        updater_exe = self.base / "SleepMateUpdater.exe"
+        updater_dir = self.base / "Updater"
+        updater_exe = updater_dir / "SleepMateUpdater.exe"
+        legacy_updater_exe = self.base / "SleepMateUpdater.exe"
         if getattr(sys, "frozen", False) and updater_exe.is_file():
-            # A Windows nem engedi a futó updater EXE felülírását. A frissítő
-            # ezért a writable runtime könyvtárból fut, miközben lecseréli a
-            # teljes Program Files alatti SleepMate programfát.
-            worker_copy = self.runtime / f"SleepMateUpdater-{uuid.uuid4().hex[:10]}.exe"
-            shutil.copy2(updater_exe, worker_copy)
-            subprocess.Popen([str(worker_copy), str(plan)], cwd=str(self.runtime), creationflags=flags, close_fds=(os.name != "nt"))
+            # The coordinator uses the same transparent PyInstaller onedir
+            # layout as SleepMate. It runs from the already-created update stage
+            # so MSI can replace the installed tree without onefile extraction
+            # or a randomly named executable.
+            coordinator_dir = plan.parent / "coordinator"
+            shutil.copytree(updater_dir, coordinator_dir, dirs_exist_ok=True)
+            worker_copy = coordinator_dir / "SleepMateUpdater.exe"
+            subprocess.Popen([str(worker_copy), str(plan)], cwd=str(coordinator_dir), creationflags=flags, close_fds=(os.name != "nt"))
+        elif getattr(sys, "frozen", False) and legacy_updater_exe.is_file():
+            # One transition release may still contain the former onefile
+            # worker. It can install the first MSI-based update; new builds no
+            # longer produce or package this layout.
+            worker_copy = plan.parent / "SleepMateUpdater-legacy.exe"
+            shutil.copy2(legacy_updater_exe, worker_copy)
+            subprocess.Popen([str(worker_copy), str(plan)], cwd=str(plan.parent), creationflags=flags, close_fds=(os.name != "nt"))
         else:
             worker = self.base / "update_worker.py"
             if not worker.is_file():

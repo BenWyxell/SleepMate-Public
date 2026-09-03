@@ -362,7 +362,7 @@ class Handler(BaseHTTPRequestHandler):
         cfg = load_config()
         def cb(p, ph, msg): self._progress(jid, p, ph, msg)
         result = self.update_manager.prepare_install(cfg, self.dataset.root, int(self.server.server_address[1]), cb)
-        self._progress(jid, 100, "Újraindítás", f"SleepMate {result.get('target_version')} telepítése indul; hiba esetén automatikus rollback történik.")
+        self._progress(jid, 100, "Újraindítás", f"SleepMate {result.get('target_version')} ellenőrzött, csendes Windows Installer telepítése indul.")
         self.update_manager.launch_worker(str(result["plan"]))
         srv = self.server_instance
         if srv:
