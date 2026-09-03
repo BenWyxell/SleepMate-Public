@@ -90,7 +90,7 @@ def test_o2_master_toggle_has_authoritative_ui_and_route_cleanup_contract():
     assert "loadDaily=async function(...args){if(!featureActive())" in o2
     assert "[data-sm-nav-id=\"oximetry\"]" in o2
     assert "if(location.hash.startsWith('#oximetry'))window.navigate?.('dashboard')" in o2
-    assert "if(!activeO2()&&location.hash.startsWith('#oximetry'))window.navigate?.('dashboard')" in js
+    assert "if(o2State===O2_STATE.DISABLED&&location.hash.startsWith('#oximetry'))window.navigate?.('dashboard')" in js
     for marker in ("#spo2Metric", "#hrMetric", "#smO2QuickBar", ".sm-o2-stack", ".sm-o2-focus-mini"):
         assert marker in css
     assert 'html.sm-o2-disabled [data-settings-panel="display"]>:not(#smO2Master)' in css
