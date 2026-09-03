@@ -204,7 +204,8 @@ for asset in (
 ):
     require(asset in SERVICE_WORKER, f"live PWA shell is missing {asset}")
     require(asset in BASE_WORKER, f"release PWA shell base is missing {asset}")
-require("const stale=keys.filter" in SERVICE_WORKER and "client.navigate(client.url)" in SERVICE_WORKER, "PWA update cannot evict stale shell and reload an open client")
+require("const stale=keys.filter" in SERVICE_WORKER and "SLEEPMATE_SHELL_READY" in SERVICE_WORKER and "client.navigate(client.url)" not in SERVICE_WORKER, "PWA update must evict stale shell and notify open clients without mid-boot navigation")
+require("SLEEPMATE_SHELL_READY" in BASE_WORKER and "client.navigate(client.url)" not in BASE_WORKER, "release PWA base must notify clients without mid-boot navigation")
 require("getRegistrations" not in SERVICE_WORKER and "unregister" not in SERVICE_WORKER, "service worker must not unregister itself")
 require("'/sleepmate-chart-v523.js'" in SERVICE_WORKER, "live PWA chart overlay is not network-first")
 require("'/sleepmate-chart-v523.js'" in BASE_WORKER, "release base chart overlay is not network-first")
