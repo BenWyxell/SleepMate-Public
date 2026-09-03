@@ -78,22 +78,8 @@ jobs:
           text = polish.read_text(encoding='utf-8')
           if 'let bootAttempts=0;' not in text:
               text = text.replace('  let initialized=false;\n', '  let initialized=false;\n  let bootAttempts=0;\n', 1)
-          old_boot = """  function boot(){
-    ensureHydrationModule();
-    if(initialized)return;
-    bindUi();
-  }
-"""
-          new_boot = """  function boot(){
-    ensureHydrationModule();
-    if(initialized)return;
-    if(bindUi())return;
-    if(bootAttempts<80){
-      bootAttempts++;
-      setTimeout(boot,100);
-    }
-  }
-"""
+          old_boot = '  function boot(){\n    ensureHydrationModule();\n    if(initialized)return;\n    bindUi();\n  }\n'
+          new_boot = '  function boot(){\n    ensureHydrationModule();\n    if(initialized)return;\n    if(bindUi())return;\n    if(bootAttempts<80){\n      bootAttempts++;\n      setTimeout(boot,100);\n    }\n  }\n'
           if old_boot in text:
               text = text.replace(old_boot, new_boot, 1)
           elif new_boot not in text:
@@ -104,15 +90,7 @@ jobs:
           t = targeted.read_text(encoding='utf-8')
           marker = '    assert "user-scalable=no" not in html\n'
           if 'assert "bootAttempts<80" in polish' not in t:
-              addition = """
-
-
-def test_sleepsync_cold_start_keeps_bounded_bootstrap_fallback():
-    polish = read("web/sleepsync-polish.js")
-    assert "bootAttempts<80" in polish
-    assert "setTimeout(boot,100)" in polish
-    assert "sleepmate:sleepsync-ready" in polish
-"""
+              addition = '\n\ndef test_sleepsync_cold_start_keeps_bounded_bootstrap_fallback():\n    polish = read("web/sleepsync-polish.js")\n    assert "bootAttempts<80" in polish\n    assert "setTimeout(boot,100)" in polish\n    assert "sleepmate:sleepsync-ready" in polish\n'
               if marker not in t:
                   raise SystemExit('Unexpected targeted test source state')
               t = t.replace(marker, marker + addition, 1)
