@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import shutil
 import subprocess
@@ -8,6 +9,18 @@ import sys
 import time
 from datetime import datetime
 from pathlib import Path
+
+
+MSI_HEADER = bytes.fromhex("D0CF11E0A1B11AE1")
+IS_WINDOWS = os.name == "nt"
+
+
+def sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def log(path: Path, text: str) -> None:
@@ -341,6 +354,102 @@ def restore_previous(
         return False
 
 
+def validate_msi_plan(plan_path: Path, plan: dict) -> tuple[Path, Path]:
+    installer = Path(str(plan.get("installer_path") or "")).resolve()
+    version = str(plan.get("to_version") or "").strip()
+    expected_name = f"SleepMate_Setup_v{version}.msi"
+    if installer.parent != plan_path.parent or installer.name != expected_name:
+        raise RuntimeError("A frissítési terv nem a várt, stage-elt MSI release assetre mutat.")
+    if not installer.is_file() or installer.stat().st_size < len(MSI_HEADER):
+        raise RuntimeError("A stage-elt MSI frissítési csomag hiányzik vagy üres.")
+    with installer.open("rb") as source:
+        if source.read(len(MSI_HEADER)) != MSI_HEADER:
+            raise RuntimeError("A stage-elt csomag nem MSI konténer.")
+    expected_hash = str(plan.get("installer_sha256") or "").lower().strip()
+    if len(expected_hash) != 64 or sha256(installer).lower() != expected_hash:
+        raise RuntimeError("Az MSI SHA-256 újraellenőrzése sikertelen.")
+    installer_log = Path(str(plan.get("installer_log") or (plan_path.parent / "msiexec.log"))).resolve()
+    installer_log.parent.mkdir(parents=True, exist_ok=True)
+    return installer, installer_log
+
+
+def install_verified_msi(
+    *, plan_path: Path, plan: dict, app_dir: Path, launcher_exe: Path,
+    vbs: Path, marker: Path, port: int, log_path: Path, state_path: Path,
+    timeout: int, restart_tray_requested: bool,
+) -> int:
+    try:
+        installer, installer_log = validate_msi_plan(plan_path, plan)
+    except Exception as exc:
+        log(log_path, f"HIBA: MSI validáció sikertelen: {exc}")
+        return 9
+
+    system_root = Path(str(os.environ.get("SystemRoot") or r"C:\Windows")).resolve()
+    msiexec = system_root / "System32" / "msiexec.exe"
+    if not IS_WINDOWS or not msiexec.is_file():
+        log(log_path, "HIBA: a szabványos Windows Installer (msiexec.exe) nem érhető el.")
+        return 10
+
+    command = [
+        str(msiexec), "/i", str(installer), "/qn", "/norestart",
+        "REBOOT=ReallySuppress", f"INSTALLFOLDER={app_dir}",
+        "/L*v", str(installer_log),
+    ]
+    log(log_path, f"Windows Installer indul unattended módban: {installer.name}")
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=str(plan_path.parent),
+            creationflags=0x08000000,
+            timeout=max(120, timeout * 4),
+            check=False,
+        )
+    except Exception as exc:
+        log(log_path, f"HIBA: a Windows Installer nem indítható: {exc}")
+        completed = None
+
+    exit_code = completed.returncode if completed is not None else -1
+    if exit_code not in (0, 3010):
+        log(log_path, f"HIBA: az MSI telepítés exit kódja {exit_code}; a Windows Installer tranzakció visszagörgette a programfájlokat.")
+        save_result(state_path, {
+            "status": "install_failed", "version": str(plan.get("to_version") or ""),
+            "installer_exit_code": exit_code, "installer_log": str(installer_log),
+            "time": datetime.now().isoformat(timespec="seconds"),
+        })
+        start_tray(vbs, app_dir, log_path, launcher_exe)
+        return 11
+
+    log(log_path, f"MSI telepítés kész, exit={exit_code}; SleepMate automatikus újraindítása következik.")
+    try:
+        marker.unlink()
+    except FileNotFoundError:
+        pass
+    started = time.time()
+    launched: subprocess.Popen | None
+    if restart_tray_requested:
+        launched = start_tray(vbs, app_dir, log_path, launcher_exe)
+    else:
+        launched = launch_backend(app_dir, port, log_path, launcher_exe)
+    version = str(plan.get("to_version") or "")
+    healthy = wait_health(marker, version, started, timeout)
+    result = {
+        "status": "success" if healthy else "installed_not_healthy",
+        "version": version,
+        "installer_exit_code": exit_code,
+        "reboot_required": exit_code == 3010,
+        "installer_log": str(installer_log),
+        "time": datetime.now().isoformat(timespec="seconds"),
+        "launcher_pid": launched.pid if launched else None,
+    }
+    save_result(state_path, result)
+    if not healthy:
+        log(log_path, f"HIBA: az MSI települt, de SleepMate {version} egészségjelzése nem érkezett meg.")
+        return 12
+    log(log_path, f"SIKER: SleepMate {version} MSI frissítés és automatikus újraindítás kész.")
+    cleanup_stage(plan_path, log_path)
+    return 0
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         return 2
@@ -349,9 +458,10 @@ def main() -> int:
     if plan.get("format") != "sleepmate-update-plan":
         return 3
 
+    install_kind = str(plan.get("install_kind") or "portable-tree")
     app_dir = Path(plan["app_dir"]).resolve()
-    package_dir = Path(plan["package_dir"]).resolve()
-    rollback_dir = Path(plan["rollback_dir"]).resolve()
+    package_dir = Path(str(plan.get("package_dir") or app_dir)).resolve()
+    rollback_dir = Path(str(plan.get("rollback_dir") or app_dir)).resolve()
     marker = Path(plan["health_marker"]).resolve()
     log_path = Path(plan["worker_log"]).resolve()
     old_pid = int(plan.get("old_pid") or 0)
@@ -381,6 +491,13 @@ def main() -> int:
             except Exception as exc:
                 log(log_path, f"HIBA: a régi backend visszaindítása sem sikerült: {exc}")
             return 8
+
+    if install_kind == "msi":
+        return install_verified_msi(
+            plan_path=plan_path, plan=plan, app_dir=app_dir, launcher_exe=launcher_exe,
+            vbs=vbs, marker=marker, port=port, log_path=log_path, state_path=state_path,
+            timeout=timeout, restart_tray_requested=restart_tray_requested,
+        )
 
     # Known tray has already had a chance to remove its notification icon. This
     # remaining image-wide kill is only a lock-safety net for orphaned processes.

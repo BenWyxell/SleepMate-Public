@@ -132,9 +132,5 @@
 
 /* Integration polish */
 .sleepsync-nav-item{gap:11px!important}
-.sleepsync-nav-item:before{
-  content:"";width:19px;height:19px;flex:none;display:block;background:currentColor;
-  -webkit-mask:url('/assets/sleepsync-mark.svg') center/contain no-repeat;
-  mask:url('/assets/sleepsync-mark.svg') center/contain no-repeat
-}
+.sleepsync-nav-item>svg{width:19px;height:19px;flex:none}
 body:has(#page-sleepsync.active) .topbar-title{visibility:hidden}

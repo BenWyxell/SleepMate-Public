@@ -147,7 +147,7 @@ def main() -> int:
 
     if not source_dir.is_dir():
         raise SystemExit(f"Source directory does not exist: {source_dir}")
-    for required in ("SleepMate.exe", "SleepMateUpdater.exe", "SleepMate.ico"):
+    for required in ("SleepMate.exe", "Updater/SleepMateUpdater.exe", "SleepMate.ico"):
         if not (source_dir / required).is_file():
             raise SystemExit(f"{required} missing from MSI source tree")
 

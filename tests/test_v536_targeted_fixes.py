@@ -45,7 +45,9 @@ def test_cold_pwa_boot_loads_one_coherent_shell_and_authoritative_o2_master():
     assert "sleepmate:sleepsync-ready" in engine
     assert "<svg viewBox=" in engine
     assert 'name="sleepmate-o2ring-enabled"' in shell
-    assert "bootO2Meta==='1'?true:bootO2Meta==='0'?false:null" in o2
+    assert 'name="sleepmate-o2ring-enabled" content="unknown"' in shell
+    assert "UNKNOWN:'unknown',ENABLED:'enabled',DISABLED:'disabled'" in o2
+    assert "function activeO2(){return o2State===O2_STATE.ENABLED}" in o2
     for worker_name in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         worker = read(worker_name)
         assert "event.respondWith(navigationFallback(req))" in worker
