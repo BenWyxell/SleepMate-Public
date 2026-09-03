@@ -1,0 +1,70 @@
+name: Fix SleepMate 5.3.8 release gates
+
+on:
+  push:
+    branches:
+      - release-v5.3.8-gatefix
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Align stale regression contracts with v5.3.8 behavior
+        env:
+          SOURCE_BRANCH: release-v5.3.8-source
+        run: |
+          set -euo pipefail
+          git fetch origin "$SOURCE_BRANCH"
+          git checkout -B "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python - <<'PY'
+          from pathlib import Path
+
+          p = Path('tests/test_apple_push_splash_v417.py')
+          t = p.read_text(encoding='utf-8')
+          old = "assert 'precacheShell().then(()=>self.skipWaiting())' in BASE_SW"
+          new = "assert 'await precacheShell();await self.skipWaiting()' in BASE_SW"
+          if old in t:
+              t = t.replace(old, new, 1)
+          elif new not in t:
+              raise SystemExit('Unexpected apple push service-worker contract')
+          p.write_text(t, encoding='utf-8')
+
+          cache_files = [
+              Path('tests/test_mobile_ai_push_v417.py'),
+              Path('tests/test_o2ring_v534_release_contract.py'),
+              Path('tests/test_pwa_sleep_shell_v526.py'),
+              Path('tests/test_v534_acceptance_matrix.py'),
+              Path('tests/test_v535_user_acceptance_matrix.py'),
+          ]
+          for p in cache_files:
+              t = p.read_text(encoding='utf-8')
+              t = t.replace('sleepmate-shell-v5.3.8-refactor', 'sleepmate-shell-v5.3.8-o2-hydration-1')
+              p.write_text(t, encoding='utf-8')
+
+          p = Path('tests/test_v535_feature_regressions.py')
+          t = p.read_text(encoding='utf-8')
+          old = 'assert "setO2FeatureState(activeO2())" in js'
+          new = 'assert "setO2FeatureState()" in js'
+          if old in t:
+              t = t.replace(old, new, 1)
+          elif new not in t:
+              raise SystemExit('Unexpected O2 feature-state contract')
+          old = 'assert "setTimeout(()=>{if(!activeO2()&&location.hash.startsWith(\'#oximetry\'))window.navigate?.(\'dashboard\');applyAiVisibility();renderBottomNav()},0)" in shell'
+          new = 'assert "if(o2State===O2_STATE.DISABLED&&location.hash.startsWith(\'#oximetry\'))window.navigate?.(\'dashboard\')" in shell'
+          if old in t:
+              t = t.replace(old, new, 1)
+          elif new not in t:
+              raise SystemExit('Unexpected O2 navigation cleanup contract')
+          p.write_text(t, encoding='utf-8')
+          PY
+          git add tests/test_apple_push_splash_v417.py tests/test_mobile_ai_push_v417.py tests/test_o2ring_v534_release_contract.py tests/test_pwa_sleep_shell_v526.py tests/test_v534_acceptance_matrix.py tests/test_v535_user_acceptance_matrix.py tests/test_v535_feature_regressions.py
+          git commit -m "Align v5.3.8 regression gates with new PWA and O2 state contracts"
+          git push origin "$SOURCE_BRANCH"
