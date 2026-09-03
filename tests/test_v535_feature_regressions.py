@@ -84,7 +84,7 @@ def test_o2_master_toggle_has_authoritative_ui_and_route_cleanup_contract():
     o2 = read("web/o2ring.js")
     css = read("web/sleepmate-v530.css")
     assert 'class="sm-o2-disabled"' in html
-    assert "setO2FeatureState(activeO2())" in js
+    assert "setO2FeatureState()" in js
     assert "window.SleepMateO2Ring?.uninstall?.()" in js
     assert "const featureActive=()=>R.installed&&!!R.settings.o2ring_enabled" in o2
     assert "loadDaily=async function(...args){if(!featureActive())" in o2
@@ -138,7 +138,7 @@ def test_luna_milo_and_prompting_have_three_independent_conditions_and_actions()
     assert "prefs.ai_luna_visible!==false||prefs.ai_milo_visible!==false||prefs.ai_prompting_enabled===true" in shell
     assert "settingAiLunaVisible" in html and "settingAiMiloVisible" in html
     assert "sm-ai-luna-off" in shell and "sm-ai-milo-off" in shell
-    assert "setTimeout(()=>{if(!activeO2()&&location.hash.startsWith('#oximetry'))window.navigate?.('dashboard');applyAiVisibility();renderBottomNav()},0)" in shell
+    assert "if(o2State===O2_STATE.DISABLED&&location.hash.startsWith('#oximetry'))window.navigate?.('dashboard')" in shell
     assert "filter(r=>r.provider==='groq'?features.miloVisible:features.lunaVisible)" in js
     for marker in ("aiPromptCopy", "aiPromptDownload", "aiPromptChatGpt", "aiPromptGemini"):
         assert marker in html

@@ -47,7 +47,7 @@ def test_service_worker_install_is_tolerant_and_bounded_for_ios_push():
     assert 'cacheShellAsset' in BASE_SW
     assert 'AbortController' in BASE_SW
     assert '3500' in BASE_SW
-    assert 'precacheShell().then(()=>self.skipWaiting())' in BASE_SW
+    assert 'await precacheShell();await self.skipWaiting()' in BASE_SW
     assert "self.addEventListener('push'" in BASE_SW
 
 

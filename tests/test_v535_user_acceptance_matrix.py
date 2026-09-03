@@ -190,7 +190,7 @@ def test_release_identity_is_v535():
 
 def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():
     for worker in (SW, SW_BASE):
-        assert "const CACHE='sleepmate-shell-v5.3.8-refactor';" in worker
+        assert "const CACHE='sleepmate-shell-v5.3.8-o2-hydration-1';" in worker
         assert "const API_CACHE='sleepmate-api-v5.3.8-refactor';" in worker
         assert "const UI_VERSION='5.3.4';" in worker
         assert '/frontend-v534.js?v=5.3.4' in worker
