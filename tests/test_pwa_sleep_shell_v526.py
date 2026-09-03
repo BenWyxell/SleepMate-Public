@@ -25,11 +25,11 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
     sw = (root / "web" / "service-worker.js").read_text(encoding="utf-8")
 
     # Frozen compatibility markers remain visible, while active caches must be
-    # rotated to the v5.3.8 release-cache generation.
+    # rotated to the v5.3.9 release-cache generation.
     assert "sleepmate-shell-v5.2.14-ss131" in sw
     assert "sleepmate-api-v5.2.14-ss131" in sw
-    assert "sleepmate-shell-v5.3.8-o2-hydration-1" in sw
-    assert "sleepmate-api-v5.3.8-refactor" in sw
+    assert "sleepmate-shell-v5.3.9-o2-hydration-1" in sw
+    assert "sleepmate-api-v5.3.9-refactor" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw
@@ -48,8 +48,8 @@ def test_packaged_service_worker_base_precaches_same_sleep_feature():
     root = Path(__file__).resolve().parents[1]
     sw = (root / "web" / "service-worker-v508-base.js").read_text(encoding="utf-8")
     assert "sleepmate-shell-v5.2.14" in sw
-    assert "sleepmate-shell-v5.3.8" in sw
-    assert "sleepmate-api-v5.3.8" in sw
+    assert "sleepmate-shell-v5.3.9" in sw
+    assert "sleepmate-api-v5.3.9" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw
