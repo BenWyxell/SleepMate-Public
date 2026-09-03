@@ -30,11 +30,14 @@ def test_v535_daily_cards_use_matched_o2ring_medians():
 def test_v535_latest_sleep_card_is_duration_not_session_status():
     front = read("web/frontend-v534.js")
     html = read("web/index.html")
+    core = read("web/app-core.js")
     spec = read("build/windows/SleepMate.spec")
     assert "latest?.summary||latest" in front
     assert "latestDuration(summary)" in front
     assert "<label>Alvásidő</label>" in html
-    assert "secondsToHM(latest.therapy_seconds||0)" in spec
+    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in core
+    assert "$('#latestStatus').textContent='Befejezve'" not in core
+    assert "$('#latestStatus').textContent='Befejezve'" not in spec
 
 def test_v535_reports_and_night_card_contract():
     js = read("web/o2ring.js")
