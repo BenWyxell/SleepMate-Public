@@ -1,3 +1,24 @@
+# SleepMate 5.3.8
+
+Release build: **5.3.8**.
+Kiadási csatorna: **stable**.
+
+A 5.3.8 a 5.3.7 utáni javításokat és frissítési infrastruktúra-fejlesztéseket tartalmazza.
+
+## Főbb változások
+
+- A SleepSync oldalsávban megszűnik a dupla ikon: pontosan egy, egységesen igazított ikon marad.
+- Az O2Ring PWA állapotkezelése megbízhatóbban külön kezeli az ismeretlen, engedélyezett és letiltott állapotot, és későn érkező konfiguráció esetén is újraszinkronizálja a kapcsolódó felületeket.
+- A PWA service worker generációkezelése úgy frissül, hogy egy aktív oldal ne keverjen eltérő shell-generációkat.
+- A SleepMate frissítő külön `Updater/` koordinátorként csomagolódik.
+- A frissítési csatorna MSI-alapú telepítést használ: SHA-256 és MSI-konténer ellenőrzés után a Windows Installer végzi a tranzakciós programfájl-cserét.
+- A kiadási pipeline MSI-frissítési manifestet generál és ellenőriz, a telepítési folyamat pedig továbbra is teljes felhasználói adatmentést készít frissítés előtt.
+
+## Kiadási ellenőrzés
+
+A kiadás csak a hivatalos Windows release workflow sikeres teljes build-, teszt-, MSI telepítési smoke-test- és SHA-256/manifeszt-ellenőrzése után publikálható.
+
+---
 # SleepMate 5.3.7
 
 Release build: **5.3.7**.
