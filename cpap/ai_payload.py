@@ -256,6 +256,26 @@ def analysis_prompts(analysis_type: str, safe_payload: dict[str, Any]) -> tuple[
     return COMMON_SYSTEM_PROMPT, user
 
 
+EXTERNAL_AI_SYSTEM_PROMPT = """A SleepMate felhasználójának készíts magyar nyelvű, közérthető PAP/CPAP terápiás kiértékelést a mellékelt anonim adatcsomag alapján.
+
+A válasz legyen áttekinthető és emberi hangvételű. Használj rövid címsorokat és felsorolást, ahol segítik az olvasást. Tartalmazzon rövid összefoglalót, fő megállapításokat, fontos értékeket, pozitívumokat, figyelmet érdemlő pontokat és rövid értelmezést. Közvetlenül a SleepMate felhasználójához beszélj, ne fejlesztőhöz.
+
+Ne válaszolj JSON-ban, kódban vagy kódblokkban. Ne használj belső mezőneveket, ne magyarázd a prompt vagy az adatcsomag szerkezetét, és ne másold vissza nyersen a teljes adatcsomagot. Csak a megadott adatokból dolgozz; hiányzó értéket ne találj ki. A saját korábbi adatok és trendek legyenek az elsődleges összehasonlítási alapok, és korrelációból ne állíts automatikusan okozati kapcsolatot. Maradj tájékoztató jellegű: ne állíts fel diagnózist, és ne adj kötelező, konkrét nyomásmódosítási utasítást. Ha valamihez nincs elég adat, mondd ki természetesen."""
+
+
+def external_analysis_prompt(analysis_type: str, safe_payload: dict[str, Any]) -> str:
+    """Render the canonical anonymous payload for a human-facing external AI."""
+    specific = TYPE_PROMPTS.get(analysis_type)
+    if not specific:
+        raise ValueError("Ismeretlen AI kiértékelési mód.")
+    return (
+        EXTERNAL_AI_SYSTEM_PROMPT
+        + "\n\nAz értékelés fókusza:\n" + specific
+        + "\n\nA SleepMate által összeállított anonim terápiás adatcsomag:\n"
+        + json.dumps(safe_payload, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
 def chat_prompts(analysis: dict[str, Any], question: str) -> tuple[str, str]:
     result = analysis.get("result") if isinstance(analysis.get("result"), dict) else {}
     safe_payload = analysis.get("safe_payload") if isinstance(analysis.get("safe_payload"), dict) else {}

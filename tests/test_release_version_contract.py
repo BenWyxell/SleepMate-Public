@@ -80,7 +80,9 @@ def test_release_pwa_shell_cannot_lose_sleep_feature_after_update():
         assert "sleep-analysis" in worker
         assert "const stale=keys.filter" in worker
         assert "self.clients.matchAll({type:'window',includeUncontrolled:true})" in worker
-        assert "await client.navigate(client.url)" in worker
+        assert "SLEEPMATE_SHELL_READY" in worker
+        assert "event.respondWith(navigationFallback(req))" in worker
+        assert "event.respondWith(codeNetworkFirst(req))" in worker
         assert "/sleepmate-chart-v523.js" in worker
 
     spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")

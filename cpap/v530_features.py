@@ -51,6 +51,9 @@ def install_v530_features(app_module) -> None:
                 head_assets: list[str] = []
                 if 'name="sleepmate-ui-version"' not in text:
                     head_assets.append(f'<meta name="sleepmate-ui-version" content="{UI_VERSION}">')
+                if 'name="sleepmate-o2ring-enabled"' not in text:
+                    enabled = bool(app_module.load_config().get("o2ring_enabled", False))
+                    head_assets.append(f'<meta name="sleepmate-o2ring-enabled" content="{1 if enabled else 0}">')
                 if "sleepmate-aurora.css" not in text:
                     head_assets.append(f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={UI_VERSION}">')
                 if "sleepmate-v530.css" not in text:

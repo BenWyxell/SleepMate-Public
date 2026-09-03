@@ -273,7 +273,7 @@
         button.dataset.page='sleepsync';
         button.title='SleepSync';
         button.type='button';
-        button.innerHTML='<span>SleepSync</span>';
+        button.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h10l-2.5-2.5M19 17H9l2.5 2.5M15 7a6 6 0 0 1 4 5M9 17a6 6 0 0 1-4-5"/></svg><span>SleepSync</span>';
         nav.insertBefore(button,settings);
       }
       bindSleepSyncUi();
@@ -669,6 +669,8 @@
     }
 
     ensureSleepSyncUi();
+    window.__sleepSyncUiReady=true;
+    document.dispatchEvent(new CustomEvent('sleepmate:sleepsync-ready'));
     window.removeEventListener('hashchange',coreRoute);
     window.navigate=integrationNavigate;
     window.route=integrationRoute;

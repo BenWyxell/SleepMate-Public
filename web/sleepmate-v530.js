@@ -24,7 +24,9 @@
     dashboard:{label:'Dashboard',page:'dashboard'},patient:{label:'Kezelt személy',page:'patient'},sessions:{label:'Napok',page:'sessions'},events:{label:'Események',page:'events'},reports:{label:'Jelentések',page:'reports'},ai:{label:'Luna & Milo',page:'ai'},equipment:{label:'Felszerelés',page:'equipment'},upload:{label:'Feltöltés',page:'upload'},logs:{label:'Naplók',page:'logs'},faq:{label:'GYIK',page:'faq'},settings:{label:'Beállítások',page:'settings'},oximetry:{label:'Oximetria',page:'oximetry'},charts:{label:'Diagrammok',action:'charts'},more:{label:'Egyéb',action:'more'}
   };
   let prefs={pwa_bottom_nav:['dashboard','sessions','charts','ai','more'],pwa_bottom_nav_labels:{},pwa_bottom_nav_default_labels:{},pwa_bottom_nav_label_max_length:18,pwa_bottom_nav_max:6,ai_luna_visible:true,ai_milo_visible:true,ai_prompting_enabled:false};
-  let o2={settings:{o2ring_enabled:false,o2ring_ble_enabled:true},live:{}};
+  const bootO2Meta=document.querySelector('meta[name="sleepmate-o2ring-enabled"]')?.content;
+  const bootO2Enabled=bootO2Meta==='1'?true:bootO2Meta==='0'?false:null;
+  let o2={settings:{o2ring_enabled:bootO2Enabled,o2ring_ble_enabled:true},live:{}};
   let o2ScriptsLoaded=false;
 
   function waitCore(){return new Promise(resolve=>{let n=0;const tick=()=>{const shell=document.querySelector('.hidden-until-ready');if(shell?.classList.contains('ready')&&typeof window.navigate==='function')return resolve();if(++n>600)return resolve();setTimeout(tick,50)};tick()})}
@@ -81,7 +83,7 @@
 
   function loadScript(src,id){return new Promise((resolve,reject)=>{if(document.getElementById(id))return resolve();const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}
   function loadCss(href,id){if(document.getElementById(id))return;const l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l)}
-  async function ensureO2Modules(){if(!activeO2())return;if(o2ScriptsLoaded){window.SleepMateO2Ring?.install?.();return}loadCss(`/o2ring.css?v=${VERSION}`,'smO2Css');await loadScript(`/o2ring.js?v=${VERSION}`,'smO2Js');await loadScript(`/o2ring-report-ui.js?v=${VERSION}`,'smO2ReportJs');o2ScriptsLoaded=true;window.SleepMateO2Ring?.install?.()}
+  async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;if(o2ScriptsLoaded){window.SleepMateO2Ring?.install?.();return}loadCss(`/o2ring.css?v=${VERSION}`,'smO2Css');await loadScript(`/o2ring.js?v=${VERSION}`,'smO2Js');await loadScript(`/o2ring-report-ui.js?v=${VERSION}`,'smO2ReportJs');o2ScriptsLoaded=true;window.SleepMateO2Ring?.install?.()}
   function setO2FeatureState(enabled){document.documentElement.classList.toggle('sm-o2-disabled',!enabled)}
   function disableO2Ui(){setO2FeatureState(false);window.SleepMateO2Ring?.uninstall?.();document.querySelectorAll('[data-o2ring-feature],[data-sm-o2-col],[data-sm-o2-cell],[data-sm-o2-stat],#smO2OverlayFocus,.sm-o2-overlay-control,.sm-o2-overlay-canvas').forEach(x=>x.remove());document.getElementById('spo2Metric')?.classList.add('hidden');document.getElementById('hrMetric')?.classList.add('hidden');renderBottomNav();renderPwaEditor()}
 
@@ -107,8 +109,8 @@
     installPwaSettingsTab();
     installAiFeatureSettings();
     installO2MasterPanel();
-    setO2FeatureState(activeO2());
-    if(activeO2())try{await ensureO2Modules()}catch(e){o2Msg(`O2Ring UI betöltési hiba: ${e.message}`)}else disableO2Ui();
+    if(typeof o2?.settings?.o2ring_enabled==='boolean')setO2FeatureState(activeO2());
+    if(activeO2())try{await ensureO2Modules()}catch(e){o2Msg(`O2Ring UI betöltési hiba: ${e.message}`)}else if(o2?.settings?.o2ring_enabled===false)disableO2Ui();
     watchNavigation();
     window.SleepMateV530={ICONS,NAV,renderBottomNav,renderPwaEditor,preferences:()=>({...prefs}),refreshO2:async()=>{o2=await api('/api/o2ring/status');hydrateO2Master();setO2FeatureState(activeO2());if(activeO2())await ensureO2Modules();else disableO2Ui()}};
     applyAiVisibility();

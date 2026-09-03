@@ -9,7 +9,7 @@ from cpap.patient_store import PatientStore
 from cpap.resmed import ResMedDataset
 
 html=(root/'web'/'index.html').read_text(encoding='utf-8')
-js=(root/'web'/'app.js').read_text(encoding='utf-8')
+js=(root/'web'/'app-core.js').read_text(encoding='utf-8')
 css=(root/'web'/'style.css').read_text(encoding='utf-8')
 provider_src=(root/'cpap'/'ai_provider.py').read_text(encoding='utf-8')
 

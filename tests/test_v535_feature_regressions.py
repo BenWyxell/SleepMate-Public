@@ -60,6 +60,8 @@ def test_prompt_export_uses_the_same_canonical_builder_as_live_analysis(monkeypa
     meta = {"period_start": "2026-09-02", "period_end": "2026-09-02", "therapy_days": 1}
     monkeypatch.setattr(app_module, "build_safe_payload", lambda *_: (safe_payload, meta))
     monkeypatch.setattr(app_module, "analysis_prompts", lambda kind, payload: ("SYSTEM " + kind, "USER " + str(payload["days"][0]["ahi"])))
+    external_calls = []
+    monkeypatch.setattr(app_module, "external_analysis_prompt", lambda kind, payload: external_calls.append((kind, payload)) or "HUMAN PROMPT 1.2")
     handler = object.__new__(app_module.Handler)
     handler.dataset = object()
     handler.patient_store = object()
@@ -68,7 +70,8 @@ def test_prompt_export_uses_the_same_canonical_builder_as_live_analysis(monkeypa
     exported = handler._analysis_prompt_export({"analysis_type": "night", "provider": "gemini"})
 
     assert prepared["safe_payload"] is safe_payload
-    assert exported["prompt"] == "[RENDSZERINSTRUKCIÓ]\nSYSTEM night\n\n[FELHASZNÁLÓI PROMPT]\nUSER 1.2"
+    assert exported["prompt"] == "HUMAN PROMPT 1.2"
+    assert external_calls == [("night", safe_payload)]
     assert exported["filename"] == "SleepMate_napi_elemzes_2026-09-02_prompt.txt"
     source = read("app.py")
     assert "prepared = self._prepare_analysis_prompt(data)" in source
@@ -96,7 +99,8 @@ def test_o2_master_toggle_has_authoritative_ui_and_route_cleanup_contract():
 def test_all_oximetry_line_charts_share_responsive_x_axis_contract():
     js = read("web/o2ring.js")
     assert "function drawResponsiveXAxis" in js
-    assert "w<340?2:w<430?3:4" in js
+    assert "iw/(compact?76:92)" in js
+    assert "Math.ceil(a/step)*step" in js
     assert "mobileClock" in js and "mobileDate" in js
     assert "w-tw-2" in js
     assert js.count("drawResponsiveXAxis(ctx,") == 2  # definition + the common chartDraw call
@@ -126,9 +130,11 @@ def test_luna_milo_and_prompting_have_three_independent_conditions_and_actions()
     js = read("web/app-core.js")
     shell = read("web/sleepmate-v530.js")
     html = read("web/index.html")
-    assert "features.promptingEnabled?requestAIPrompt(selection):null" in js
-    assert "selection.provider==='groq'?features.miloVisible:features.lunaVisible" in js
-    assert "return startAIAnalysis(type,button)" in js
+    assert "function availableAIAnalysisModes()" in js
+    assert "Luna értékelje" in js and "Milo értékelje" in js and "Prompt külső AI-hoz" in js
+    assert "if(modes.length===1)return runAIAnalysisMode" in js
+    assert "showAIAnalysisModeMenu(modes,type,button)" in js
+    assert "btn.textContent='Elemzés indítása'" in js
     assert "prefs.ai_luna_visible!==false||prefs.ai_milo_visible!==false||prefs.ai_prompting_enabled===true" in shell
     assert "settingAiLunaVisible" in html and "settingAiMiloVisible" in html
     assert "sm-ai-luna-off" in shell and "sm-ai-milo-off" in shell
@@ -165,9 +171,10 @@ def test_phone_web_and_pwa_use_first_paint_mobile_performance_mode():
     diagnostics = read("web/mobile-boot-diagnostics.js")
     for worker_name in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         worker = read(worker_name)
-        assert "function navigationFastCache" in worker
-        assert "function codeFastCache" in worker
-        assert "event.waitUntil(update)" in worker
+        assert "function navigationFastCache" not in worker
+        assert "function codeFastCache" not in worker
+        assert "event.respondWith(navigationFallback(req))" in worker
+        assert "event.respondWith(codeNetworkFirst(req))" in worker
     assert "document.documentElement.classList.toggle('sm-phone-ui',phone)" in html
     assert "document.documentElement.classList.toggle('sm-phone-ui',phone)" in shell
     assert '<link rel="preload" as="script" href="/app-engine119.js?v=130">' in html

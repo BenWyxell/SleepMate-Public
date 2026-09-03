@@ -17,7 +17,8 @@ assert 'bindMobileDrawerGestures' in js and ("t.clientX>28" in js or "t.clientX>
 assert "window.addEventListener('pageshow',()=>closeMobileSidebar())" in js
 cache=re.search(r"const CACHE='([^']+)'",sw)
 assert cache and cache.group(1).startswith(f'sleepmate-shell-v{APP_VERSION}')
-assert "const stale=keys.filter" in sw and "client.navigate(client.url)" in sw
+assert "const stale=keys.filter" in sw and "SLEEPMATE_SHELL_READY" in sw
+assert "event.respondWith(navigationFallback(req))" in sw and "event.respondWith(codeNetworkFirst(req))" in sw
 assert "CODE_ASSETS.has(url.pathname)" in sw and "'/app.js'" in sw and "'/app-core.js'" in sw
 assert 'APP_VERSION' in app and 'from cpap.version import APP_NAME, APP_VERSION' in app
 print('PASS: current stable PWA drawer + versioned shell/network-first code assets')

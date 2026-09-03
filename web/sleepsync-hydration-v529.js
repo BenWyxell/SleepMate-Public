@@ -2,7 +2,6 @@
   const nativeFetch=window.fetch.bind(window);
   let hydrated=false;
   let hydrating=null;
-  let attempts=0;
   let applying=false;
   let dirty=false;
   let lastSettings=null;
@@ -241,9 +240,7 @@
   }
 
   function boot(){
-    if(bind())return;
-    attempts+=1;
-    if(attempts<120)setTimeout(boot,100);
+    bind();
   }
 
   function injectPackagedOnboardingReopen(){
@@ -308,5 +305,6 @@
   });
 
   loadPackagedOnboarding();
-  boot();
+  document.addEventListener('sleepmate:sleepsync-ready',boot);
+  if(window.__sleepSyncUiReady)boot();
 })();
