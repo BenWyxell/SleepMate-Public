@@ -1,5 +1,7 @@
 # SleepMate 5.3.7
 
+Release build: **5.3.7**.
+
 A 5.3.7 a PWA stabilitására, az AI-elemzés használhatóságára és az O2Ring megjelenítés/export finomítására fókuszáló hibajavító kiadás.
 
 ## AI elemzés és külső prompt
