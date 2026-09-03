@@ -134,6 +134,7 @@ class _FrameAssembler:
 
 
 class O2RingBLEManager:
+    POST_RECORDING_RETRY_OFFSETS = (0.0, 2.0, 5.0, 10.0, 20.0, 35.0, 50.0, 70.0, 90.0)
     DEVICE_HINTS = (
         "Checkme_O2", "CheckO2", "SleepU", "SleepO2", "O2Ring",
         "O2 Ring", "WearO2", "KidsO2", "BabyO2", "Oxylink",
@@ -147,6 +148,12 @@ class O2RingBLEManager:
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._sync_requested = threading.Event()
+        self._sync_completed = threading.Event()
+        self._auto_immediate_request = False
+        self._post_recording_pending = False
+        self._post_recording_started_at = 0.0
+        self._post_recording_next_attempt = 0.0
+        self._post_recording_attempt_index = 0
         self._preferred_address: str | None = None
         self._listeners: list[Callable[[dict[str, Any]], None]] = []
         self._known_file = known_file or (lambda _name: False)
@@ -170,6 +177,8 @@ class O2RingBLEManager:
         payload["updated_at"] = datetime.now(timezone.utc).isoformat()
         payload["ble_service_uuid"] = SERVICE_UUID
         payload["remembered_address"] = self._preferred_address
+        with self._lock:
+            payload["post_recording_sync_pending"] = self._post_recording_pending
         return payload
 
     def add_listener(self, callback):
@@ -180,7 +189,64 @@ class O2RingBLEManager:
 
     def request_sync(self):
         """Explicit/manual sync request; this works even when auto-sync is off."""
+        with self._lock:
+            self._auto_immediate_request = False
+        self._sync_completed.clear()
         self._sync_requested.set()
+
+    def wait_for_sync(self, timeout: float) -> bool:
+        """Wait for one requested FileList/download pass without blocking BLE."""
+        return self._sync_completed.wait(max(0.0, float(timeout)))
+
+    def cancel_auto_sync(self) -> None:
+        """Cancel only the automatic post-recording retry state."""
+        with self._lock:
+            self._post_recording_pending = False
+            if self._auto_immediate_request:
+                self._auto_immediate_request = False
+                self._sync_requested.clear()
+
+    def _auto_sync_is_enabled(self) -> bool:
+        try:
+            return bool(self._auto_sync_enabled())
+        except Exception:
+            return False
+
+    def _schedule_post_recording_sync(self) -> None:
+        now = time.monotonic()
+        with self._lock:
+            self._post_recording_pending = True
+            self._post_recording_started_at = now
+            self._post_recording_next_attempt = now
+            self._post_recording_attempt_index = 0
+            self._auto_immediate_request = True
+        # Keep the existing immediate request semantics. Later retries are driven
+        # by monotonic deadlines in the normal BLE loop, never by a blocking sleep.
+        self._sync_requested.set()
+
+    def _post_recording_sync_due(self, now: float | None = None) -> bool:
+        if not self._auto_sync_is_enabled():
+            self.cancel_auto_sync()
+            return False
+        with self._lock:
+            return bool(
+                self._post_recording_pending
+                and (time.monotonic() if now is None else now) >= self._post_recording_next_attempt
+            )
+
+    def _finish_or_reschedule_post_recording_sync(self, imported: int) -> None:
+        with self._lock:
+            if not self._post_recording_pending:
+                return
+            if imported > 0:
+                self._post_recording_pending = False
+                return
+            self._post_recording_attempt_index += 1
+            if self._post_recording_attempt_index >= len(self.POST_RECORDING_RETRY_OFFSETS):
+                self._post_recording_pending = False
+                return
+            offset = self.POST_RECORDING_RETRY_OFFSETS[self._post_recording_attempt_index]
+            self._post_recording_next_attempt = self._post_recording_started_at + offset
 
     def queue_device_config(self, update: dict[str, Any]):
         self._pending_config = dict(update or {})
@@ -188,11 +254,11 @@ class O2RingBLEManager:
     def start(self, *, sync_on_start: bool = True):
         if self._thread and self._thread.is_alive():
             if sync_on_start:
-                self._sync_requested.set()
+                self.request_sync()
             return
         self._stop.clear()
         if sync_on_start:
-            self._sync_requested.set()
+            self.request_sync()
         else:
             self._sync_requested.clear()
         self._thread = threading.Thread(target=self._thread_main, name="SleepMate-O2Ring", daemon=True)
@@ -253,6 +319,9 @@ class O2RingBLEManager:
                     await client.start_notify(NOTIFY_UUID, self._on_notification)
                     with self._lock:
                         self._state.connected = True
+                    # Establish the current worn/measuring state before FileList
+                    # handling so historical downloads never start mid-recording.
+                    await self._request(client, CMD_READ_SENSORS, timeout=2.0, live=True)
                     await self._refresh_info(client)
                     last_info = time.monotonic()
                     while client.is_connected and not self._stop.is_set():
@@ -262,7 +331,11 @@ class O2RingBLEManager:
                             await self._write_config(client, update)
                             await self._refresh_info(client)
                         await self._request(client, CMD_READ_SENSORS, timeout=2.0, live=True)
-                        if self._sync_requested.is_set() or time.monotonic() - last_info > 60:
+                        if (
+                            self._sync_requested.is_set()
+                            or self._post_recording_sync_due()
+                            or time.monotonic() - last_info > 60
+                        ):
                             await self._refresh_info(client)
                             last_info = time.monotonic()
                         await asyncio.sleep(1)
@@ -314,9 +387,32 @@ class O2RingBLEManager:
                 self._state.battery_percent = int(str(info.get("CurBAT") or "").replace("%", ""))
             except Exception:
                 pass
-        if self._sync_requested.is_set() and not self._state.measuring:
-            await self._download_new_files(client, files, info)
+        with self._lock:
+            measuring = self._state.measuring
+            post_pending = self._post_recording_pending
+        manual_or_immediate = self._sync_requested.is_set()
+        auto_enabled = self._auto_sync_is_enabled()
+        if not auto_enabled and post_pending:
+            self.cancel_auto_sync()
+            post_pending = False
+        post_due = self._post_recording_sync_due() if post_pending else False
+        unknown_available = any(not self._known_file(name) for name in files)
+        # The unknown-file branch is the periodic fallback: every normal info
+        # refresh imports a newly closed VLD even if the worn transition was lost.
+        should_download = bool(
+            not measuring
+            and (manual_or_immediate or (auto_enabled and (post_due or unknown_available)))
+        )
+        if not should_download:
+            return
+        imported = await self._download_new_files(client, files, info)
+        if manual_or_immediate:
             self._sync_requested.clear()
+            with self._lock:
+                self._auto_immediate_request = False
+            self._sync_completed.set()
+        if post_pending and (post_due or imported > 0):
+            self._finish_or_reschedule_post_recording_sync(imported)
 
     async def _write_config(self, client, update: dict[str, Any]):
         allowed = {
@@ -330,14 +426,17 @@ class O2RingBLEManager:
         await self._request(client, CMD_CONFIG, data=data, timeout=4)
 
     async def _download_new_files(self, client, files, info):
+        imported = 0
         for name in files:
             if self._stop.is_set() or self._known_file(name):
                 continue
             raw = await self._download_file(client, name)
             if raw and self._on_file:
                 self._on_file(name, raw, info)
+                imported += 1
         with self._lock:
             self._state.last_sync_ts = time.time()
+        return imported
 
     async def _download_file(self, client, name: str) -> bytes:
         payload = await self._request(
@@ -381,12 +480,8 @@ class O2RingBLEManager:
         # auto-sync preference is enabled. Explicit /sync requests remain valid
         # regardless of this preference.
         if previous_worn is True and update.get("worn") is False:
-            try:
-                auto_sync = bool(self._auto_sync_enabled())
-            except Exception:
-                auto_sync = False
-            if auto_sync:
-                self._sync_requested.set()
+            if self._auto_sync_is_enabled():
+                self._schedule_post_recording_sync()
         for listener in tuple(self._listeners):
             try:
                 listener(payload)

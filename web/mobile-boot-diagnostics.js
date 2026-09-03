@@ -2,6 +2,8 @@
   'use strict';
   const BUILD='__SLEEPMATE_FRONTEND_ID__';
   const started=Date.now();
+  const phoneUi=document.documentElement.classList.contains('sm-phone-ui');
+  const verboseDiagnostics=new URLSearchParams(location.search).get('sm_boot_diag')==='1';
   let seq=0;
 
   function slimUrl(raw){
@@ -33,6 +35,7 @@
     };
   }
   function send(stage,details){
+    if(phoneUi&&!verboseDiagnostics&&!['window-error','unhandled-rejection','startup-slow'].includes(stage))return;
     const payload={...base(),stage,details:details||{}};
     try{
       fetch('/api/mobile-boot',{
@@ -42,6 +45,7 @@
     }catch{}
   }
   function snapshot(label){
+    if(phoneUi&&!verboseDiagnostics&&label!=='startup-slow')return;
     const shell=document.querySelector('.hidden-until-ready');
     const content=document.querySelector('.content-shell');
     const main=document.querySelector('main');
@@ -234,13 +238,20 @@
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded',()=>{
       send('dom-content-loaded');
-      snapshot('dom-content-loaded');
-      probe('/api/version');probe('/api/config');probe('/api/days');
+      if(!phoneUi||verboseDiagnostics){snapshot('dom-content-loaded');probe('/api/version');probe('/api/config');probe('/api/days');}
     },{once:true});
   }else{
-    send('dom-already-ready');snapshot('dom-already-ready');probe('/api/version');probe('/api/config');probe('/api/days');
+    send('dom-already-ready');
+    if(!phoneUi||verboseDiagnostics){snapshot('dom-already-ready');probe('/api/version');probe('/api/config');probe('/api/days');}
   }
-  window.addEventListener('load',()=>{send('window-load');snapshot('window-load');swSnapshot();loadPushRepair();loadV511Enhancements()},{once:true});
-  [250,800,1600,3000,5000,8000,12000].forEach(ms=>setTimeout(()=>snapshot(`t+${ms}`),ms));
-  setTimeout(swSnapshot,2500);
+  window.addEventListener('load',()=>{send('window-load');if(!phoneUi||verboseDiagnostics){snapshot('window-load');swSnapshot()}loadPushRepair();loadV511Enhancements()},{once:true});
+  if(!phoneUi||verboseDiagnostics){
+    [250,800,1600,3000,5000,8000,12000].forEach(ms=>setTimeout(()=>snapshot(`t+${ms}`),ms));
+    setTimeout(swSnapshot,2500);
+  }else{
+    setTimeout(()=>{
+      const shell=document.querySelector('.hidden-until-ready');
+      if(!shell?.classList.contains('ready')){snapshot('startup-slow');probe('/api/version');}
+    },5000);
+  }
 })();

@@ -17,6 +17,13 @@
       if(!raw)return'Még nem volt';
       try{return new Date(raw).toLocaleString('hu-HU',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}catch{return raw;}
     };
+    const scheduleDayNames={monday:'Hétfő',tuesday:'Kedd',wednesday:'Szerda',thursday:'Csütörtök',friday:'Péntek',saturday:'Szombat',sunday:'Vasárnap'};
+    const scheduleSummaryText=(settings={})=>{
+      const days=(settings.schedule_days||[]).map(day=>scheduleDayNames[day]).filter(Boolean);
+      const dayText=days.length===7?'Minden nap':days.length?days.join(', '):'Nincs kiválasztott nap';
+      const times=Array.isArray(settings.schedule_times)&&settings.schedule_times.length?settings.schedule_times:['09:00'];
+      return `${dayText} • ${times.join(', ')}`;
+    };
     const metric=(title,value,sub,accent,id)=>`
       <article class="ss-metric">
         <i class="${accent}"></i>
@@ -128,6 +135,11 @@
                 A SleepSync figyeli az ez Share hálózatot. Amikor a kártya megjelenik, egyszer szinkronizál; újra csak akkor indul, ha eltűnt, majd ismét elérhető lett.
               </div>
               <div id="ssTimedSchedule" class="ss-schedule-detail hidden">
+                <div class="ss-current-schedule" role="status">
+                  <span>Jelenlegi mentett ütemezés</span>
+                  <strong id="ssCurrentSchedule">Betöltés…</strong>
+                  <small>A napok és időpontok lent közvetlenül módosíthatók.</small>
+                </div>
                 <strong class="ss-subhead">Napok</strong>
                 <div class="ss-days" id="ssScheduleDays">
                   <label><input data-day="monday" type="checkbox"> Hétfő</label>
@@ -368,6 +380,7 @@
       setText('ssOverviewFolderSub',therapy);
       setText('ssOverviewAuto',settings.auto_sync_enabled?'Bekapcsolva':'Kikapcsolva');
       setText('ssOverviewAutoSub',settings.auto_sync_mode==='scheduled'?'Időzített szinkron':'Kártya megjelenésekor');
+      setText('ssCurrentSchedule',scheduleSummaryText(settings));
       setText('ssTotalFiles',String(data.total_files||0));
       setText('ssWorkFiles',String(data.work_files||0));
       setText('ssProcessedFiles',String(data.processed_files||0));
@@ -431,6 +444,7 @@
         if(mode)mode.value=cfg.auto_sync_mode||'card_available';
         document.querySelectorAll('#ssScheduleDays [data-day]').forEach(input=>input.checked=(cfg.schedule_days||[]).includes(input.dataset.day));
         renderTimes(cfg.schedule_times||['09:00']);
+        setText('ssCurrentSchedule',scheduleSummaryText(cfg));
         const therapy=document.getElementById('ssTherapyDir');
         const backup=document.getElementById('ssBackupDir');
         const buffer=document.getElementById('ssBufferDays');
@@ -571,7 +585,7 @@
       document.querySelectorAll('[data-sleepsync-tab]').forEach(btn=>btn.classList.toggle('active',btn.dataset.sleepsyncTab===tab));
       document.querySelectorAll('[data-sleepsync-panel]').forEach(panel=>panel.classList.toggle('active',panel.dataset.sleepsyncPanel===tab));
       if(tab==='history')loadHistoryAndLog();
-      if(tab==='settings')loadSettings();
+      if(tab==='settings'||tab==='sync')loadSettings();
     }
 
     let bound=false;

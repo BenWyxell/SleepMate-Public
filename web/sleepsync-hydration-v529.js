@@ -144,6 +144,9 @@
         ]);
         if(!settingsResponse.ok)throw new Error(`SleepSync beállítások: HTTP ${settingsResponse.status}`);
         const cfg=await settingsResponse.json();
+        // A felhasználó közben már szerkeszthette az űrlapot. Ilyenkor egy
+        // későn beérkező hidratálás nem írhatja felül a látható értékeket.
+        if(dirty&&!force)return true;
         applySettings(cfg);
         if(wifiResponse.ok){
           const wifi=await wifiResponse.json();
@@ -233,7 +236,7 @@
       }
     });
 
-    hydrate(false);
+    if(location.hash.startsWith('#sleepsync'))hydrate(false);
     return true;
   }
 

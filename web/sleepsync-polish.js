@@ -123,6 +123,8 @@
     if(auto)auto.textContent=enabled?'Ütemezve':'Kikapcsolva';
     const summary=ensureOverviewSummary();
     if(summary)summary.textContent=enabled?scheduleSummary(settings):'Automatikus szinkron';
+    const current=document.getElementById('ssCurrentSchedule');
+    if(current)current.textContent=scheduleSummary(settings);
 
     const sdSub=document.getElementById('ssOverviewSdSub');
     if(sdSub){
@@ -251,8 +253,10 @@
 
     updateScheduleVisibility(!!toggle?.checked);
     initialized=true;
-    refreshStatus(true);
-    requestHydration(false);
+    if(location.hash.startsWith('#sleepsync')){
+      refreshStatus(true);
+      requestHydration(false);
+    }
     return true;
   }
 

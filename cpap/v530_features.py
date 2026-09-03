@@ -60,8 +60,6 @@ def install_v530_features(app_module) -> None:
                 if "sm-o2-master-visibility" not in text:
                     head_assets.append(
                         '<style id="sm-o2-master-visibility">'
-                        '#page-settings [data-settings-panel="display"]:has(#smO2Enabled:not(:checked))>'
-                        ':not(#smO2Master):not(.panel-head){display:none!important}'
                         'body:has(#smO2Enabled:not(:checked)) .o2ring-report-option{display:none!important}'
                         '[data-settings-tab="pwa"]{display:none!important}'
                         '</style>'
