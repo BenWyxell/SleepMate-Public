@@ -96,6 +96,20 @@ jobs:
               t = t.replace(marker, marker + addition, 1)
           targeted.write_text(t, encoding='utf-8')
 
+          # v5.3.7 deliberately replaces forced service-worker client navigation
+          # with a shell-ready notification. Align the legacy SleepSync verifier
+          # with that tested cold-start contract instead of reintroducing a reload
+          # race that the user-facing fix explicitly removed.
+          verifier = Path('scripts/verify_sleepsync_integration.py')
+          v = verifier.read_text(encoding='utf-8')
+          old_contract = 'require("const stale=keys.filter" in SERVICE_WORKER and "client.navigate(client.url)" in SERVICE_WORKER, "PWA update cannot evict stale shell and reload an open client")'
+          new_contract = 'require("const stale=keys.filter" in SERVICE_WORKER and "SLEEPMATE_SHELL_READY" in SERVICE_WORKER and "client.navigate(client.url)" not in SERVICE_WORKER, "PWA update must evict stale shell and notify open clients without mid-boot navigation")\nrequire("SLEEPMATE_SHELL_READY" in BASE_WORKER and "client.navigate(client.url)" not in BASE_WORKER, "release PWA base must notify clients without mid-boot navigation")'
+          if old_contract in v:
+              v = v.replace(old_contract, new_contract, 1)
+          elif new_contract not in v:
+              raise SystemExit('Unexpected SleepSync service-worker verifier state')
+          verifier.write_text(v, encoding='utf-8')
+
           notes = Path('RELEASE_NOTES.md')
           current = notes.read_text(encoding='utf-8')
           if not current.startswith('# SleepMate 5.3.7\n'):
@@ -103,7 +117,7 @@ jobs:
               notes.write_text(latest + '\n\n---\n' + current, encoding='utf-8')
           PY
 
-          git add cpap/version.py web/service-worker.js web/service-worker-v508-base.js web/sleepsync-polish.js RELEASE_NOTES.md release-notes/v5.3.7.md tests/test_mobile_ai_push_v417.py tests/test_o2ring_v532_release_contract.py tests/test_o2ring_v534_release_contract.py tests/test_pwa_sleep_shell_v526.py tests/test_v534_acceptance_matrix.py tests/test_v535_user_acceptance_matrix.py tests/test_release_version_contract.py tests/test_v536_targeted_fixes.py
+          git add cpap/version.py web/service-worker.js web/service-worker-v508-base.js web/sleepsync-polish.js RELEASE_NOTES.md release-notes/v5.3.7.md scripts/verify_sleepsync_integration.py tests/test_mobile_ai_push_v417.py tests/test_o2ring_v532_release_contract.py tests/test_o2ring_v534_release_contract.py tests/test_pwa_sleep_shell_v526.py tests/test_v534_acceptance_matrix.py tests/test_v535_user_acceptance_matrix.py tests/test_release_version_contract.py tests/test_v536_targeted_fixes.py
           if ! git diff --cached --quiet; then
             git commit -m "Finalize SleepMate 5.3.7 release identity"
             git push origin "$SOURCE_BRANCH"
@@ -115,6 +129,7 @@ jobs:
           grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-refactor';" web/service-worker.js
           grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-refactor';" web/service-worker-v508-base.js
           grep -Fq "bootAttempts<80" web/sleepsync-polish.js
+          grep -Fq "SLEEPMATE_SHELL_READY" scripts/verify_sleepsync_integration.py
           grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
           echo "Release source: $TARGET_SHA"
 
