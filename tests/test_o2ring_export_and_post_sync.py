@@ -148,8 +148,11 @@ def test_complete_export_creates_raw_csv_xlsx_and_unique_timestamped_folders(tmp
     root_one, root_two = Path(export_one["folder"]), Path(export_two["folder"])
     assert root_one != root_two
     assert {item.name for item in root_one.iterdir()} == {"OSCAR", "CSV", "Excel"}
-    assert (root_one / "OSCAR" / "night-one.vld").read_bytes() == b"VLD-one"
-    assert (root_one / "OSCAR" / "night two.vld").read_bytes() == b"\x00VLD-two\xff"
+    assert {item.name for item in (root_one / "OSCAR").iterdir()} == {"VLD", "DAT"}
+    assert (root_one / "OSCAR" / "VLD" / "night-one.vld").read_bytes() == b"VLD-one"
+    assert (root_one / "OSCAR" / "VLD" / "night two.vld").read_bytes() == b"\x00VLD-two\xff"
+    assert (root_one / "OSCAR" / "DAT" / "night-one.dat").read_bytes() == b"VLD-one"
+    assert (root_one / "OSCAR" / "DAT" / "night two.dat").read_bytes() == b"\x00VLD-two\xff"
 
     csv_path = next((root_one / "CSV").glob("*.csv"))
     with csv_path.open(encoding="utf-8", newline="") as handle:

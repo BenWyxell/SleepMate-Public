@@ -4,7 +4,6 @@
   const dayNames={monday:'Hétfő',tuesday:'Kedd',wednesday:'Szerda',thursday:'Csütörtök',friday:'Péntek',saturday:'Szombat',sunday:'Vasárnap'};
   let lastStatus=null;
   let initialized=false;
-  let bootAttempts=0;
 
   const esc=(value)=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const fmtTime=(raw)=>{
@@ -263,9 +262,7 @@
   function boot(){
     ensureHydrationModule();
     if(initialized)return;
-    if(bindUi())return;
-    bootAttempts+=1;
-    if(bootAttempts<80)setTimeout(boot,100);
+    bindUi();
   }
 
   document.addEventListener('click',event=>{
@@ -292,5 +289,6 @@
     }
   });
 
-  boot();
+  document.addEventListener('sleepmate:sleepsync-ready',boot);
+  if(window.__sleepSyncUiReady)boot();
 })();

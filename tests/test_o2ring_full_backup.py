@@ -38,6 +38,11 @@ def test_full_backup_carries_exact_o2ring_snapshot_and_manifest_config(tmp_path)
         "o2ring_show_motion": False,
         "o2ring_spo2_reference": 90,
         "o2ring_spo2_secondary_reference": 88,
+        "ai_luna_visible": False,
+        "ai_milo_visible": True,
+        "ai_prompting_enabled": True,
+        "pwa_bottom_nav": ["dashboard", "sessions", "more"],
+        "pwa_bottom_nav_labels": {"dashboard": "Főoldal"},
     }
 
     archive = tmp_path / "full.zip"

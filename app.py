@@ -42,7 +42,7 @@ _configure_utf8_stdio()
 from cpap.resmed import ResMedDataset
 from cpap.patient_store import PatientStore
 from cpap.ai_store import AIStore, dataset_signature
-from cpap.ai_payload import PROMPT_VERSION, analysis_prompts, build_safe_payload, build_comparison_payload, chat_prompts
+from cpap.ai_payload import PROMPT_VERSION, analysis_prompts, build_safe_payload, build_comparison_payload, chat_prompts, external_analysis_prompt
 from cpap.ai_provider import AIProviderError, stream_provider, groq_transport_name
 from cpap.report_pdf import generate_report_pdf
 from cpap.remote_access import RemoteAccessManager
@@ -1068,10 +1068,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def _analysis_prompt_export(self, data: dict) -> dict:
         prepared = self._prepare_analysis_prompt(data)
-        full_prompt = (
-            "[RENDSZERINSTRUKCIÓ]\n" + prepared["system_prompt"]
-            + "\n\n[FELHASZNÁLÓI PROMPT]\n" + prepared["user_prompt"]
-        )
+        # The anonymous therapy payload is built once in _prepare_analysis_prompt.
+        # Luna/Milo keep their strict JSON contract, while external AI receives a
+        # presentation layer aimed at the SleepMate user.
+        full_prompt = external_analysis_prompt(prepared["analysis_type"], prepared["safe_payload"])
         meta = prepared["meta"]
         stamp = str(meta.get("period_end") or datetime.now().date().isoformat())
         kind = {

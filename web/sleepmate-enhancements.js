@@ -33,7 +33,7 @@
       const base=await coreShareCard();
       try{
         const [card,logo]=await Promise.all([imageFromBlob(base),loadImage(LOGO)]);
-        const c=document.createElement('canvas');c.width=1080;c.height=1350;
+        const c=document.createElement('canvas');c.width=1080;c.height=card.naturalHeight||card.height||1350;
         const x=c.getContext('2d');x.drawImage(card,0,0,c.width,c.height);
         const size=142,pad=18,left=c.width-70-size,top=52;
         x.save();x.fillStyle='rgba(8,17,31,.72)';x.beginPath();x.roundRect(left-pad,top-pad,size+pad*2,size+pad*2,28);x.fill();x.globalAlpha=.96;x.drawImage(logo,left,top,size,size);x.restore();

@@ -123,3 +123,4 @@ html.sm-phone-ui :is(.sidebar,#dashboardDailyView){will-change:auto!important}
 html.sm-phone-ui .startup-progress i{animation:none!important;width:44%!important;transform:none!important}
 html.sm-phone-ui :is(.page,.panel,.metric,.ss-card,.sleepsync-tab-panel){animation:none!important}
 @media(prefers-reduced-motion:reduce){.sm-starfield,.sm-aurora-flow .flow{animation:none!important;transform:none!important}.sm-aurora-flow .flow{stroke-dashoffset:0!important}}
+.sm-pwa-label-field input{min-height:40px;font-size:16px!important}

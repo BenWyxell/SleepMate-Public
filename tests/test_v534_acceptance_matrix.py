@@ -31,7 +31,9 @@ def test_acceptance_p0_single_frontend_owner_and_stale_pwa_recovery():
         assert "/o2ring-v532.js" not in worker
         assert "/frontend-v533.js" not in worker
         assert "X-SleepMate-UI-Version" in worker
-        assert "await client.navigate(client.url)" in worker
+        assert "SLEEPMATE_SHELL_READY" in worker
+        assert "event.respondWith(navigationFallback(req))" in worker
+        assert "event.respondWith(codeNetworkFirst(req))" in worker
 
 
 def test_acceptance_p0_dashboard_three_modes_and_route_lifecycle_are_single_owned():

@@ -115,9 +115,13 @@ def export_o2ring_data(store, destination: str | Path,
             moment += timedelta(seconds=1)
 
     oscar_dir = root / "OSCAR"
+    oscar_vld_dir = oscar_dir / "VLD"
+    oscar_dat_dir = oscar_dir / "DAT"
     csv_dir = root / "CSV"
     excel_dir = root / "Excel"
     oscar_dir.mkdir()
+    oscar_vld_dir.mkdir()
+    oscar_dat_dir.mkdir()
     csv_dir.mkdir()
     excel_dir.mkdir()
 
@@ -136,7 +140,10 @@ def export_o2ring_data(store, destination: str | Path,
         if target_name.casefold() in used_names:
             target_name = f"{Path(target_name).stem}_{recording_id}.vld"
         used_names.add(target_name.casefold())
-        shutil.copyfile(source, oscar_dir / target_name)
+        # OSCAR keeps the original .vld archive and also scans the byte-identical
+        # Viatom/Wellue payload under its accepted .dat extension.
+        shutil.copyfile(source, oscar_vld_dir / target_name)
+        shutil.copyfile(source, oscar_dat_dir / f"{Path(target_name).stem}.dat")
         raw_count += 1
 
     csv_path = csv_dir / f"O2Ring_Export_{stamp}.csv"
@@ -155,6 +162,7 @@ def export_o2ring_data(store, destination: str | Path,
         "recordings": len(recordings),
         "samples": len(rows),
         "raw_files": raw_count,
+        "oscar_dat_files": raw_count,
         "missing_raw_files": missing_raw,
     }
 

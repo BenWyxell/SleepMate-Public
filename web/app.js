@@ -31,24 +31,11 @@
     document.head.appendChild(firstRun);
   }
 
-  // SleepSync presentation and settings hydration are non-critical add-ons.
-  // They start after the main document, but hydration blocks settings/schedule
-  // saving until the already-persisted backend configuration is actually in the
-  // form. This prevents empty lazy fields from overwriting valid settings.
-  window.addEventListener('load',()=>{
-    if(!document.querySelector('script[data-sleepsync-polish="130"]')){
-      const polish=document.createElement('script');
-      polish.src=POLISH;
-      polish.async=true;
-      polish.dataset.sleepsyncPolish='130';
-      document.head.appendChild(polish);
-    }
-    if(!document.querySelector('script[data-sleepsync-hydration="131"]')){
-      const hydration=document.createElement('script');
-      hydration.src=HYDRATION;
-      hydration.async=true;
-      hydration.dataset.sleepsyncHydration='131';
-      document.head.appendChild(hydration);
-    }
-  },{once:true});
+  // Load the complete SleepSync bundle as part of the initial application boot.
+  // The engine publishes a readiness event after it has created the module UI;
+  // polish and hydration bind to that event instead of racing window.load.
+  for(const [src,key,value] of [[POLISH,'sleepsyncPolish','130'],[HYDRATION,'sleepsyncHydration','131']]){
+    if(document.querySelector(`script[data-${key.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}="${value}"]`))continue;
+    const script=document.createElement('script');script.src=src;script.async=false;script.dataset[key]=value;document.head.appendChild(script);
+  }
 })();
