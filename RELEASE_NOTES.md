@@ -1,3 +1,48 @@
+# SleepMate 5.3.6
+
+A SleepMate 5.3.6 a v5.3.5 stabil alapjára épülő funkcionális frissítés, amely főként az O2Ring automatikus adatkezelését, az exportot, a mobil PWA használhatóságát és az AI-kezelést bővíti.
+
+## O2Ring
+
+- Új teljes O2Ring export készült az összes helyben tárolt lezárt méréshez.
+- Minden export külön időbélyeges mappába készül `OSCAR`, `CSV` és `Excel` alkönyvtárral.
+- Az OSCAR könyvtár az eredeti nyers felvételek másolatát kapja, a CSV és az egyszerű XLSX pedig az összes mintát egy közös időrendi adatkészletben tartalmazza.
+- Az exportálási alapmappa kiválasztható és megmarad újraindítás után is.
+- Export előtt a SleepMate megpróbálja a meglévő O2Ring szinkronmechanizmussal letölteni az új lezárt méréseket, aktív mérés megszakítása nélkül.
+- A gyűrű levétele utáni automatikus szinkron kontrollált retry mechanizmust kapott, amely kezeli a késve megjelenő VLD fájlt és a rövid BLE reconnectet is.
+- A periodikus fallback automatikusan felismerheti az új, korábban még nem letöltött lezárt fájlokat, miközben a meglévő deduplikáció megmarad.
+
+## Mobil PWA és felület
+
+- Az Oximetria mobil grafikonjain ritkább és reszponzívabb X-tengely feliratok csökkentik az időpontok egymásra csúszását kis kijelzőn.
+- A mobil navigáció és safe-area kezelés finomodott; az alsó PWA navigáció nem takarja a használható felületet.
+- Az alsó PWA navigáció megjelenített feliratai személyre szabhatók és alapértékre visszaállíthatók a belső route-ok megváltoztatása nélkül.
+- Telefonos PWA-ban a háttér szaggatásának elkerülésére a költséges díszítő SVG/aurora mozgás statikussá válhat, desktopon az animáció megmarad.
+- A `prefers-reduced-motion` beállítás tiszteletben marad.
+
+## AI és Luna/Milo
+
+- Luna és Milo megjelenítése külön szabályozható.
+- Az AI promptolás külön kapcsolót kapott, ezért a vizuális Luna/Milo jelenlét és az AI prompt használata egymástól függetlenül vezérelhető.
+- Az AI összegzésből elérhető a teljes, kanonikus prompt/adatcsomag.
+- A prompt modalból másolás, UTF-8 TXT mentés, valamint ChatGPT és Gemini megnyitása érhető el.
+- A prompt felület mobilon is reszponzív.
+
+## Egyéb javítások
+
+- A legutóbbi terápia kártya állapotszöveg helyett a tényleges terápiás időt mutatja.
+- A SleepSync mentett ütemezési állapota stabilabban jelenik meg a felület újratöltése után.
+- Az O2Ring főkapcsoló kikapcsolt állapotában a hozzá tartozó felhasználói felület elrejthető az adatok törlése nélkül.
+
+## Kiadási validáció
+
+A kiadás a teljes publikus regressziós tesztkészleten, Windows program-tree builden, magyar WiX MSI builden, valódi `msiexec` telepítés/runtime/eltávolítás ellenőrzésen, release-integritás ellenőrzésen és valódi Microsoft Edge packaged acceptance teszten megy keresztül publikálás előtt.
+
+Kiadási csatorna: **stable**.
+Release build: **5.3.6**.
+API: **19**.
+
+---
 # SleepMate 5.3.5
 
 A SleepMate 5.3.5 a v5.3.4 O2Ring/PWA stabilitási körére épülő célzott felület- és adatmegjelenítési javítókiadás.

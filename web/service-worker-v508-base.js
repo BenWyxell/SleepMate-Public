@@ -1,8 +1,8 @@
 // Compatibility marker for the frozen v5.2.14 Sleep/PWA contract: sleepmate-shell-v5.2.14
 const UI_VERSION='5.3.4';
-const CACHE='sleepmate-shell-v5.3.5-refactor';
+const CACHE='sleepmate-shell-v5.3.6-refactor';
 const SHELL_CACHE=CACHE;
-const API_CACHE='sleepmate-api-v5.3.5-refactor';
+const API_CACHE='sleepmate-api-v5.3.6-refactor';
 const SHELL=['/','/index.html','/style.css?v=5.3.4','/app.js?v=5.3.4','/sleepmate-enhancements.js','/sleepmate-offline-runtime.js','/sleepsync-hydration-v529.js','/sleepsync-mobile-v5213.css','/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14','/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12','/sleepmate-aurora.css?v=5.3.4','/sleepmate-v530.css?v=5.3.4','/sleepmate-v530.js?v=5.3.4','/o2ring.css?v=5.3.4','/o2ring.js?v=5.3.4','/o2ring-report-ui.js?v=5.3.4','/o2ring-v534.css?v=5.3.4','/frontend-v534.js?v=5.3.4','/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp'];
 const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|equipment(?:\/catalog)?|faq|glossary|system\/status|logs\/diagnostics|sleep-analysis|o2ring\/(?:day|day-batch|trends))/;
 async function cacheShellAsset(cache,url){const controller=typeof AbortController==='function'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),3500):null;try{const response=await fetch(url,{cache:'no-store',signal:controller?.signal});if(response.ok)await cache.put(url,response.clone())}catch{}finally{if(timer)clearTimeout(timer)}}
