@@ -187,12 +187,15 @@ force = UPDATER.index("stop_process_tree(tray_pid", gr)
 image_fallback = UPDATER.index("stop_sleepmate_image_processes(launcher_exe", gr)
 require(gr < force < image_fallback, "force-kill can run before graceful tray icon cleanup")
 
-# Release/PWA shell. The v5.3 release keeps the proven 5.2.x SleepSync/PWA
-# compatibility shell while the product release version advances independently.
-require('APP_VERSION = "5.3.0"' in VERSION, "release version is not 5.3.0")
+# Release/PWA shell. The long-lived SleepSync compatibility markers stay pinned,
+# but the active v5.3.17 worker now uses an atomic generation handover: critical
+# shell assets must precache before takeover; an older open client is then
+# navigated to the new generation; stale SleepMate caches are deleted only after
+# that new client acknowledges the matching BUILD_ID.
+require('APP_VERSION = "5.3.0"' in VERSION, "release compatibility marker is missing")
 require('BUILD_CHANNEL = "stable"' in VERSION, "release channel is not stable")
-require("sleepmate-shell-v5.2.14-ss131" in SERVICE_WORKER, "live PWA shell cache is not 5.2.14-ss131")
-require("sleepmate-api-v5.2.14-ss131" in SERVICE_WORKER, "live PWA API cache is not 5.2.14-ss131")
+require("sleepmate-shell-v5.2.14-ss131" in SERVICE_WORKER, "SleepSync shell compatibility marker is missing")
+require("sleepmate-api-v5.2.14-ss131" in SERVICE_WORKER, "SleepSync API compatibility marker is missing")
 for asset in (
     "/sleepsync-hydration-v529.js",
     "/sleepsync-mobile-v5213.css",
@@ -204,8 +207,22 @@ for asset in (
 ):
     require(asset in SERVICE_WORKER, f"live PWA shell is missing {asset}")
     require(asset in BASE_WORKER, f"release PWA shell base is missing {asset}")
-require("const stale=keys.filter" in SERVICE_WORKER and "SLEEPMATE_SHELL_READY" in SERVICE_WORKER and "client.navigate(client.url)" not in SERVICE_WORKER, "PWA update must evict stale shell and notify open clients without mid-boot navigation")
-require("SLEEPMATE_SHELL_READY" in BASE_WORKER and "client.navigate(client.url)" not in BASE_WORKER, "release PWA base must notify clients without mid-boot navigation")
+
+for worker_name, worker in (
+    ("live PWA worker", SERVICE_WORKER),
+    ("release PWA base", BASE_WORKER),
+):
+    require("precacheShellAtomic" in worker, f"{worker_name} does not atomically precache the new shell")
+    require("if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error" in worker, f"{worker_name} can activate with missing critical shell assets")
+    require("await self.skipWaiting()" in worker and "await self.clients.claim()" in worker, f"{worker_name} does not take over the installed PWA after a complete precache")
+    require("hadPreviousShell" in worker and "SLEEPMATE_SHELL_READY" in worker, f"{worker_name} does not announce generation handover to open clients")
+    require("if(hadPreviousShell)" in worker and "await client.navigate(client.url)" in worker, f"{worker_name} does not refresh open clients when handing over from an older shell")
+    require("SLEEPMATE_CLIENT_READY" in worker and "data.buildId!==BUILD_ID" in worker, f"{worker_name} does not require a matching new-generation client acknowledgement")
+    require("cleanupStaleSleepMateCaches" in worker, f"{worker_name} has no deferred stale-cache cleanup")
+    require("key.startsWith('sleepmate-shell-')||key.startsWith('sleepmate-api-')" in worker, f"{worker_name} stale-cache cleanup is not scoped to SleepMate caches")
+    activate = worker.split("self.addEventListener('activate'", 1)[1].split("function backendUnavailable", 1)[0]
+    require("caches.delete" not in activate, f"{worker_name} deletes old caches before the new client is ready")
+
 require("getRegistrations" not in SERVICE_WORKER and "unregister" not in SERVICE_WORKER, "service worker must not unregister itself")
 require("'/sleepmate-chart-v523.js'" in SERVICE_WORKER, "live PWA chart overlay is not network-first")
 require("'/sleepmate-chart-v523.js'" in BASE_WORKER, "release base chart overlay is not network-first")
