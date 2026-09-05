@@ -15,7 +15,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  finalize-last-release-contracts:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.fix.outputs.changed }}
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Advance the final two stale 5.3.17 assertions
+        id: fix
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path('tests/test_pwa_sleep_shell_v526.py'): [
+                  ('assert "sleepmate-shell-v5.3.17" in sw', 'assert "sleepmate-shell-v5.3.18" in sw'),
+              ],
+              Path('tests/test_v535_user_acceptance_matrix.py'): [
+                  ("assert RELEASE_NOTES.startswith('# SleepMate 5.3.17\\n')", "assert RELEASE_NOTES.startswith('# SleepMate 5.3.18\\n')"),
+              ],
+          }
+          for path, pairs in replacements.items():
+              text = path.read_text(encoding='utf-8')
+              for old, new in pairs:
+                  if old in text:
+                      text = text.replace(old, new, 1)
+                  elif new not in text:
+                      raise SystemExit(f'Missing expected release assertion in {path}: {old}')
+              path.write_text(text, encoding='utf-8')
+          PY
+
+          if git diff --quiet -- tests/test_pwa_sleep_shell_v526.py tests/test_v535_user_acceptance_matrix.py; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/test_pwa_sleep_shell_v526.py tests/test_v535_user_acceptance_matrix.py
+          git commit -m 'test(release): finish v5.3.18 identity assertions'
+          git push origin "HEAD:$GITHUB_REF_NAME"
+          echo 'changed=true' >> "$GITHUB_OUTPUT"
+          gh workflow run v5318-one-shot-release.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+
   publish-after-canonical-gate:
+    needs: finalize-last-release-contracts
+    if: needs.finalize-last-release-contracts.outputs.changed != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
