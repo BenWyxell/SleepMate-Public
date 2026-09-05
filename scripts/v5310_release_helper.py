@@ -1,0 +1,257 @@
+from pathlib import Path
+import re
+
+
+def read(path: str) -> str:
+    return Path(path).read_text(encoding="utf-8")
+
+
+def write(path: str, text: str) -> None:
+    Path(path).write_text(text, encoding="utf-8")
+
+
+def replace_once(path: str, old: str, new: str) -> None:
+    text = read(path)
+    count = text.count(old)
+    if count != 1:
+        raise SystemExit(f"{path}: expected exactly one occurrence, got {count}: {old[:120]!r}")
+    write(path, text.replace(old, new, 1))
+
+
+def regex_once(path: str, pattern: str, replacement: str, flags: int = 0) -> None:
+    text = read(path)
+    new, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+    if count != 1:
+        raise SystemExit(f"{path}: regex expected exactly one match, got {count}: {pattern}")
+    write(path, new)
+
+
+# Release identity.
+replace_once("cpap/version.py", 'APP_VERSION = "5.3.9"', 'APP_VERSION = "5.3.10"')
+for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
+    replace_once(path, "sleepmate-shell-v5.3.9-o2-hydration-1", "sleepmate-shell-v5.3.10-o2-hydration-1")
+
+# First-run wizard: external AI prompt can be selected without an API key.
+replace_once(
+    "web/first-run.js",
+    "const state={step:1,status:null,config:null,sleepsync:null,remote:null,ai:null,choices:{remote_mode:'local'}};",
+    "const state={step:1,status:null,config:null,sleepsync:null,remote:null,ai:null,ui:null,choices:{remote_mode:'local'}};",
+)
+replace_once(
+    "web/first-run.js",
+    '<p class="fr-lead">Mindkettő opcionális. Itt bekapcsolhatod a heti automatikus biztonsági mentést, illetve megadhatod a helyben, DPAPI-val titkosított AI API-kulcsokat.</p>',
+    '<p class="fr-lead">Mindkettő opcionális. Itt bekapcsolhatod a heti automatikus biztonsági mentést, az API-kulcs nélküli külső AI promptot, illetve megadhatod a helyben, DPAPI-val titkosított AI API-kulcsokat.</p>',
+)
+replace_once(
+    "web/first-run.js",
+    '</div><div class="fr-note">Az API-kulcsok a Windows felhasználói fiókjához kötött DPAPI titkosítással kerülnek helyben tárolásra. Google Drive backupot később a Beállításokban kapcsolhatsz hozzá.</div></div>',
+    '</div><label class="fr-check"><input id="frAiPrompt" type="checkbox"><span><b>Prompt külső AI-hoz bekapcsolása</b><br><small>API-kulcs nélkül is használható. A SleepMate összeállítja a másolható, anonim terápiás promptot, amelyet külső AI-ban nyithatsz meg.</small></span></label><div class="fr-note">Az API-kulcsok a Windows felhasználói fiókjához kötött DPAPI titkosítással kerülnek helyben tárolásra. A külső AI prompt használatához nem szükséges API-kulcs. Google Drive backupot később a Beállításokban kapcsolhatsz hozzá.</div></div>',
+)
+old_save = """  async function saveStep5(){
+    const backup=$('#frBackup').checked;await request('/api/settings',{method:'POST',body:{auto_backup_enabled:backup}});choicePatch({backup_enabled:backup});
+    const gemini=$('#frGemini').value.trim(),groq=$('#frGroq').value.trim();if(gemini||groq){const payload={};if(gemini)payload.gemini_api_key=gemini;if(groq)payload.groq_api_key=groq;state.ai=await request('/api/ai/config',{method:'POST',body:payload});$('#frGemini').value='';$('#frGroq').value=''}
+    const providers=state.ai?.providers||{};choicePatch({gemini_configured:!!providers.gemini?.configured||!!gemini,groq_configured:!!providers.groq?.configured||!!groq});
+  }"""
+new_save = """  async function saveStep5(){
+    const backup=$('#frBackup').checked;await request('/api/settings',{method:'POST',body:{auto_backup_enabled:backup}});choicePatch({backup_enabled:backup});
+    const prompting=$('#frAiPrompt').checked;state.ui=await request('/api/ui/preferences',{method:'POST',body:{ai_prompting_enabled:prompting}});choicePatch({ai_prompting_enabled:prompting});
+    const gemini=$('#frGemini').value.trim(),groq=$('#frGroq').value.trim();if(gemini||groq){const payload={};if(gemini)payload.gemini_api_key=gemini;if(groq)payload.groq_api_key=groq;state.ai=await request('/api/ai/config',{method:'POST',body:payload});$('#frGemini').value='';$('#frGroq').value=''}
+    const providers=state.ai?.providers||{};choicePatch({gemini_configured:!!providers.gemini?.configured||!!gemini,groq_configured:!!providers.groq?.configured||!!groq});
+  }"""
+replace_once("web/first-run.js", old_save, new_save)
+replace_once(
+    "web/first-run.js",
+    "      ['✨','Luna / Milo',state.choices.gemini_configured||state.choices.groq_configured?'Legalább egy AI beállítva':'Később állítható']",
+    "      ['✨','Luna / Milo',state.choices.gemini_configured||state.choices.groq_configured?'Legalább egy AI beállítva':'Később állítható'],\n      ['💬','Külső AI prompt',state.choices.ai_prompting_enabled?'Bekapcsolva':'Kikapcsolva']",
+)
+old_hydrate = """    const results=await Promise.allSettled([request('/api/config'),request('/api/sleepsync/settings'),request('/api/remote/status'),request('/api/ai/config')]);
+    state.config=results[0].status==='fulfilled'?results[0].value:{};state.sleepsync=results[1].status==='fulfilled'?results[1].value:{};state.remote=results[2].status==='fulfilled'?results[2].value:{};state.ai=results[3].status==='fulfilled'?results[3].value:{};
+    $('#frDataDir').value=state.config.data_dir||'';$('#frAutoScan').checked=state.config.auto_scan_enabled!==false;$('#frSleepSync').checked=!!state.sleepsync.auto_sync_enabled;$('#frBackup').checked=!!state.config.auto_backup_enabled;const savedCfHost=String(state.config.cloudflare_hostname||'').trim();$('#frCfHost').value=savedCfHost;const cfOrigin=$('#frCfHostOrigin');if(cfOrigin)cfOrigin.hidden=!savedCfHost;$('#frCfAccess').checked=!!state.config.cloudflare_access_confirmed;
+    const old=state.status?.choices||{};state.choices={...state.choices,...old,data_source_configured:!!state.config.data_dir,sleepsync_enabled:!!state.sleepsync.auto_sync_enabled,backup_enabled:!!state.config.auto_backup_enabled,gemini_configured:!!state.ai?.providers?.gemini?.configured,groq_configured:!!state.ai?.providers?.groq?.configured};"""
+new_hydrate = """    const results=await Promise.allSettled([request('/api/config'),request('/api/sleepsync/settings'),request('/api/remote/status'),request('/api/ai/config'),request('/api/ui/preferences')]);
+    state.config=results[0].status==='fulfilled'?results[0].value:{};state.sleepsync=results[1].status==='fulfilled'?results[1].value:{};state.remote=results[2].status==='fulfilled'?results[2].value:{};state.ai=results[3].status==='fulfilled'?results[3].value:{};state.ui=results[4].status==='fulfilled'?results[4].value:{};
+    $('#frDataDir').value=state.config.data_dir||'';$('#frAutoScan').checked=state.config.auto_scan_enabled!==false;$('#frSleepSync').checked=!!state.sleepsync.auto_sync_enabled;$('#frBackup').checked=!!state.config.auto_backup_enabled;$('#frAiPrompt').checked=state.ui.ai_prompting_enabled===true;const savedCfHost=String(state.config.cloudflare_hostname||'').trim();$('#frCfHost').value=savedCfHost;const cfOrigin=$('#frCfHostOrigin');if(cfOrigin)cfOrigin.hidden=!savedCfHost;$('#frCfAccess').checked=!!state.config.cloudflare_access_confirmed;
+    const old=state.status?.choices||{};state.choices={...state.choices,...old,data_source_configured:!!state.config.data_dir,sleepsync_enabled:!!state.sleepsync.auto_sync_enabled,backup_enabled:!!state.config.auto_backup_enabled,gemini_configured:!!state.ai?.providers?.gemini?.configured,groq_configured:!!state.ai?.providers?.groq?.configured,ai_prompting_enabled:state.ui.ai_prompting_enabled===true};"""
+replace_once("web/first-run.js", old_hydrate, new_hydrate)
+replace_once("web/first-run.css", "color:#07111d;box-shadow:", "color:#fff;box-shadow:")
+
+# Self-check must validate the current MSI updater location.
+replace_once(
+    "cpap/maintenance.py",
+    'required = (["SleepMate.exe", "SleepMateUpdater.exe", "build_info.json", "installed.marker"] if installed_tree else',
+    'required = (["SleepMate.exe", "Updater/SleepMateUpdater.exe", "build_info.json", "installed.marker"] if installed_tree else',
+)
+
+# O2 live view: current-page/current-measurement buffer only and fast windows.
+replace_once(
+    "web/o2ring.js",
+    "dashboardTrendRows:[],liveResumePromise:null,liveAbort:null};",
+    "dashboardTrendRows:[],liveResumePromise:null,liveAbort:null,livePageActive:false};",
+)
+replace_once(
+    "web/o2ring.js",
+    '<select id="o2rLiveWindow"><option value="5">5 perc</option><option value="15">15 perc</option><option value="30" selected>30 perc</option><option value="60">1 óra</option><option value="all">Teljes</option></select>',
+    '<select id="o2rLiveWindow"><option value="instant" selected>Azonnali</option><option value="1">1 perc</option><option value="5">5 perc</option><option value="15">15 perc</option><option value="30">30 perc</option><option value="60">1 óra</option><option value="all">Teljes</option></select>',
+)
+replace_once(
+    "web/o2ring.js",
+    '</div><div class="o2r-live-toolbar"><span>Időablak</span>',
+    '</div><div id="o2rLiveIdle" class="o2r-empty">Jelenleg nincs mérés folyamatban.</div><div class="o2r-live-toolbar"><span>Időablak</span>',
+)
+replace_once(
+    "web/o2ring.js",
+    "if(x.last_sample_ts&&(x.spo2!=null||x.heart_rate!=null)){mergeLive([{timestamp:x.last_sample_ts,spo2:x.spo2,heart_rate:x.heart_rate,motion:x.motion}]);scheduleLiveDraw()}",
+    "if(x.measuring===true&&x.last_sample_ts&&(x.spo2!=null||x.heart_rate!=null)){mergeLive([{timestamp:x.last_sample_ts,spo2:x.spo2,heart_rate:x.heart_rate,motion:x.motion}]);scheduleLiveDraw()}",
+)
+replace_once(
+    "web/o2ring.js",
+    "async function resumeLive(){if(!o2PageVisible())return;if(R.liveResumePromise)return R.liveResumePromise;const since=R.live.at(-1)?.timestamp||0,work=(async()=>{if(o2PageVisible())openLiveStream();await refillLive(since)})();R.liveResumePromise=work;try{return await work}finally{if(R.liveResumePromise===work)R.liveResumePromise=null}}",
+    "async function resumeLive(){if(!o2PageVisible())return;if(R.liveResumePromise)return R.liveResumePromise;const work=(async()=>{if(o2PageVisible())openLiveStream()})();R.liveResumePromise=work;try{return await work}finally{if(R.liveResumePromise===work)R.liveResumePromise=null}}",
+)
+replace_once(
+    "web/o2ring.js",
+    "function updateLiveLifecycle(){if(o2PageVisible())resumeLive();else closeLiveStream()}",
+    "function updateLiveLifecycle(){const active=o2PageVisible();if(active){if(!R.livePageActive){R.livePageActive=true;R.live=[];R.liveZoom=null;drawLive()}resumeLive()}else{if(R.livePageActive){R.livePageActive=false;R.live=[];R.liveZoom=null}closeLiveStream()}}",
+)
+replace_once(
+    "web/o2ring.js",
+    "function liveRange(){if(R.liveZoom)return R.liveZoom;const b=bounds(R.live);if(!b)return null;const v=id('o2rLiveWindow')?.value||'30';if(v==='all')return b;return[Math.max(b[0],b[1]-Number(v)*60),b[1]]}",
+    "function liveRange(){if(R.liveZoom)return R.liveZoom;const b=bounds(R.live);if(!b)return null;const v=id('o2rLiveWindow')?.value||'instant',now=Math.max(Date.now()/1000,b[1]);if(v==='all')return b;if(v==='instant'){const start=Math.max(b[0],now-30);return[Math.min(start,now-5),now]}const seconds=Math.max(1,Number(v)||1)*60;return[Math.max(b[0],now-seconds),now]}",
+)
+old_apply = "function applyLive(l){R.status.live=l||{};const put=(k,v)=>{if(id(k))id(k).textContent=v};put('o2rLiveSpo2',l.spo2??'–');put('o2rLiveHr',l.heart_rate??'–');put('o2rLiveBattery',l.battery_percent??'–');put('o2rLiveSignal',`jel ${l.signal_strength??'–'}`);put('o2rLiveState',l.calibrating?'Kalibrál':l.measuring?'Mér':l.connected?'Készenlét':'Nincs kapcsolat');put('o2rDeviceName',l.device_model||l.device_name||l.remembered_address||R.settings.o2ring_preferred_address||'O2Ring');const badge=id('o2rStatus');if(badge)badge.textContent=!R.settings.o2ring_ble_enabled?'BLE kikapcsolva':l.connected?(l.measuring?'Mér':'Kapcsolódva'):(l.scanning?'Keresés…':'Nincs kapcsolat');id('o2rConnectNow')?.classList.toggle('hidden',!!l.connected);id('smO2QuickConnect')?.classList.toggle('hidden',!!l.connected)}"
+new_apply = "function applyLive(l){R.status.live=l||{};const measuring=l.measuring===true,put=(k,v)=>{if(id(k))id(k).textContent=v};put('o2rLiveSpo2',measuring?(l.spo2??'–'):'–');put('o2rLiveHr',measuring?(l.heart_rate??'–'):'–');put('o2rLiveBattery',l.battery_percent??'–');put('o2rLiveSignal',`jel ${l.signal_strength??'–'}`);put('o2rLiveState',l.calibrating?'Kalibrál':measuring?'Mér':l.connected?'Készenlét':'Nincs kapcsolat');put('o2rDeviceName',l.device_model||l.device_name||l.remembered_address||R.settings.o2ring_preferred_address||'O2Ring');id('o2rLiveIdle')?.classList.toggle('hidden',measuring);if(!measuring&&R.live.length){R.live=[];R.liveZoom=null;drawLive()}const badge=id('o2rStatus');if(badge)badge.textContent=!R.settings.o2ring_ble_enabled?'BLE kikapcsolva':l.connected?(measuring?'Mér':'Kapcsolódva'):(l.scanning?'Keresés…':'Nincs kapcsolat');id('o2rConnectNow')?.classList.toggle('hidden',!!l.connected);id('smO2QuickConnect')?.classList.toggle('hidden',!!l.connected)}"
+replace_once("web/o2ring.js", old_apply, new_apply)
+replace_once(
+    "web/o2ring.js",
+    "chartDraw(c,R.live,{range,series:ss,syncGroup:'live',redraw:drawLive})",
+    "chartDraw(c,R.live,{range,series:ss,syncGroup:'live',empty:'Jelenleg nincs mérés folyamatban.',redraw:drawLive})",
+)
+
+# Dashboard O2 trend style aligned to existing rounded dashboard lines.
+regex_once(
+    "web/o2ring.js",
+    r"(function drawLine\(ctx,segments,mapX,mapY,color,width=1\.15\)\{[^\n]+\}\n)",
+    r"\1function drawSmoothLine(ctx,segments,mapX,mapY,color,width=2,points=false){ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineJoin='round';ctx.lineCap='round';for(const seg of segments){const pts=seg.map(r=>({x:mapX(r.timestamp),y:mapY(r.value)}));if(!pts.length)continue;if(pts.length===1){if(points){ctx.fillStyle=color;ctx.beginPath();ctx.arc(pts[0].x,pts[0].y,2.3,0,Math.PI*2);ctx.fill()}continue}ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length-1;i++){const p=pts[i],n=pts[i+1],mx=(p.x+n.x)/2,my=(p.y+n.y)/2;ctx.quadraticCurveTo(p.x,p.y,mx,my)}const last=pts.at(-1);ctx.quadraticCurveTo(last.x,last.y,last.x,last.y);ctx.stroke();if(points)for(const p of pts){ctx.fillStyle=color;ctx.beginPath();ctx.arc(p.x,p.y,2.3,0,Math.PI*2);ctx.fill()}}}\n",
+)
+replace_once(
+    "web/o2ring.js",
+    "explicitGap=num(opts.gapSeconds),gap=explicitGap==null?chartGap(rows,!!opts.trendGap):Math.max(0,explicitGap);for(const s of series){const r=s.axis==='right'?rr:lr;drawLine(ctx,makeSegments(rows,s.key,a,b,gap),mx,v=>my(v,r),s.color,opts.lineWidth??1.15)}",
+    "explicitGap=num(opts.gapSeconds),gap=opts.connectGaps?Number.POSITIVE_INFINITY:(explicitGap==null?chartGap(rows,!!opts.trendGap):Math.max(0,explicitGap));for(const s of series){const r=s.axis==='right'?rr:lr,segments=makeSegments(rows,s.key,a,b,gap);if(opts.smooth)drawSmoothLine(ctx,segments,mx,v=>my(v,r),s.color,opts.lineWidth??2,!!opts.points);else drawLine(ctx,segments,mx,v=>my(v,r),s.color,opts.lineWidth??1.15)}",
+)
+replace_once(
+    "web/o2ring.js",
+    "syncGroup:'dash-o2',rightAxis:false,trendGap:true,gapSeconds:36*3600,xLabel:date",
+    "syncGroup:'dash-o2',rightAxis:false,smooth:true,points:true,connectGaps:true,lineWidth:2,xLabel:date",
+)
+
+# Update existing generation contract for 5.3.10/current-measurement live behavior.
+path = "tests/test_v534_regressions.py"
+text = read(path)
+text = text.replace('assert APP_VERSION == "5.3.9"', 'assert APP_VERSION == "5.3.10"')
+text = text.replace("sleepmate-shell-v5.3.9-o2-hydration-1", "sleepmate-shell-v5.3.10-o2-hydration-1")
+pattern = r"def test_v534_live_chart_is_visibility_scoped_and_batch_restored\(\):\n.*?(?=\ndef test_v534_sleepsync_is_event_driven_not_frontend_polled)"
+replacement = '''def test_v534_live_chart_is_visibility_scoped_and_current_measurement_only():
+    js = read("web/o2ring.js")
+    stream = read("cpap/o2ring_stream.py")
+    for marker in (
+        "document.visibilityState==='visible'",
+        "function updateLiveLifecycle()",
+        "value=\\\"instant\\\" selected>Azonnali",
+        "value=\\\"1\\\">1 perc",
+        "Jelenleg nincs mérés folyamatban.",
+        "x.measuring===true&&x.last_sample_ts",
+        "R.livePageActive=true;R.live=[];R.liveZoom=null",
+        "if(!measuring&&R.live.length){R.live=[];R.liveZoom=null;drawLive()}",
+    ):
+        assert marker in js
+    assert "await refillLive(since)" not in js
+    assert "class _LiveBuffer" in stream
+    assert "service.manager.add_listener(BUFFER.append_snapshot)" in stream
+    assert "setInterval(" not in js
+
+'''
+text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+if count != 1:
+    raise SystemExit("Could not replace live regression test contract")
+write(path, text)
+
+Path("tests/test_v5310_targeted_fixes.py").write_text(r'''from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def test_v5310_first_run_offers_external_ai_prompt_without_api_key():
+    js = read("web/first-run.js")
+    css = read("web/first-run.css")
+    assert 'id="frAiPrompt"' in js
+    assert "Prompt külső AI-hoz bekapcsolása" in js
+    assert "request('/api/ui/preferences',{method:'POST',body:{ai_prompting_enabled:prompting}})" in js
+    assert "$('#frAiPrompt').checked=state.ui.ai_prompting_enabled===true" in js
+    assert ".fr-btn.primary" in css and "color:#fff" in css
+
+
+def test_v5310_self_check_uses_current_msi_updater_path():
+    maintenance = read("cpap/maintenance.py")
+    assert '["SleepMate.exe", "Updater/SleepMateUpdater.exe", "build_info.json", "installed.marker"]' in maintenance
+    assert '["SleepMate.exe", "SleepMateUpdater.exe", "build_info.json", "installed.marker"]' not in maintenance
+    assert 'self.base / "SleepMateUpdater.exe"' in maintenance
+    assert 'self.base / "Updater" / "SleepMateUpdater.exe"' in maintenance
+
+
+def test_v5310_o2_live_view_is_page_scoped_and_has_fast_windows():
+    js = read("web/o2ring.js")
+    assert 'value="instant" selected>Azonnali' in js
+    assert 'value="1">1 perc' in js
+    assert "x.measuring===true&&x.last_sample_ts" in js
+    assert "Jelenleg nincs mérés folyamatban." in js
+    assert "await refillLive(since)" not in js
+    assert "livePageActive:false" in js
+
+
+def test_v5310_dashboard_o2_trends_use_smoothed_dashboard_style():
+    js = read("web/o2ring.js")
+    assert "function drawSmoothLine" in js
+    assert "smooth:true,points:true,connectGaps:true,lineWidth:2" in js
+    assert "syncGroup:'dash-o2'" in js
+''', encoding="utf-8")
+
+notes = '''# SleepMate 5.3.10
+
+Release build: **5.3.10**.
+Kiadási csatorna: **stable**.
+
+A 5.3.10 célzott hibajavító és felületi konzisztencia-kiadás.
+
+## Első beállítás és AI
+
+- Az első indítási varázslóban külön bekapcsolható a **Prompt külső AI-hoz** funkció akkor is, ha a felhasználó nem ad meg Gemini- vagy Groq API-kulcsot.
+- A választás ugyanazt az `ai_prompting_enabled` felhasználói preferenciát menti, mint a későbbi Beállítások felület.
+- A varázsló **Tovább / Kezdjük** elsődleges gombjának szövege fehér, így a gradiens háttéren jól olvasható.
+
+## Önellenőrzés és MSI updater
+
+- A Programfájlok önellenőrzés már a jelenlegi MSI/onedir struktúrát ellenőrzi: `Updater/SleepMateUpdater.exe`.
+- A frissítő indításának régi gyökérbeli kompatibilitási fallbackje szándékosan megmarad; csak a téves önellenőrzési elvárás változik.
+
+## Oximetria
+
+- Az Élő O₂ monitor új **Azonnali** és **1 perc** időablakot kap; az Azonnali nézet legfeljebb az utolsó 30 másodperc környezetére igazodik.
+- Az élő grafikon többé nem tölti vissza a korábbi mérés bufferét csak azért, mert az Oximetria oldal megnyílt. A grafikon kizárólag az adott megnyitás alatt ténylegesen folyó mérés mintáit mutatja.
+- Ha nincs aktív mérés, a korábbi SpO₂/pulzus minták törlődnek az élő nézetből, a számkártyák `–` értékre állnak, és egyértelmű **„Jelenleg nincs mérés folyamatban.”** állapot jelenik meg.
+- A Dashboard SpO₂- és pulzustrendjei a többi Dashboard vonaldiagramhoz igazodó simított, lekerekített vonalrajzolást kapnak.
+
+## Kiadási ellenőrzés
+
+A kiadás a hivatalos Windows release pipeline teljes build-, teszt-, MSI telepítési/runtime/eltávolítási és release-integritási ellenőrzése után publikálható.
+'''
+Path("release-notes/v5.3.10.md").write_text(notes, encoding="utf-8")
+release_notes = read("RELEASE_NOTES.md")
+if not release_notes.startswith("# SleepMate 5.3.9"):
+    raise SystemExit("Unexpected RELEASE_NOTES.md head")
+write("RELEASE_NOTES.md", notes.rstrip() + "\n\n---\n" + release_notes)
+
+print("SleepMate 5.3.10 targeted patch applied successfully.")
