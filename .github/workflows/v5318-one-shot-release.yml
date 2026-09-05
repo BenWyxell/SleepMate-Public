@@ -1,0 +1,162 @@
+name: SleepMate 5.3.18 one-shot verified publisher
+
+on:
+  push:
+    branches:
+      - release-v5.3.18-source
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sleepmate-v5.3.18-one-shot
+  cancel-in-progress: true
+
+jobs:
+  publish-after-canonical-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate one-shot release identity and O2 recovery syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
+          test "$VERSION" = "5.3.18"
+          test "$GITHUB_REF_NAME" = "release-v5.3.18-source"
+          test -f release-notes/v5.3.18.md
+          grep -F 'Release build: **5.3.18**.' release-notes/v5.3.18.md
+          node --check web/frontend-v534.js
+          node --check web/o2ring-recovery-v5318.js
+          python -m pip install -q pytest
+          python -m pytest -q tests/test_v5318_o2_desktop_recovery.py tests/test_v5318_o2_metadata_lazy.py
+
+      - name: Refuse to overwrite an existing 5.3.18 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v5.3.18 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v5.3.18 already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+
+      - name: Dispatch canonical Windows release gate for this exact commit
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/windows-release.yml/dispatches" \
+            -f ref="$GITHUB_REF_NAME"
+
+          RUN_ID=''
+          for _ in $(seq 1 40); do
+            RUN_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/windows-release.yml/runs?branch=$GITHUB_REF_NAME&event=workflow_dispatch&per_page=20" \
+              --jq ".workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\") | .id" | head -n1)"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 3
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo 'Canonical Windows workflow run was not found for this commit.' >&2
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Canonical run: $RUN_ID"
+
+      - name: Wait for full Windows build, MSI smoke test and release-set verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 180); do
+            STATUS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.status')"
+            CONCLUSION="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.conclusion // ""')"
+            echo "canonical status=$STATUS conclusion=$CONCLUSION"
+            if [[ "$STATUS" == 'completed' ]]; then
+              if [[ "$CONCLUSION" != 'success' ]]; then
+                gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" || true
+                exit 1
+              fi
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Canonical Windows workflow did not finish inside the publisher timeout.' >&2
+          exit 1
+
+      - name: Download the canonical VERIFIED release set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          mkdir release-staging
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name SleepMate-Windows-x64-VERIFIED-RELEASE \
+            --dir release-staging
+          find release-staging -maxdepth 2 -type f -printf '%P\n' | sort
+
+      - name: Verify 5.3.18 MSI, manifest and source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          MSI='SleepMate_Setup_v5.3.18.msi'
+          test -f "release-staging/$MSI"
+          test -f "release-staging/$MSI.sha256"
+          test -f release-staging/sleepmate-update.json
+          test -f release-staging/release-metadata.json
+          test -f release-staging/SHA256SUMS.txt
+          (
+            cd release-staging
+            sha256sum -c "$MSI.sha256"
+          )
+          test "$(jq -r '.version' release-staging/sleepmate-update.json)" = '5.3.18'
+          test "$(jq -r '.asset' release-staging/sleepmate-update.json)" = "$MSI"
+          META_SHA="$(jq -r '.source_sha // .commit_sha // .sha // empty' release-staging/release-metadata.json)"
+          if [[ -n "$META_SHA" ]]; then test "$META_SHA" = "$GITHUB_SHA"; fi
+          grep -F "$MSI" release-staging/SHA256SUMS.txt >/dev/null
+
+      - name: Create draft GitHub Release from VERIFIED artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v5.3.18 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'SleepMate 5.3.18 — Oximetria betöltési stabilitás' \
+            --notes-file release-notes/v5.3.18.md \
+            --draft
+          gh release upload v5.3.18 release-staging/* --repo "$GITHUB_REPOSITORY"
+
+      - name: Verify published asset set and make release live
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE="$(gh release view v5.3.18 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)"
+          LOCAL="$(find release-staging -maxdepth 1 -type f -printf '%f\n' | sort)"
+          if [[ "$REMOTE" != "$LOCAL" ]]; then
+            echo 'Release asset set does not exactly match VERIFIED artifact.' >&2
+            diff -u <(printf '%s\n' "$LOCAL") <(printf '%s\n' "$REMOTE") || true
+            exit 1
+          fi
+          gh release edit v5.3.18 --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release view v5.3.18 --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,targetCommitish,url
