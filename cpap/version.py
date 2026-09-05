@@ -1,5 +1,5 @@
 APP_NAME = "SleepMate"
-APP_VERSION = "5.3.17"
+APP_VERSION = "5.3.18"
 # Previous stable v5.3 release marker retained for the long-lived SleepSync contract: APP_VERSION = "5.3.0"
 API_VERSION = 19
 BUILD_CHANNEL = "stable"
