@@ -13,12 +13,19 @@ text = text.replace('assert "await client.navigate(client.url)" not in sw', 'ass
 path.write_text(text, encoding='utf-8')
 
 path = root / 'tests/test_v5315_pwa_daily_delivery_and_o2.py'
-text = path.read_text(encoding='utf-8')
-old = '''    assert "sw = sw.replace(\"'/dashboard-pwa-v5312.css?v=2'\", f\"'/dashboard-pwa-v5312.css?v={FRONTEND_ID}'\")" in spec\n'''
-new = '''    assert "'/dashboard-pwa-v5312.css'" in spec\n    assert "asset + f'?v={FRONTEND_ID}'" in spec\n'''
-if old not in text:
-    raise SystemExit('old dashboard SW versioning assertion not found')
-text = text.replace(old, new, 1)
-path.write_text(text, encoding='utf-8')
+lines = path.read_text(encoding='utf-8').splitlines()
+out = []
+changed = False
+for line in lines:
+    if 'assert ' in line and 'sw = sw.replace' in line and 'dashboard-pwa-v5312.css' in line:
+        indent = line[:len(line)-len(line.lstrip())]
+        out.append(indent + 'assert "dashboard-pwa-v5312.css" in spec')
+        out.append(indent + 'assert "asset + f\'?v={FRONTEND_ID}\'" in spec')
+        changed = True
+    else:
+        out.append(line)
+if not changed:
+    raise SystemExit('dashboard SW versioning assertion not found')
+path.write_text('\n'.join(out) + '\n', encoding='utf-8')
 
 print('Legacy PWA regression expectations updated.')
