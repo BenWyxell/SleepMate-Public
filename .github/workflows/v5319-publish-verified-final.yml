@@ -1,0 +1,171 @@
+name: Publish exact verified SleepMate 5.3.19
+
+on:
+  push:
+    branches:
+      - release-v5.3.19-source
+    paths:
+      - '.github/workflows/v5319-publish-verified-final.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: sleepmate-v5.3.19-final-publish
+  cancel-in-progress: false
+
+jobs:
+  publish-exact-tested-artifact:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TESTED_SHA: 1ff73d1de12a01e7da7fd2a3e92e52265f9bc291
+      CANONICAL_RUN: '33991686628'
+      TAG: v5.3.19
+      VERSION: 5.3.19
+      MSI: SleepMate_Setup_v5.3.19.msi
+      ZIP: SleepMate_v5.3.19_windows_x64.zip
+      EXPECTED_ARTIFACT_SHA: 146befec687c7217e220796154a0ca2e706e690f062b013f685cc4bebc1e790b
+      EXPECTED_MSI_SHA: f2a55f688d8aab6fcbfa63d41c655be183d325f2c57be00aa99fe44835acf1b2
+      EXPECTED_ZIP_SHA: 05ce142e7468b3e866cd362c28843c0b4bb33d6ff68b1c92f0e3fcfad78eac88
+      EXPECTED_UPDATER_SHA: f1ae4577887315b50c4c31f563d7d6c56da8a4ccfe2827f19a40dda7e8aa66e4
+
+    steps:
+      - name: Checkout repository only for tested release notes
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove canonical run is the successful exact tested SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANONICAL_RUN")"
+          test "$(jq -r '.head_sha' <<<"$RUN_JSON")" = "$TESTED_SHA"
+          test "$(jq -r '.status' <<<"$RUN_JSON")" = 'completed'
+          test "$(jq -r '.conclusion' <<<"$RUN_JSON")" = 'success'
+          test "$(jq -r '.path' <<<"$RUN_JSON")" = '.github/workflows/windows-release.yml'
+          echo "Canonical verified run $CANONICAL_RUN is SUCCESS for $TESTED_SHA"
+
+      - name: Refuse any pre-existing 5.3.19 tag or release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$TAG release already exists; refusing to overwrite." >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "$TAG git tag already exists without the expected release; refusing to overwrite." >&2
+            exit 1
+          fi
+
+      - name: Download only the canonical VERIFIED release set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          mkdir release-staging
+          gh run download "$CANONICAL_RUN" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name SleepMate-Windows-x64-VERIFIED-RELEASE \
+            --dir release-staging
+          find release-staging -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Re-verify every release identity, hash and updater byte
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "release-staging/$MSI"
+          test -f "release-staging/$MSI.sha256"
+          test -f "release-staging/$ZIP"
+          test -f release-staging/sleepmate-update.json
+          test -f release-staging/release-metadata.json
+          test -f release-staging/SHA256SUMS.txt
+
+          test "$(jq -r '.product' release-staging/release-metadata.json)" = 'SleepMate'
+          test "$(jq -r '.version' release-staging/release-metadata.json)" = "$VERSION"
+          test "$(jq -r '.tag' release-staging/release-metadata.json)" = "$TAG"
+          test "$(jq -r '.git_commit' release-staging/release-metadata.json)" = "$TESTED_SHA"
+          test "$(jq -r '.workflow_run_id' release-staging/release-metadata.json)" = "$CANONICAL_RUN"
+
+          test "$(jq -r '.version' release-staging/sleepmate-update.json)" = "$VERSION"
+          test "$(jq -r '.asset' release-staging/sleepmate-update.json)" = "$MSI"
+          test "$(jq -r '.git_commit' release-staging/sleepmate-update.json)" = "$TESTED_SHA"
+          test "$(jq -r '.sha256' release-staging/sleepmate-update.json)" = "$EXPECTED_MSI_SHA"
+
+          ACTUAL_MSI_SHA="$(sha256sum "release-staging/$MSI" | awk '{print $1}')"
+          ACTUAL_ZIP_SHA="$(sha256sum "release-staging/$ZIP" | awk '{print $1}')"
+          test "$ACTUAL_MSI_SHA" = "$EXPECTED_MSI_SHA"
+          test "$ACTUAL_ZIP_SHA" = "$EXPECTED_ZIP_SHA"
+          grep -F "$EXPECTED_MSI_SHA  $MSI" release-staging/SHA256SUMS.txt >/dev/null
+          grep -F "$EXPECTED_ZIP_SHA  $ZIP" release-staging/SHA256SUMS.txt >/dev/null
+          (
+            cd release-staging
+            sha256sum -c "$MSI.sha256"
+          )
+
+          rm -rf updater-check
+          mkdir updater-check
+          unzip -q "release-staging/$ZIP" -d updater-check
+          UPDATER="$(find updater-check -type f -path '*/Updater/SleepMateUpdater.exe' -print -quit)"
+          test -n "$UPDATER"
+          ACTUAL_UPDATER_SHA="$(sha256sum "$UPDATER" | awk '{print $1}')"
+          test "$ACTUAL_UPDATER_SHA" = "$EXPECTED_UPDATER_SHA"
+          echo "Exact stable updater verified: $ACTUAL_UPDATER_SHA"
+
+          # Release notes must come from the exact tested source, not this helper commit.
+          git show "$TESTED_SHA:release-notes/v5.3.19.md" > tested-release-notes.md
+          grep -F 'Release build: **5.3.19**.' tested-release-notes.md >/dev/null
+
+      - name: Create draft release targeted to exact tested SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$TESTED_SHA" \
+            --title 'SleepMate 5.3.19 — O2Ring indulás és stabil updater' \
+            --notes-file tested-release-notes.md \
+            --draft
+          gh release upload "$TAG" release-staging/* --repo "$GITHUB_REPOSITORY"
+
+      - name: Prove exact uploaded asset set before making stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCAL="$(find release-staging -maxdepth 1 -type f -printf '%f\n' | sort)"
+          REMOTE="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)"
+          if [[ "$LOCAL" != "$REMOTE" ]]; then
+            echo 'Remote release assets differ from canonical VERIFIED release set.' >&2
+            diff -u <(printf '%s\n' "$LOCAL") <(printf '%s\n' "$REMOTE") || true
+            exit 1
+          fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
+
+      - name: Final stable-release proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,targetCommitish,url,assets)"
+          test "$(jq -r '.tagName' <<<"$RELEASE")" = "$TAG"
+          test "$(jq -r '.isDraft' <<<"$RELEASE")" = 'false'
+          test "$(jq -r '.isPrerelease' <<<"$RELEASE")" = 'false'
+          test "$(jq -r '.targetCommitish' <<<"$RELEASE")" = "$TESTED_SHA"
+          jq -e --arg MSI "$MSI" '.assets[] | select(.name == $MSI)' <<<"$RELEASE" >/dev/null
+          LATEST="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          test "$LATEST" = "$TAG"
+          echo "LIVE STABLE: $TAG target=$TESTED_SHA latest=$LATEST"
