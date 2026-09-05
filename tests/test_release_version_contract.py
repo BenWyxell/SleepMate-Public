@@ -78,9 +78,20 @@ def test_release_pwa_shell_cannot_lose_sleep_feature_after_update():
 
     for worker in (base, live):
         assert "sleep-analysis" in worker
-        assert "const stale=keys.filter" in worker
-        assert "self.clients.matchAll({type:'window',includeUncontrolled:true})" in worker
+        assert "precacheShellAtomic" in worker
+        assert "if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error" in worker
+        assert "await self.skipWaiting()" in worker
+        assert "await self.clients.claim()" in worker
+        assert "hadPreviousShell" in worker
+        assert "await client.navigate(client.url)" in worker
         assert "SLEEPMATE_SHELL_READY" in worker
+        assert "SLEEPMATE_CLIENT_READY" in worker
+        assert "data.buildId!==BUILD_ID" in worker
+        assert "cleanupStaleSleepMateCaches" in worker
+        assert "key.startsWith('sleepmate-shell-')||key.startsWith('sleepmate-api-')" in worker
+        activate = worker.split("self.addEventListener('activate'", 1)[1].split("function backendUnavailable", 1)[0]
+        assert "caches.delete" not in activate
+        assert "self.clients.matchAll({type:'window',includeUncontrolled:true})" in worker
         assert "event.respondWith(navigationFallback(req))" in worker
         assert "event.respondWith(codeNetworkFirst(req))" in worker
         assert "/sleepmate-chart-v523.js" in worker
