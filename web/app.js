@@ -3,6 +3,17 @@
   const POLISH='/sleepsync-polish.js?v=130';
   const HYDRATION='/sleepsync-hydration-v529.js?v=131';
   const FIRST_RUN='/first-run.js?v=4';
+  const DASHBOARD_PWA_STYLE='/dashboard-pwa-v5312.css?v=1';
+
+  // Dashboard layout polish is scoped inside the stylesheet to installed,
+  // phone-class PWAs, so desktop/web layouts keep their existing geometry.
+  if(!document.querySelector('link[data-sleepmate-dashboard-pwa="1"]')){
+    const dashboardStyle=document.createElement('link');
+    dashboardStyle.rel='stylesheet';
+    dashboardStyle.href=DASHBOARD_PWA_STYLE;
+    dashboardStyle.dataset.sleepmateDashboardPwa='1';
+    document.head.appendChild(dashboardStyle);
+  }
 
   function appendEngine(){
     if(window.__sleepmateStableEngine130)return;
