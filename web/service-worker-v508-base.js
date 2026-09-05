@@ -1,11 +1,11 @@
 // Compatibility marker for the frozen v5.2.14 Sleep/PWA contract: sleepmate-shell-v5.2.14
 const UI_VERSION='5.3.4';
-const RELEASE_VERSION='5.3.18';
-const BUILD_ID='5.3.18';
-const CACHE='sleepmate-shell-v5.3.18-o2-recovery-1';
+const RELEASE_VERSION='5.3.19';
+const BUILD_ID='5.3.19';
+const CACHE='sleepmate-shell-v5.3.19-o2-updater-recovery-1';
 const SHELL_CACHE=CACHE;
 const API_CACHE='sleepmate-api-v5.3.9-refactor';
-const SHELL=['/','/index.html','/style.css?v=5.3.4','/app.js?v=5.3.4','/sleepmate-enhancements.js','/sleepmate-offline-runtime.js','/sleepsync-hydration-v529.js','/sleepsync-mobile-v5213.css','/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14','/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12','/sleepmate-aurora.css?v=5.3.4','/sleepmate-v530.css?v=5.3.4','/dashboard-pwa-v5312.css?v=2','/sleepmate-v530.js?v=5.3.4','/o2ring.css?v=5.3.4','/o2ring.js?v=5.3.4','/o2ring-report-ui.js?v=5.3.4','/o2ring-v534.css?v=5.3.4','/frontend-v534.js?v=5.3.4','/o2ring-recovery-v5318.js?v=5.3.18','/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp'];
+const SHELL=['/','/index.html','/style.css?v=5.3.4','/app.js?v=5.3.4','/sleepmate-enhancements.js','/sleepmate-offline-runtime.js','/sleepsync-hydration-v529.js','/sleepsync-mobile-v5213.css','/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14','/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12','/sleepmate-aurora.css?v=5.3.4','/sleepmate-v530.css?v=5.3.4','/dashboard-pwa-v5312.css?v=2','/sleepmate-v530.js?v=5.3.4','/o2ring.css?v=5.3.4','/o2ring.js?v=5.3.4','/o2ring-report-ui.js?v=5.3.4','/o2ring-v534.css?v=5.3.4','/frontend-v534.js?v=5.3.4','/o2ring-recovery-v5318.js?v=5.3.19','/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp'];
 const OFFLINE_API=/^\/api\/(version|config|days|day-table|dashboard\/overview|day\/[^/]+(?:\/stats|\/signal\/[^/?]+)?|patient(?:\/therapy)?|equipment(?:\/catalog)?|faq|glossary|system\/status|logs\/diagnostics|sleep-analysis|o2ring\/(?:day|day-batch|trends))/;
 const OPTIONAL_SHELL_ASSETS=new Set(['/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp','/assets/sleepsync-aurora.svg','/assets/sleepsync-mark.svg','/assets/sleepsync-logo.webp','/assets/sidebar-aurora-line.svg']);
 async function cacheShellAsset(cache,url){const controller=typeof AbortController==='function'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),5000):null;try{const response=await fetch(url,{cache:'no-store',signal:controller?.signal});if(!response.ok)throw new Error(`Shell asset ${url}: HTTP ${response.status}`);await cache.put(url,response.clone())}finally{if(timer)clearTimeout(timer)}}
