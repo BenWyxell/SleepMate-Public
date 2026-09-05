@@ -48,7 +48,7 @@ def test_packaged_service_worker_base_precaches_same_sleep_feature():
     root = Path(__file__).resolve().parents[1]
     sw = (root / "web" / "service-worker-v508-base.js").read_text(encoding="utf-8")
     assert "sleepmate-shell-v5.2.14" in sw
-    assert "sleepmate-shell-v5.3.17" in sw
+    assert "sleepmate-shell-v5.3.18" in sw
     assert "sleepmate-api-v5.3.9" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw

@@ -186,7 +186,7 @@ def test_mobile_oximetry_landscape_is_behaviorally_covered():
 
 def test_release_identity_is_v535():
     assert APP_VERSION == '5.3.18'
-    assert RELEASE_NOTES.startswith('# SleepMate 5.3.17\n')
+    assert RELEASE_NOTES.startswith('# SleepMate 5.3.18\n')
     section = RELEASE_NOTES.split('\n---\n', 1)[0]
     assert 'Release build: **5.3.17**.' in section
     assert 'Kiadási csatorna: **stable**.' in section
