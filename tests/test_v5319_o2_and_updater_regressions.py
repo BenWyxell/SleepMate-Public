@@ -83,7 +83,7 @@ def test_windows_release_reuses_exact_stable_updater_component():
     assert "$StableUpdaterVersion = '5.3.17'" in build
     assert STABLE_UPDATER_SHA256 in build
     assert STABLE_UPDATER_SOURCE_BLOB in build
-    assert "git hash-object update_worker.py" in build
+    assert "git rev-parse HEAD:update_worker.py" in build
     assert "Invoke-WebRequest -Uri $StableUpdaterZipUrl" in build
     assert "Pinned updater hash mismatch" in build
     assert "Packaged updater changed during copy" in build

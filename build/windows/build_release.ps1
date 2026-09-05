@@ -44,8 +44,8 @@ $StableUpdaterExeSha256 = 'f1ae4577887315b50c4c31f563d7d6c56da8a4ccfe2827f19a40d
 $StableUpdaterSourceBlob = '473938fe42d561a31243326793d7894681996eb7'
 $StableUpdaterZipUrl = "https://github.com/BenWyxell/SleepMate-Public/releases/download/v${StableUpdaterVersion}/SleepMate_v${StableUpdaterVersion}_windows_x64.zip"
 
-$CurrentUpdaterSourceBlob = (& git hash-object update_worker.py).Trim()
-Assert-LastExitCode 'hash update_worker.py'
+$CurrentUpdaterSourceBlob = (& git rev-parse HEAD:update_worker.py).Trim()
+Assert-LastExitCode 'read update_worker.py repository blob'
 if ($CurrentUpdaterSourceBlob -ne $StableUpdaterSourceBlob) {
   throw "update_worker.py changed ($CurrentUpdaterSourceBlob). Refusing to silently rebuild the security-sensitive updater. Establish and review a new updater baseline first."
 }
