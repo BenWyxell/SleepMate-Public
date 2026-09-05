@@ -3,7 +3,7 @@ const UI_VERSION='5.3.4';
 const RELEASE_VERSION='5.3.18';
 const BUILD_ID='5.3.18';
 const CACHE='sleepmate-shell-v5.3.18-o2-recovery-1';
-// Historical v5.3.17 release-contract marker: const CACHE='sleepmate-shell-v5.3.18-o2-recovery-1';
+// Historical v5.3.17 release-contract marker: const CACHE='sleepmate-shell-v5.3.17-o2-hydration-1';
 const SHELL_CACHE=CACHE;
 const API_CACHE='sleepmate-api-v5.3.9-refactor';
 const SHELL=['/','/index.html','/style.css?v=5.3.4','/app.js?v=5.3.4','/sleepmate-enhancements.js','/sleepmate-offline-runtime.js','/sleepsync-hydration-v529.js','/sleepsync-mobile-v5213.css','/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14','/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12','/sleepmate-aurora.css?v=5.3.4','/sleepmate-v530.css?v=5.3.4','/dashboard-pwa-v5312.css?v=2','/sleepmate-v530.js?v=5.3.4','/o2ring.css?v=5.3.4','/o2ring.js?v=5.3.4','/o2ring-report-ui.js?v=5.3.4','/o2ring-v534.css?v=5.3.4','/frontend-v534.js?v=5.3.4','/o2ring-recovery-v5318.js?v=5.3.18','/manifest.webmanifest','/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp'];
