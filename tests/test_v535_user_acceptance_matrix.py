@@ -185,16 +185,16 @@ def test_mobile_oximetry_landscape_is_behaviorally_covered():
 
 
 def test_release_identity_is_v535():
-    assert APP_VERSION == '5.3.18'
-    assert RELEASE_NOTES.startswith('# SleepMate 5.3.18\n')
+    assert APP_VERSION == '5.3.19'
+    assert RELEASE_NOTES.startswith('# SleepMate 5.3.19\n')
     section = RELEASE_NOTES.split('\n---\n', 1)[0]
-    assert 'Release build: **5.3.18**.' in section
+    assert 'Release build: **5.3.19**.' in section
     assert 'Kiadási csatorna: **stable**.' in section
 
 
 def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():
     for worker in (SW, SW_BASE):
-        assert "const CACHE='sleepmate-shell-v5.3.18-o2-recovery-1';" in worker
+        assert "const CACHE='sleepmate-shell-v5.3.19-o2-updater-recovery-1';" in worker
         assert "const API_CACHE='sleepmate-api-v5.3.9-refactor';" in worker
         assert "const UI_VERSION='5.3.4';" in worker
         assert '/frontend-v534.js?v=5.3.4' in worker
