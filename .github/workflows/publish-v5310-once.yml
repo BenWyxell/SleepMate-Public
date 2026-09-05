@@ -39,7 +39,7 @@ jobs:
       - name: Apply targeted fixes
         working-directory: source
         shell: bash
-        run: python ../_helper/scripts/v5310_release_helper_v2.py
+        run: python ../_helper/scripts/v5310_release_helper_v3.py
 
       - name: Validate targeted fixes
         working-directory: source
