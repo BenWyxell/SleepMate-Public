@@ -1,0 +1,48 @@
+name: Apply v5.3.14 PWA daily hotfix once
+
+on:
+  push:
+    branches:
+      - v5314-pwa-hotfix-helper
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fixes branch
+        uses: actions/checkout@v4
+        with:
+          ref: v5.3.14-fixes
+          fetch-depth: 0
+
+      - name: Fetch patch helper
+        run: |
+          git fetch origin v5314-pwa-hotfix-helper
+          git show origin/v5314-pwa-hotfix-helper:scripts/apply_v5314_pwa_daily_hotfix.py > /tmp/apply_v5314_pwa_daily_hotfix.py
+
+      - name: Apply hotfix
+        run: python /tmp/apply_v5314_pwa_daily_hotfix.py
+
+      - name: Validate spec syntax
+        run: python - <<'PY'
+          from pathlib import Path
+          compile(Path('build/windows/SleepMate.spec').read_text(encoding='utf-8'), 'SleepMate.spec', 'exec')
+          print('SleepMate.spec syntax OK')
+          PY
+
+      - name: Install test dependency
+        run: python -m pip install pytest
+
+      - name: Run focused regressions
+        run: python -m pytest -q tests/test_pwa_dashboard_packaging.py tests/test_pwa_dashboard_daily_bento.py tests/test_v5315_pwa_daily_delivery_and_o2.py
+
+      - name: Commit and push fixes
+        run: |
+          git config user.name "BenWyxell"
+          git config user.email "201330618+BenWyxell@users.noreply.github.com"
+          git add build/windows/SleepMate.spec web/service-worker-v508-base.js web/service-worker.js tests/test_v5315_pwa_daily_delivery_and_o2.py
+          git commit -m "Fix PWA daily Dashboard delivery and O2 hydration"
+          git push origin HEAD:v5.3.14-fixes
