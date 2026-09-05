@@ -52,9 +52,12 @@ jobs:
           ):
               path = Path(name)
               data = path.read_bytes()
-              if old not in data:
-                  raise SystemExit(f"Expected {old.decode()} marker missing from {name}")
-              path.write_bytes(data.replace(old, new))
+              if old in data:
+                  path.write_bytes(data.replace(old, new))
+              elif new not in data:
+                  raise SystemExit(
+                      f"Neither expected previous marker {old.decode()} nor final marker {new.decode()} exists in {name}"
+                  )
 
           for path in Path("tests").glob("test_*.py"):
               data = path.read_bytes()
