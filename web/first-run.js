@@ -2,7 +2,7 @@
   'use strict';
 
   const TOTAL=6;
-  const state={step:1,status:null,config:null,sleepsync:null,remote:null,ai:null,choices:{remote_mode:'local'}};
+  const state={step:1,status:null,config:null,sleepsync:null,remote:null,ai:null,ui:null,choices:{remote_mode:'local'}};
   const $=(s,r=document)=>r.querySelector(s);
   const $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
@@ -102,14 +102,14 @@
           <section class="fr-panel" data-step="5">
             <span class="fr-kicker">5. lépés · Extrák</span>
             <h1 class="fr-title">Backup és <span class="fr-highlight">AI</span>.</h1>
-            <p class="fr-lead">Mindkettő opcionális. Itt bekapcsolhatod a heti automatikus biztonsági mentést, illetve megadhatod a helyben, DPAPI-val titkosított AI API-kulcsokat.</p>
+            <p class="fr-lead">Mindkettő opcionális. Itt bekapcsolhatod a heti automatikus biztonsági mentést, az API-kulcs nélküli külső AI promptot, illetve megadhatod a helyben, DPAPI-val titkosított AI API-kulcsokat.</p>
             <div class="fr-grid single">
               <div class="fr-card"><div class="fr-icon">🛟</div><h3>Automatikus backup</h3><p>Alapértelmezés szerint heti teljes SleepMate biztonsági mentést tudunk bekapcsolni.</p><label class="fr-check"><input id="frBackup" type="checkbox"><span>Heti automatikus backup bekapcsolása</span></label></div>
             </div>
             <div class="fr-subsection"><div class="fr-subsection-head"><b>AI összegzés – opcionális</b><span class="fr-status-pill">helyben titkosított kulcsok</span></div><div class="fr-grid">
               <div class="fr-field"><label>Luna · Google Gemini API-kulcs</label><input id="frGemini" class="fr-input" type="password" autocomplete="off" placeholder="Hagyd üresen, ha később állítod be"></div>
               <div class="fr-field"><label>Milo · Groq API-kulcs</label><input id="frGroq" class="fr-input" type="password" autocomplete="off" placeholder="Hagyd üresen, ha később állítod be"></div>
-            </div><div class="fr-note">Az API-kulcsok a Windows felhasználói fiókjához kötött DPAPI titkosítással kerülnek helyben tárolásra. Google Drive backupot később a Beállításokban kapcsolhatsz hozzá.</div></div>
+            </div><label class="fr-check"><input id="frAiPrompt" type="checkbox"><span><b>Prompt külső AI-hoz bekapcsolása</b><br><small>API-kulcs nélkül is használható. A SleepMate összeállítja a másolható, anonim terápiás promptot, amelyet külső AI-ban nyithatsz meg.</small></span></label><div class="fr-note">Az API-kulcsok a Windows felhasználói fiókjához kötött DPAPI titkosítással kerülnek helyben tárolásra. A külső AI prompt használatához nem szükséges API-kulcs. Google Drive backupot később a Beállításokban kapcsolhatsz hozzá.</div></div>
           </section>
 
           <section class="fr-panel" data-step="6">
@@ -174,6 +174,7 @@
   }
   async function saveStep5(){
     const backup=$('#frBackup').checked;await request('/api/settings',{method:'POST',body:{auto_backup_enabled:backup}});choicePatch({backup_enabled:backup});
+    const prompting=$('#frAiPrompt').checked;state.ui=await request('/api/ui/preferences',{method:'POST',body:{ai_prompting_enabled:prompting}});choicePatch({ai_prompting_enabled:prompting});
     const gemini=$('#frGemini').value.trim(),groq=$('#frGroq').value.trim();if(gemini||groq){const payload={};if(gemini)payload.gemini_api_key=gemini;if(groq)payload.groq_api_key=groq;state.ai=await request('/api/ai/config',{method:'POST',body:payload});$('#frGemini').value='';$('#frGroq').value=''}
     const providers=state.ai?.providers||{};choicePatch({gemini_configured:!!providers.gemini?.configured||!!gemini,groq_configured:!!providers.groq?.configured||!!groq});
   }
@@ -195,7 +196,8 @@
       ['↻','SleepSync',state.choices.sleepsync_enabled?'Automatika bekapcsolva':'Kézi / később'],
       ['🔒','Távoli elérés',remoteLabel],
       ['🛟','Automatikus backup',state.choices.backup_enabled?'Bekapcsolva':'Kikapcsolva'],
-      ['✨','Luna / Milo',state.choices.gemini_configured||state.choices.groq_configured?'Legalább egy AI beállítva':'Később állítható']
+      ['✨','Luna / Milo',state.choices.gemini_configured||state.choices.groq_configured?'Legalább egy AI beállítva':'Később állítható'],
+      ['💬','Külső AI prompt',state.choices.ai_prompting_enabled?'Bekapcsolva':'Kikapcsolva']
     ];$('#frSummary').innerHTML=rows.map(r=>`<div class="fr-summary-row"><b>${r[0]}</b><span>${r[1]}</span><small>${r[2]}</small></div>`).join('');
   }
 
@@ -211,10 +213,10 @@
   }
 
   async function hydrate(){
-    const results=await Promise.allSettled([request('/api/config'),request('/api/sleepsync/settings'),request('/api/remote/status'),request('/api/ai/config')]);
-    state.config=results[0].status==='fulfilled'?results[0].value:{};state.sleepsync=results[1].status==='fulfilled'?results[1].value:{};state.remote=results[2].status==='fulfilled'?results[2].value:{};state.ai=results[3].status==='fulfilled'?results[3].value:{};
-    $('#frDataDir').value=state.config.data_dir||'';$('#frAutoScan').checked=state.config.auto_scan_enabled!==false;$('#frSleepSync').checked=!!state.sleepsync.auto_sync_enabled;$('#frBackup').checked=!!state.config.auto_backup_enabled;const savedCfHost=String(state.config.cloudflare_hostname||'').trim();$('#frCfHost').value=savedCfHost;const cfOrigin=$('#frCfHostOrigin');if(cfOrigin)cfOrigin.hidden=!savedCfHost;$('#frCfAccess').checked=!!state.config.cloudflare_access_confirmed;
-    const old=state.status?.choices||{};state.choices={...state.choices,...old,data_source_configured:!!state.config.data_dir,sleepsync_enabled:!!state.sleepsync.auto_sync_enabled,backup_enabled:!!state.config.auto_backup_enabled,gemini_configured:!!state.ai?.providers?.gemini?.configured,groq_configured:!!state.ai?.providers?.groq?.configured};
+    const results=await Promise.allSettled([request('/api/config'),request('/api/sleepsync/settings'),request('/api/remote/status'),request('/api/ai/config'),request('/api/ui/preferences')]);
+    state.config=results[0].status==='fulfilled'?results[0].value:{};state.sleepsync=results[1].status==='fulfilled'?results[1].value:{};state.remote=results[2].status==='fulfilled'?results[2].value:{};state.ai=results[3].status==='fulfilled'?results[3].value:{};state.ui=results[4].status==='fulfilled'?results[4].value:{};
+    $('#frDataDir').value=state.config.data_dir||'';$('#frAutoScan').checked=state.config.auto_scan_enabled!==false;$('#frSleepSync').checked=!!state.sleepsync.auto_sync_enabled;$('#frBackup').checked=!!state.config.auto_backup_enabled;$('#frAiPrompt').checked=state.ui.ai_prompting_enabled===true;const savedCfHost=String(state.config.cloudflare_hostname||'').trim();$('#frCfHost').value=savedCfHost;const cfOrigin=$('#frCfHostOrigin');if(cfOrigin)cfOrigin.hidden=!savedCfHost;$('#frCfAccess').checked=!!state.config.cloudflare_access_confirmed;
+    const old=state.status?.choices||{};state.choices={...state.choices,...old,data_source_configured:!!state.config.data_dir,sleepsync_enabled:!!state.sleepsync.auto_sync_enabled,backup_enabled:!!state.config.auto_backup_enabled,gemini_configured:!!state.ai?.providers?.gemini?.configured,groq_configured:!!state.ai?.providers?.groq?.configured,ai_prompting_enabled:state.ui.ai_prompting_enabled===true};
     if(old.remote_mode&&['local','tailscale','cloudflare'].includes(old.remote_mode)){const radio=$(`input[name="frRemote"][value="${old.remote_mode}"]`);if(radio)radio.checked=true}updateRemotePanels();await loadRemote(false);
   }
 

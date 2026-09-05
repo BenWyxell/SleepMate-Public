@@ -1,3 +1,33 @@
+# SleepMate 5.3.10
+
+Release build: **5.3.10**.
+Kiadási csatorna: **stable**.
+
+A 5.3.10 célzott hibajavító és felületi konzisztencia-kiadás.
+
+## Első beállítás és AI
+
+- Az első indítási varázslóban külön bekapcsolható a **Prompt külső AI-hoz** funkció akkor is, ha a felhasználó nem ad meg Gemini- vagy Groq API-kulcsot.
+- A választás ugyanazt az `ai_prompting_enabled` felhasználói preferenciát menti, mint a későbbi Beállítások felület.
+- A varázsló **Tovább / Kezdjük** elsődleges gombjának szövege fehér, így a gradiens háttéren jól olvasható.
+
+## Önellenőrzés és MSI updater
+
+- A Programfájlok önellenőrzés már a jelenlegi MSI/onedir struktúrát ellenőrzi: `Updater/SleepMateUpdater.exe`.
+- A frissítő indításának régi gyökérbeli kompatibilitási fallbackje szándékosan megmarad; csak a téves önellenőrzési elvárás változik.
+
+## Oximetria
+
+- Az Élő O₂ monitor új **Azonnali** és **1 perc** időablakot kap; az Azonnali nézet legfeljebb az utolsó 30 másodperc környezetére igazodik.
+- Az élő grafikon többé nem tölti vissza a korábbi mérés bufferét csak azért, mert az Oximetria oldal megnyílt. A grafikon kizárólag az adott megnyitás alatt ténylegesen folyó mérés mintáit mutatja.
+- Ha nincs aktív mérés, a korábbi SpO₂/pulzus minták törlődnek az élő nézetből, a számkártyák `–` értékre állnak, és egyértelmű **„Jelenleg nincs mérés folyamatban.”** állapot jelenik meg.
+- A Dashboard SpO₂- és pulzustrendjei a többi Dashboard vonaldiagramhoz igazodó simított, lekerekített vonalrajzolást kapnak.
+
+## Kiadási ellenőrzés
+
+A kiadás a hivatalos Windows release pipeline teljes build-, teszt-, MSI telepítési/runtime/eltávolítási és release-integritási ellenőrzése után publikálható.
+
+---
 # SleepMate 5.3.9
 
 Release build: **5.3.9**.

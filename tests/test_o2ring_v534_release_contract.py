@@ -41,7 +41,7 @@ def fake_service(recordings: list[dict], start: datetime, end: datetime, *, auto
 
 def test_v534_release_identity_and_single_active_frontend_owner():
     shell = read("cpap/v530_features.py")
-    assert APP_VERSION == "5.3.9"
+    assert APP_VERSION == "5.3.10"
     assert API_VERSION == 19
     assert BUILD_CHANNEL == "stable"
     assert 'UI_VERSION = "5.3.4"' in shell
@@ -52,22 +52,22 @@ def test_v534_release_identity_and_single_active_frontend_owner():
     assert 'install_o2ring_runtime_v534' in shell
 
 
-def test_v534_live_chart_is_visibility_scoped_and_batch_restored():
+def test_v534_live_chart_is_visibility_scoped_and_current_measurement_only():
     js = read("web/o2ring.js")
     stream = read("cpap/o2ring_stream.py")
     for marker in (
         "document.visibilityState==='visible'",
         "function updateLiveLifecycle()",
-        "function closeLiveStream()",
-        "/api/o2ring/live-buffer?since=",
-        "async function refillLive(since=null)",
-        "R.liveResumePromise",
-        "await refillLive(since)",
-        "if(o2PageVisible())openLiveStream()",
+        "value=\"instant\" selected>Azonnali",
+        "value=\"1\">1 perc",
+        "Jelenleg nincs mérés folyamatban.",
+        "x.measuring===true&&x.last_sample_ts",
+        "R.livePageActive=true;R.live=[];R.liveZoom=null",
+        "if(!measuring&&R.live.length){R.live=[];R.liveZoom=null;drawLive()}",
     ):
         assert marker in js
+    assert "await refillLive(since)" not in js
     assert "class _LiveBuffer" in stream
-    assert 'path == "/api/o2ring/live-buffer"' in stream
     assert "service.manager.add_listener(BUFFER.append_snapshot)" in stream
     assert "setInterval(" not in js
 
@@ -221,7 +221,7 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
 def test_v534_service_workers_only_activate_current_o2_frontend_generation():
     for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         sw = read(path)
-        assert "sleepmate-shell-v5.3.9-o2-hydration-1" in sw
+        assert "sleepmate-shell-v5.3.10-o2-hydration-1" in sw
         assert "/o2ring-v534.css?v=5.3.4" in sw
         assert "/frontend-v534.js?v=5.3.4" in sw
         assert "'/o2ring.js'" in sw

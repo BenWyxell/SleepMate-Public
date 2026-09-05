@@ -790,7 +790,7 @@ class SelfCheckService:
             rows.append(self._row("updater", level, "Frissítési rendszer", msg, {"repo": update_status.get("github_repo"), "latest": update_status.get("latest_version")}))
 
         installed_tree = (self.base / "SleepMate.exe").is_file() or (self.base / "installed.marker").exists()
-        required = (["SleepMate.exe", "SleepMateUpdater.exe", "build_info.json", "installed.marker"] if installed_tree else
+        required = (["SleepMate.exe", "Updater/SleepMateUpdater.exe", "build_info.json", "installed.marker"] if installed_tree else
                     ["app.py", "SleepMate.vbs", "sleepmate_tray.pyw", "web/index.html", "web/app.js", "web/service-worker.js", "cpap/version.py", "update_worker.py"])
         missing = [name for name in required if not (self.base / name).is_file()]
         rows.append(self._row("program", "ERROR" if missing else "OK", "Programfájlok", "Hiányzó alapfájlok: " + ", ".join(missing) if missing else "A kötelező SleepMate programfájlok megvannak.", {"missing": missing}))
