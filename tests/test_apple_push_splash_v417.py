@@ -9,12 +9,16 @@ BASE_SW=(ROOT/'web'/'service-worker-v508-base.js').read_text(encoding='utf-8')
 PUSH_FIX=(ROOT/'web'/'pwa-push-fix.js').read_text(encoding='utf-8')
 
 
-def test_standalone_pwa_shows_exactly_one_custom_html_splash():
+def test_standalone_pwa_shows_exactly_one_custom_html_splash_per_document_boot():
     assert 'pwa-native-launch' not in HTML
     assert '@media (display-mode: standalone){#startupSplash{display:none!important}}' not in CSS
     assert 'html.pwa-standalone #startupSplash{display:grid!important}' in CSS
     assert 'window.__sleepmateBootStarted' in JS
-    assert 'hadController&&!standalonePwa()' in JS
+    assert 'prepareStartupSplash();' in JS and 'init();' in JS
+    # v5.3.17 intentionally allows the installed standalone PWA to move to the
+    # new document generation. The duplicate-splash guard is per document boot,
+    # so the old standalone exclusion must not be required anymore.
+    assert 'hadController&&!standalonePwa()' not in JS
 
 
 def test_push_uses_real_https_origin_and_repairs_key_drift():
@@ -42,12 +46,15 @@ def test_vapid_subject_accepts_real_https_and_rejects_localhost():
             raise AssertionError(value)
 
 
-def test_service_worker_install_is_tolerant_and_bounded_for_ios_push():
+def test_service_worker_install_is_tolerant_bounded_and_atomic_for_ios_push():
     assert 'c.addAll(SHELL)' not in BASE_SW
     assert 'cacheShellAsset' in BASE_SW
     assert 'AbortController' in BASE_SW
-    assert '3500' in BASE_SW
-    assert 'await precacheShell();await self.skipWaiting()' in BASE_SW
+    assert 'setTimeout(()=>controller.abort(),5000)' in BASE_SW
+    assert 'OPTIONAL_SHELL_ASSETS' in BASE_SW
+    assert 'precacheShellAtomic' in BASE_SW
+    assert 'if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error' in BASE_SW
+    assert 'await precacheShellAtomic();await self.skipWaiting()' in BASE_SW
     assert "self.addEventListener('push'" in BASE_SW
 
 
