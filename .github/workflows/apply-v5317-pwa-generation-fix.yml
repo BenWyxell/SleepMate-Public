@@ -19,13 +19,20 @@ jobs:
           ref: v5.3.16-fixes
           fetch-depth: 0
 
+      - name: Checkout helper tools
+        uses: actions/checkout@v4
+        with:
+          ref: v5317-pwa-generation-fix-helper
+          path: .helper
+          fetch-depth: 1
+
       - name: Apply coherent PWA generation and bootstrap fix
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          python "$GITHUB_WORKSPACE/.github/scripts/apply_v5317_pwa_generation_fix.py"
+          python .helper/.github/scripts/apply_v5317_pwa_generation_fix.py
 
       - name: Run focused regression suite
         shell: bash
@@ -45,6 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf .helper
           git add web/service-worker.js web/service-worker-v508-base.js web/app-core.js web/frontend-v534.js cpap/v530_features.py build/windows/SleepMate.spec tests/
           git commit -m "Rebuild PWA generation handover and O2 bootstrap reliability"
           git push origin HEAD:v5.3.16-fixes
