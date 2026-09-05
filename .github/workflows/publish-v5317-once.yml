@@ -67,7 +67,12 @@ jobs:
           notes = Path("release-notes/v5.3.17.md").read_text(encoding="utf-8").rstrip() + "\n\n"
           release_notes = Path("RELEASE_NOTES.md")
           existing = release_notes.read_text(encoding="utf-8")
-          if not existing.startswith("# SleepMate 5.3.17"):
+          header = "# SleepMate 5.3.17"
+          if existing.startswith(header):
+              next_section = existing.find("\n# SleepMate ", len(header))
+              tail = existing[next_section + 1:] if next_section >= 0 else ""
+              release_notes.write_text(notes + tail, encoding="utf-8")
+          else:
               release_notes.write_text(notes + existing, encoding="utf-8")
           PY
 
@@ -100,6 +105,7 @@ jobs:
           grep -Fq "const ASSET_VERSION=" cpap/v530_features.py
           grep -Fq '/o2ring.js?v=${ASSET_VERSION}' cpap/v530_features.py
           grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
+          grep -Fq "Release build: **${VERSION}**." RELEASE_NOTES.md
           echo "Release source: $TARGET_SHA"
 
       - name: Build and fully verify exact release source
