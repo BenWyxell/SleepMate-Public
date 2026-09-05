@@ -191,9 +191,16 @@ if core_app.exists() and engine_app.exists():
 
     style_link = f'<link rel="stylesheet" href="/style.css?v={FRONTEND_ID}">'
     aurora_link = f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={FRONTEND_ID}">'
+    dashboard_pwa_link = '<link rel="stylesheet" href="/dashboard-pwa-v5312.css?v=1">'
     if index_text.count(style_link) != 1:
         raise RuntimeError('generated index does not contain exactly one versioned style.css link')
-    index_text = index_text.replace(style_link, style_link + '\n  ' + aurora_link, 1)
+    index_text = index_text.replace(
+        style_link,
+        style_link + '\n  ' + aurora_link + '\n  ' + dashboard_pwa_link,
+        1,
+    )
+    if index_text.count(dashboard_pwa_link) != 1:
+        raise RuntimeError('generated index does not contain exactly one PWA Dashboard stylesheet link')
     index_path.write_text(index_text, encoding='utf-8')
 
     # Give every portable workflow run its own PWA generation while preserving
@@ -245,6 +252,7 @@ if core_app.exists() and engine_app.exists():
         '/sleepmate-sleep-refresh-v5212.js',
         '/sleepmate-aurora.css',
         '/sleepmate-v530.css',
+        '/dashboard-pwa-v5312.css',
         '/sleepmate-v530.js',
         '/o2ring.css',
         '/o2ring.js',
