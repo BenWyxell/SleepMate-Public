@@ -38,13 +38,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          python scripts/finalize_v5312.py
+          if [[ -f scripts/finalize_v5312.py ]]; then python scripts/finalize_v5312.py; fi
+          if [[ -f scripts/fix_v5312_release_tests.py ]]; then python scripts/fix_v5312_release_tests.py; fi
+
           python -m pip install pytest
-          python -m pytest -q tests/test_v5312_pwa_dashboard_ui.py tests/test_v5311_pwa_o2_recovery.py tests/test_v5311_dashboard_layout.py
+          python -m pytest -q \
+            tests/test_v5312_pwa_dashboard_ui.py \
+            tests/test_v5311_pwa_o2_recovery.py \
+            tests/test_v5311_dashboard_layout.py \
+            tests/test_mobile_ai_push_v417.py \
+            tests/test_o2ring_v532_release_contract.py \
+            tests/test_o2ring_v534_release_contract.py \
+            tests/test_pwa_sleep_shell_v526.py \
+            tests/test_v534_acceptance_matrix.py \
+            tests/test_v535_user_acceptance_matrix.py \
+            tests/test_v537_targeted_fixes.py
 
           git add -A
           if ! git diff --cached --quiet; then
-            git commit -m "Finalize SleepMate 5.3.12 PWA Dashboard redesign release"
+            git commit -m "Finalize SleepMate 5.3.12 release gate"
             git push origin "$SOURCE_BRANCH"
           fi
 
@@ -58,6 +70,7 @@ jobs:
           grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
           grep -Fq "# SleepMate ${VERSION}" "release-notes/v${VERSION}.md"
           test ! -e scripts/finalize_v5312.py
+          test ! -e scripts/fix_v5312_release_tests.py
           echo "Release source: $TARGET_SHA"
 
       - name: Build and fully verify exact release source
