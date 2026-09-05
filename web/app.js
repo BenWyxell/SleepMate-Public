@@ -4,6 +4,7 @@
   const HYDRATION='/sleepsync-hydration-v529.js?v=131';
   const FIRST_RUN='/first-run.js?v=4';
   const DASHBOARD_PWA_STYLE='/dashboard-pwa-v5312.css?v=1';
+  const O2_RECOVERY='/o2ring-recovery-v5318.js?v=1';
 
   // Dashboard layout polish is scoped inside the stylesheet to installed,
   // phone-class PWAs, so desktop/web layouts keep their existing geometry.
@@ -48,5 +49,17 @@
   for(const [src,key,value] of [[POLISH,'sleepsyncPolish','130'],[HYDRATION,'sleepsyncHydration','131']]){
     if(document.querySelector(`script[data-${key.replace(/[A-Z]/g,m=>'-'+m.toLowerCase())}="${value}"]`))continue;
     const script=document.createElement('script');script.src=src;script.async=false;script.dataset[key]=value;document.head.appendChild(script);
+  }
+
+  // Independent O2 bootstrap. The normal v5.3.x feature shell still owns the
+  // O2Ring UI, but this recovery module guarantees that desktop cannot stay in
+  // the broken state where the Oximetria route exists while the sidebar item,
+  // page markup and charts were never installed.
+  if(!document.querySelector('script[data-sleepmate-o2-recovery="1"]')){
+    const recovery=document.createElement('script');
+    recovery.src=O2_RECOVERY;
+    recovery.async=false;
+    recovery.dataset.sleepmateO2Recovery='1';
+    document.head.appendChild(recovery);
   }
 })();
