@@ -11,7 +11,8 @@ def read(path: str) -> str:
 def test_pwa_dashboard_stylesheet_is_loaded_from_app_bootstrap() -> None:
     app = read("web/app.js")
     assert "dashboard-pwa-v5312.css?v=1" in app
-    assert 'data-sleepmate-dashboard-pwa="1"' in app
+    assert "dashboardStyle.dataset.sleepmateDashboardPwa='1'" in app
+    assert "link[data-sleepmate-dashboard-pwa=\"1\"]" in app
 
 
 def test_pwa_dashboard_uses_compact_bento_grids_without_hiding_data() -> None:
