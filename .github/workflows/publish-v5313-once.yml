@@ -1,0 +1,156 @@
+name: Publish SleepMate 5.3.13 once
+
+on:
+  push:
+    branches:
+      - release-v5.3.13-helper
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sleepmate-v5.3.13-one-shot-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      VERSION: 5.3.13
+      TAG: v5.3.13
+      SOURCE_BRANCH: release-v5.3.13-source
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout publication helper
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Finalize exact 5.3.13 release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$SOURCE_BRANCH"
+          git checkout -B "$SOURCE_BRANCH" "origin/$SOURCE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          python scripts/finalize_v5313.py
+          python -m pip install pytest
+          python -m pytest -q tests/test_pwa_dashboard_packaging.py tests/test_v5312_pwa_dashboard_ui.py tests/test_v5311_pwa_o2_recovery.py tests/test_v5311_dashboard_layout.py
+
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Finalize SleepMate 5.3.13 PWA Dashboard packaging fix release"
+            git push origin "$SOURCE_BRANCH"
+          fi
+
+          TARGET_SHA="$(git rev-parse HEAD)"
+          echo "TARGET_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+          [[ "$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')" == "$VERSION" ]]
+          grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-o2-hydration-1';" web/service-worker.js
+          grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-o2-hydration-1';" web/service-worker-v508-base.js
+          grep -Fq "dashboard-pwa-v5312.css?v=1" build/windows/SleepMate.spec
+          grep -Fq "dashboard-pwa-v5312.css?v=1" web/service-worker-v508-base.js
+          grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
+          grep -Fq "# SleepMate ${VERSION}" "release-notes/v${VERSION}.md"
+          test ! -e scripts/finalize_v5313.py
+          echo "Release source: $TARGET_SHA"
+
+      - name: Build and fully verify exact release source
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/branches/$SOURCE_BRANCH" --jq '.commit.sha')"
+          [[ "$ACTUAL" == "$TARGET_SHA" ]] || { echo "Release source moved: $ACTUAL" >&2; exit 1; }
+
+          gh workflow run windows-release.yml --ref "$SOURCE_BRANCH"
+          RUN_ID=''
+          for i in $(seq 1 90); do
+            RUN_ID="$(gh run list --workflow windows-release.yml --branch "$SOURCE_BRANCH" --event workflow_dispatch --limit 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$TARGET_SHA\") | .databaseId" | head -n1)"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 2
+          done
+          [[ -n "$RUN_ID" ]] || { echo 'Dispatched verification run was not found.' >&2; exit 1; }
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          gh run watch "$RUN_ID" --exit-status
+
+      - name: Download VERIFIED release artifact
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.verify.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          mkdir -p release-staging
+          gh run download "$RUN_ID" --name SleepMate-Windows-x64-VERIFIED-RELEASE --dir release-staging
+          cd release-staging
+          sha256sum -c SHA256SUMS.txt
+          test -s "SleepMate_Setup_v${VERSION}.msi"
+          test -s "SleepMate_Setup_v${VERSION}.msi.sha256"
+          test -s "SleepMate_v${VERSION}_windows_x64.zip"
+          test -s sleepmate-update.json
+          test -s release-metadata.json
+
+      - name: Create, verify and publish GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE="SleepMate ${VERSION} — PWA Dashboard csomagolási javítás"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish >/tmp/existing.json 2>/dev/null; then
+            DRAFT="$(jq -r '.isDraft' /tmp/existing.json)"
+            TARGET="$(jq -r '.targetCommitish' /tmp/existing.json)"
+            [[ "$TARGET" == "$TARGET_SHA" ]] || { echo "Existing $TAG targets $TARGET, expected $TARGET_SHA" >&2; exit 1; }
+            if [[ "$DRAFT" == 'false' ]]; then
+              echo "$TAG is already published from the expected commit."
+              exit 0
+            fi
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes-file "release-notes/v${VERSION}.md"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$TARGET_SHA" --title "$TITLE" --notes-file "release-notes/v${VERSION}.md" --draft
+          fi
+
+          gh release upload "$TAG" release-staging/* --repo "$GITHUB_REPOSITORY" --clobber
+
+          mapfile -t actual < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          expected=(
+            SHA256SUMS.txt
+            "SleepMate_Setup_v${VERSION}.msi"
+            "SleepMate_Setup_v${VERSION}.msi.sha256"
+            "SleepMate_v${VERSION}_windows_x64.zip"
+            build-msi-toolchain.txt
+            msi-inventory.txt
+            release-metadata.json
+            sleepmate-update.json
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          [[ "$(printf '%s\n' "${actual[@]}")" == "$(printf '%s\n' "${expected_sorted[@]}")" ]] || {
+            echo 'Release asset set mismatch.' >&2
+            printf 'actual: %s\n' "${actual[*]}" >&2
+            printf 'expected: %s\n' "${expected_sorted[*]}" >&2
+            exit 1
+          }
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,targetCommitish,url > /tmp/published.json
+          [[ "$(jq -r '.isDraft' /tmp/published.json)" == 'false' ]]
+          [[ "$(jq -r '.isPrerelease' /tmp/published.json)" == 'false' ]]
+          [[ "$(jq -r '.tagName' /tmp/published.json)" == "$TAG" ]]
+          [[ "$(jq -r '.targetCommitish' /tmp/published.json)" == "$TARGET_SHA" ]]
+          cat /tmp/published.json
+
+      - name: Advance stable and next fixes branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin
+          git push origin "$TARGET_SHA:refs/heads/v5.3.5-stable-base"
+          if gh api "repos/$GITHUB_REPOSITORY/branches/v5.3.13-fixes" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/v5.3.13-fixes" -f sha="$TARGET_SHA" -F force=false >/dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref='refs/heads/v5.3.13-fixes' -f sha="$TARGET_SHA" >/dev/null
+          fi
