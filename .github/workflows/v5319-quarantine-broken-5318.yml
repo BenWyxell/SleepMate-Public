@@ -1,0 +1,29 @@
+name: Quarantine broken v5.3.18 stable release
+
+on:
+  push:
+    branches:
+      - release-v5.3.19-source
+    paths:
+      - '.github/workflows/v5319-quarantine-broken-5318.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  quarantine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark v5.3.18 as prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release_id="$(gh api "repos/$GH_REPO/releases/tags/v5.3.18" --jq .id)"
+          gh api -X PATCH "repos/$GH_REPO/releases/$release_id" \
+            -f prerelease=true \
+            -f name='SleepMate 5.3.18 — VISSZAVONVA / hibás Oximetria-updater build'
+          latest_tag="$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)"
+          test "$latest_tag" != 'v5.3.18'
+          echo "v5.3.18 quarantined; latest stable is $latest_tag"
