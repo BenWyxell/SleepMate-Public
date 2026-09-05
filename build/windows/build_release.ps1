@@ -17,7 +17,7 @@ function Normalize-VersionString($Value) {
 }
 
 Write-Host '== SleepMate Windows program-tree build =='
-Write-Host 'MSI packaging is performed in GitHub Actions on a GitHub-hosted Ubuntu runner using GNOME msitools/wixl.'
+Write-Host 'MSI packaging is performed in GitHub Actions after this verified program-tree build.'
 if ($SkipInstaller) {
   Write-Host 'NOTE: -SkipInstaller is retained as a compatibility no-op; this script no longer builds an installer.'
 }
@@ -32,6 +32,21 @@ if ($AppVersion -notmatch '^\d+\.\d+\.\d+$') {
 }
 $VersionParts = $AppVersion.Split('.')
 Write-Host "Release version source: cpap/version.py -> $AppVersion"
+
+# The updater is an independently versioned security-sensitive helper. Rebuilding
+# an unchanged unsigned helper for every application patch creates a new PE hash
+# and throws away AV reputation. Until updater source intentionally changes, every
+# release reuses the exact proven v5.3.17 Updater directory byte-for-byte.
+$StableUpdaterVersion = '5.3.17'
+$StableUpdaterExeSha256 = 'f1ae4577887315b50c4c31f563d7d6c56da8a4ccfe2827f19a40dda7e8aa66e4'
+$StableUpdaterSourceBlob = '473938fe42d561a31243326793d7894681996eb7'
+$StableUpdaterZipUrl = "https://github.com/BenWyxell/SleepMate-Public/releases/download/v${StableUpdaterVersion}/SleepMate_v${StableUpdaterVersion}_windows_x64.zip"
+
+$CurrentUpdaterSourceBlob = (& git hash-object update_worker.py).Trim()
+Assert-LastExitCode 'hash update_worker.py'
+if ($CurrentUpdaterSourceBlob -ne $StableUpdaterSourceBlob) {
+  throw "update_worker.py changed ($CurrentUpdaterSourceBlob). Refusing to silently rebuild the security-sensitive updater. Establish and review a new updater baseline first."
+}
 
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
@@ -80,6 +95,8 @@ $BuildInfoObject = [ordered]@{
   git_commit = $GitCommit
   channel = 'stable'
   packaging = 'windows-onedir-msi-ready'
+  updater_component_version = $StableUpdaterVersion
+  updater_sha256 = $StableUpdaterExeSha256
 }
 $BuildInfoJson = $BuildInfoObject | ConvertTo-Json
 [IO.File]::WriteAllText((Join-Path $Root 'build_info.json'), $BuildInfoJson + [Environment]::NewLine, $Utf8NoBom)
@@ -89,8 +106,6 @@ $BuildLock = 'build\windows\requirements-build.lock'
 if (-not (Test-Path $RuntimeLock)) { throw "Runtime dependency lock missing: $RuntimeLock" }
 if (-not (Test-Path $BuildLock)) { throw "Build dependency lock missing: $BuildLock" }
 
-# Keep the public release resolver deterministic. The exact versions below were
-# captured from the successful public v5.2.16 GitHub-hosted build.
 python -m pip install --upgrade 'pip==26.2.1'
 Assert-LastExitCode 'pip pin'
 python -m pip install -r $RuntimeLock
@@ -130,9 +145,6 @@ New-Item -ItemType Directory -Force build\windows\pyi-build, release | Out-Null
 pyinstaller --noconfirm --clean --distpath dist --workpath build\windows\pyi-build build\windows\SleepMate.spec
 Assert-LastExitCode 'SleepMate PyInstaller build'
 
-pyinstaller --noconfirm --clean --distpath build\windows\updater-dist --workpath build\windows\pyi-build-updater build\windows\SleepMateUpdater.spec
-Assert-LastExitCode 'SleepMateUpdater PyInstaller build'
-
 $BuiltExe = Get-Item 'dist\SleepMate\SleepMate.exe'
 $BuiltExeProductVersion = Normalize-VersionString $BuiltExe.VersionInfo.ProductVersion
 $BuiltExeFileVersion = Normalize-VersionString $BuiltExe.VersionInfo.FileVersion
@@ -143,33 +155,46 @@ if ($BuiltExeFileVersion -notlike "$AppVersion*") {
   throw "SleepMate.exe FileVersion mismatch: expected $AppVersion.x, got $BuiltExeFileVersion"
 }
 
-$BuiltUpdater = Get-Item 'build\windows\updater-dist\SleepMateUpdater\SleepMateUpdater.exe'
-$BuiltUpdaterProductVersion = Normalize-VersionString $BuiltUpdater.VersionInfo.ProductVersion
-$BuiltUpdaterFileVersion = Normalize-VersionString $BuiltUpdater.VersionInfo.FileVersion
-if ($BuiltUpdaterProductVersion -ne $AppVersion) {
-  throw "SleepMateUpdater.exe ProductVersion mismatch: expected $AppVersion, got $BuiltUpdaterProductVersion"
+# Reuse the exact vetted updater component. This is deliberately a release
+# dependency, not a fresh PyInstaller build. The hash check is mandatory.
+$StableUpdaterTemp = Join-Path $env:TEMP "sleepmate-stable-updater-$StableUpdaterVersion"
+$StableUpdaterZip = Join-Path $StableUpdaterTemp "SleepMate_v${StableUpdaterVersion}_windows_x64.zip"
+Remove-Item $StableUpdaterTemp -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $StableUpdaterTemp | Out-Null
+Write-Host "Downloading pinned stable updater component from v$StableUpdaterVersion..."
+Invoke-WebRequest -Uri $StableUpdaterZipUrl -OutFile $StableUpdaterZip -UseBasicParsing
+$StableUpdaterExtract = Join-Path $StableUpdaterTemp 'extract'
+Expand-Archive -Path $StableUpdaterZip -DestinationPath $StableUpdaterExtract -Force
+$StableUpdaterCandidates = @(Get-ChildItem $StableUpdaterExtract -Recurse -File -Filter 'SleepMateUpdater.exe' | Where-Object { $_.Directory.Name -eq 'Updater' })
+if ($StableUpdaterCandidates.Count -ne 1) {
+  throw "Pinned updater package must contain exactly one Updater/SleepMateUpdater.exe; found $($StableUpdaterCandidates.Count)."
 }
-if ($BuiltUpdaterFileVersion -notlike "$AppVersion*") {
-  throw "SleepMateUpdater.exe FileVersion mismatch: expected $AppVersion.x, got $BuiltUpdaterFileVersion"
+$StableUpdaterExe = $StableUpdaterCandidates[0]
+$StableUpdaterHash = (Get-FileHash $StableUpdaterExe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($StableUpdaterHash -ne $StableUpdaterExeSha256) {
+  throw "Pinned updater hash mismatch: expected $StableUpdaterExeSha256, got $StableUpdaterHash"
 }
+$StableUpdaterDir = $StableUpdaterExe.Directory.FullName
+Copy-Item $StableUpdaterDir 'dist\SleepMate\Updater' -Recurse -Force
+$PackagedUpdaterHash = (Get-FileHash 'dist\SleepMate\Updater\SleepMateUpdater.exe' -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($PackagedUpdaterHash -ne $StableUpdaterExeSha256) {
+  throw "Packaged updater changed during copy: expected $StableUpdaterExeSha256, got $PackagedUpdaterHash"
+}
+Write-Host "Pinned updater component OK: v$StableUpdaterVersion SHA256=$PackagedUpdaterHash"
 
-Copy-Item 'build\windows\updater-dist\SleepMateUpdater' 'dist\SleepMate\Updater' -Recurse -Force
 Copy-Item SleepMate.ico dist\SleepMate\SleepMate.ico -Force
 Copy-Item build_info.json dist\SleepMate\build_info.json -Force
 Copy-Item build\windows\installed.marker dist\SleepMate\installed.marker -Force
 
-# License/privacy material is part of both the portable program tree and the MSI
-# because the MSI is generated from this exact dist\SleepMate directory.
 $ReleaseNoticeFiles = @('LICENSE', 'THIRD_PARTY_NOTICES.md', 'PRIVACY.md')
 foreach ($notice in $ReleaseNoticeFiles) {
   if (-not (Test-Path $notice)) { throw "Required release notice missing: $notice" }
   Copy-Item $notice (Join-Path 'dist\SleepMate' $notice) -Force
 }
 
-# Production signing is intentionally NOT performed here.
-# Official signing will be requested from SignPath by the trusted GitHub Actions
-# workflow after the Foundation application and project configuration are ready.
-# Developer-workstation/PFX signing is prohibited by CODE_SIGNING_POLICY.md.
+# Production signing is intentionally NOT performed here. Until trusted signing
+# is available, preserving the exact vetted updater bytes prevents needless AV
+# reputation resets between ordinary SleepMate application patches.
 
 python tools\build_binary_release.py --program-dir dist\SleepMate --out-dir release --min-version 4.2.2
 Assert-LastExitCode 'binary release packaging'
@@ -209,7 +234,7 @@ foreach ($notice in $ReleaseNoticeFiles) {
   }
 }
 
-Write-Host "Program-tree release contract OK: app/EXE/updater/manifest/ZIP = $AppVersion"
+Write-Host "Program-tree release contract OK: app/EXE/manifest/ZIP = $AppVersion; updater component = $StableUpdaterVersion"
 Write-Host 'MSI will be built from dist\SleepMate by the dedicated GitHub Actions MSI job.'
 Write-Host 'Program-tree release artifacts:'
 Get-ChildItem release | Format-Table Name,Length,LastWriteTime
