@@ -10,14 +10,14 @@ def read(path: str) -> str:
 
 def test_packaged_index_injects_dashboard_pwa_stylesheet():
     spec = read("build/windows/SleepMate.spec")
-    assert "dashboard_pwa_link = '<link rel=\"stylesheet\" href=\"/dashboard-pwa-v5312.css?v=1\">'" in spec
+    assert "dashboard_pwa_link = f'<link rel=\"stylesheet\" href=\"/dashboard-pwa-v5312.css?v={FRONTEND_ID}\">'" in spec
     assert "generated index does not contain exactly one PWA Dashboard stylesheet link" in spec
 
 
 def test_packaged_worker_keeps_dashboard_pwa_stylesheet_network_first():
     base = read("web/service-worker-v508-base.js")
     spec = read("build/windows/SleepMate.spec")
-    assert "'/dashboard-pwa-v5312.css?v=1'" in base
+    assert "'/dashboard-pwa-v5312.css?v=2'" in base
     assert "'/dashboard-pwa-v5312.css'" in base
     assert "'/dashboard-pwa-v5312.css'," in spec
 
