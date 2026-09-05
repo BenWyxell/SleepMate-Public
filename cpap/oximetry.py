@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import re
 from statistics import median
 from typing import Iterable, Sequence
 
@@ -55,14 +56,7 @@ class SessionMatch:
 
 
 class _LazyRecording(dict):
-    """Recording metadata that reads the large sample array only on demand.
-
-    O2Ring JSON files contain metadata and summary first, followed by a potentially
-    very large ``samples`` array. Most application paths (startup status, sidebar,
-    recordings list, trends, known-file detection and CPAP candidate matching) do
-    not need those samples. Keeping them lazy prevents one harmless status request
-    from decoding every historical night before the Oximetria UI can even mount.
-    """
+    """Recording metadata that reads the large sample array only on demand."""
 
     def __init__(self, metadata: dict, path: Path):
         super().__init__(metadata)
@@ -78,8 +72,6 @@ class _LazyRecording(dict):
             payload = json.loads(self._path.read_text(encoding="utf-8"))
             if isinstance(payload, dict):
                 samples = payload.get("samples") or []
-                # Refresh scalar metadata as well in case an older/hand-edited
-                # file changed after the lightweight prefix was read.
                 for key, value in payload.items():
                     if key != "samples":
                         dict.__setitem__(self, key, value)
@@ -105,6 +97,8 @@ class _LazyRecording(dict):
 
 class OximetryStore:
     """Simple file-backed store kept separate from the external CPAP source."""
+
+    METADATA_PREFIX_LIMIT = 1_048_576
 
     def __init__(self, root: str | Path):
         self.root = Path(root)
@@ -140,31 +134,48 @@ class OximetryStore:
             (self.raw_dir / f"{rid}.vld").write_bytes(raw_bytes)
         return payload
 
-    @staticmethod
-    def _recording_metadata(path: Path) -> dict:
-        """Read only the JSON prefix before the large ``samples`` array.
+    def count_recordings(self) -> int:
+        """Return the recording count without opening or decoding any JSON file."""
+        try:
+            return sum(1 for path in self.recordings_dir.glob("*.json") if path.is_file())
+        except OSError:
+            return 0
 
-        SleepMate writes ``samples`` as the final top-level field, so metadata can
-        be decoded from a tiny prefix. A conservative full-file fallback keeps
-        compatibility with legacy or manually modified recording files.
+    @classmethod
+    def _recording_metadata(cls, path: Path) -> dict:
+        """Read recording metadata without ever decoding the large sample array.
+
+        Older SleepMate builds may have written whitespace/newlines around the
+        ``samples`` key. The old fallback decoded the entire recording when the
+        exact compact marker was not found, which could stall application startup
+        for every historical O2 night. This parser accepts arbitrary JSON
+        whitespace but keeps a hard prefix bound. Large or malformed files are
+        skipped rather than allowed to block the O2 status/UI bootstrap.
         """
         try:
             buffer = ""
-            with path.open("r", encoding="utf-8") as handle:
-                while len(buffer) < 262_144:
-                    chunk = handle.read(32_768)
+            eof = False
+            with path.open("r", encoding="utf-8-sig") as handle:
+                while len(buffer) < cls.METADATA_PREFIX_LIMIT:
+                    chunk = handle.read(min(65_536, cls.METADATA_PREFIX_LIMIT - len(buffer)))
                     if not chunk:
+                        eof = True
                         break
                     buffer += chunk
-                    marker = buffer.find(',"samples":')
-                    if marker >= 0:
-                        payload = json.loads(buffer[:marker] + "}")
+                    marker = re.search(r',\s*"samples"\s*:', buffer)
+                    if marker:
+                        payload = json.loads(buffer[:marker.start()] + "}")
                         return payload if isinstance(payload, dict) else {}
-            payload = json.loads(path.read_text(encoding="utf-8"))
-            if not isinstance(payload, dict):
-                return {}
-            payload.pop("samples", None)
-            return payload
+
+            # Only a genuinely small file may use the compatibility full parse.
+            # Never read a multi-megabyte O2 sample array on startup/status paths.
+            if eof and len(buffer) <= cls.METADATA_PREFIX_LIMIT:
+                payload = json.loads(buffer)
+                if not isinstance(payload, dict):
+                    return {}
+                payload.pop("samples", None)
+                return payload
+            return {}
         except Exception:
             return {}
 
