@@ -76,6 +76,11 @@ replace_literal(
     "ind.classList.add('refreshing');ind.querySelector('b').textContent='Adatok ellenőrzése…';refreshData()",
     "ind.classList.add('refreshing');ind.querySelector('b').textContent='Adatok ellenőrzése…';setTimeout(()=>{if(state.pullRefreshing)resetPullRefreshUi()},1100);refreshData()",
 )
+replace_literal(
+    sidebar_app_js,
+    "const o2Promise=window.SleepMateO2Ring?.getDailySummary?.(day)||null;",
+    "const o2Promise=(async()=>{const code=String(day||'').replace(/-/g,'').slice(0,8);for(let attempt=0;attempt<3;attempt++){try{const getter=window.SleepMateO2Ring?.getDailySummary;if(typeof getter==='function'){const x=await getter(day);if(x)return x}const x=await api(`/api/o2ring/day?day=${encodeURIComponent(code)}&max_points=1`);if(x)return x}catch{}if(attempt<2)await sleep(180*(attempt+1))}return null})();",
+)
 
 replace_exact(
     'index.html',
@@ -191,7 +196,7 @@ if core_app.exists() and engine_app.exists():
 
     style_link = f'<link rel="stylesheet" href="/style.css?v={FRONTEND_ID}">'
     aurora_link = f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={FRONTEND_ID}">'
-    dashboard_pwa_link = '<link rel="stylesheet" href="/dashboard-pwa-v5312.css?v=1">'
+    dashboard_pwa_link = f'<link rel="stylesheet" href="/dashboard-pwa-v5312.css?v={FRONTEND_ID}">'
     if index_text.count(style_link) != 1:
         raise RuntimeError('generated index does not contain exactly one versioned style.css link')
     index_text = index_text.replace(
@@ -212,6 +217,7 @@ if core_app.exists() and engine_app.exists():
     sw = sw.replace(f'sleepmate-api-v{APP_VERSION}', f'sleepmate-api-v{APP_VERSION}-b{BUILD_ID}')
     sw = sw.replace(f"'/style.css?v={APP_VERSION}'", f"'/style.css?v={FRONTEND_ID}'")
     sw = sw.replace(f"'/app.js?v={APP_VERSION}'", f"'/app.js?v={FRONTEND_ID}'")
+    sw = sw.replace("'/dashboard-pwa-v5312.css?v=2'", f"'/dashboard-pwa-v5312.css?v={FRONTEND_ID}'")
     app_entry = f"'/app.js?v={FRONTEND_ID}'"
     extra_shell = (
         app_entry
