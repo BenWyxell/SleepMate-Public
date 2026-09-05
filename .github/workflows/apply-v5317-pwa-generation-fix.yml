@@ -1,0 +1,395 @@
+name: Apply v5.3.17 PWA generation recovery overhaul
+
+on:
+  push:
+    branches:
+      - v5317-pwa-generation-fix-helper
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout current fixes branch
+        uses: actions/checkout@v4
+        with:
+          ref: v5.3.16-fixes
+          fetch-depth: 0
+
+      - name: Apply coherent PWA generation and bootstrap fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          ROOT = Path('.')
+
+          def read(path):
+              return (ROOT / path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              (ROOT / path).write_text(text, encoding='utf-8')
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, got {count}')
+              return text.replace(old, new, 1)
+
+          # ------------------------------------------------------------------
+          # 1) Canonical, atomic Service Worker generation handover.
+          # ------------------------------------------------------------------
+          for worker_path in ('web/service-worker.js', 'web/service-worker-v508-base.js'):
+              text = read(worker_path)
+              ui = "const UI_VERSION='5.3.4';"
+              if ui not in text:
+                  raise SystemExit(f'{worker_path}: UI_VERSION marker missing')
+              if "const BUILD_ID=" not in text:
+                  text = text.replace(
+                      ui,
+                      ui + "\nconst RELEASE_VERSION='5.3.16';\nconst BUILD_ID='5.3.16';",
+                      1,
+                  )
+
+              start = text.index('async function cacheShellAsset')
+              end = text.index('function backendUnavailable', start)
+              handover = r'''const OPTIONAL_SHELL_ASSETS=new Set(['/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp','/assets/sleepsync-aurora.svg','/assets/sleepsync-mark.svg','/assets/sleepsync-logo.webp','/assets/sidebar-aurora-line.svg']);
+async function cacheShellAsset(cache,url){const controller=typeof AbortController==='function'?new AbortController():null;const timer=controller?setTimeout(()=>controller.abort(),5000):null;try{const response=await fetch(url,{cache:'no-store',signal:controller?.signal});if(!response.ok)throw new Error(`Shell asset ${url}: HTTP ${response.status}`);await cache.put(url,response.clone())}finally{if(timer)clearTimeout(timer)}}
+async function precacheShellAtomic(){const cache=await caches.open(SHELL_CACHE);for(const url of SHELL){try{await cacheShellAsset(cache,url)}catch(error){const pathname=new URL(url,self.location.origin).pathname;if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error}}}
+function isSleepMateCache(key){return key.startsWith('sleepmate-shell-')||key.startsWith('sleepmate-api-')}
+async function cleanupStaleSleepMateCaches(){const keys=await caches.keys(),keep=new Set([SHELL_CACHE,API_CACHE]),stale=keys.filter(key=>isSleepMateCache(key)&&!keep.has(key));await Promise.all(stale.map(key=>caches.delete(key)))}
+self.addEventListener('install',event=>event.waitUntil((async()=>{await precacheShellAtomic();await self.skipWaiting()})()));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{const keys=await caches.keys(),hadPreviousShell=keys.some(key=>key.startsWith('sleepmate-shell-')&&key!==SHELL_CACHE);await self.clients.claim();const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});for(const client of windows)client.postMessage({type:'SLEEPMATE_SHELL_READY',uiVersion:UI_VERSION,releaseVersion:RELEASE_VERSION,buildId:BUILD_ID,hadPreviousShell});if(hadPreviousShell)await Promise.all(windows.map(async client=>{try{await client.navigate(client.url)}catch{}}))})()));
+self.addEventListener('message',event=>{const data=event.data||{};if(data.type!=='SLEEPMATE_CLIENT_READY'||data.buildId!==BUILD_ID)return;event.waitUntil(cleanupStaleSleepMateCaches())});
+'''
+              text = text[:start] + handover + text[end:]
+              write(worker_path, text)
+
+          # ------------------------------------------------------------------
+          # 2) PWA page lifecycle: update/reconcile on wake and real standalone
+          #    handover. Do not leave a 5.3.x page running against a newer backend.
+          # ------------------------------------------------------------------
+          app_path = 'web/app-core.js'
+          app = read(app_path)
+          start = app.index('function registerPwa(){')
+          end = app.index('async function installPwa(){', start)
+          register = r'''function pwaMeta(name){return document.querySelector(`meta[name="${name}"]`)?.content||''}
+function pwaReleaseVersion(){return pwaMeta('sleepmate-release-version')}
+function pwaBuildId(){return pwaMeta('sleepmate-build-id')}
+function postPwaClientReady(reg=null){const buildId=pwaBuildId(),releaseVersion=pwaReleaseVersion(),target=navigator.serviceWorker?.controller||reg?.active;if(!buildId||!target)return;try{target.postMessage({type:'SLEEPMATE_CLIENT_READY',buildId,releaseVersion})}catch{}}
+async function reconcilePwaRelease(reason='resume'){
+  if(!('serviceWorker' in navigator))return;
+  let reg=null;try{reg=await navigator.serviceWorker.getRegistration()}catch{}
+  let backend='';try{const r=await fetch(`/api/version?_pwa=${Date.now()}`,{cache:'no-store'});if(r.ok){const x=await r.json();backend=String(x.version||'')}}catch{}
+  const page=pwaReleaseVersion();
+  if(backend&&page&&backend!==page){
+    try{await reg?.update?.()}catch{}
+    const key=`sleepmate-release-reload:${backend}`;
+    if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');location.reload();return}
+  }
+  if(backend&&page&&backend===page){for(const key of Object.keys(sessionStorage))if(key.startsWith('sleepmate-release-reload:')&&key!==`sleepmate-release-reload:${backend}`)sessionStorage.removeItem(key)}
+  postPwaClientReady(reg);
+}
+function bindPwaReleaseRecovery(){
+  if(document.documentElement.dataset.smPwaReleaseRecovery==='1')return;
+  document.documentElement.dataset.smPwaReleaseRecovery='1';
+  const reconcile=()=>reconcilePwaRelease().catch(()=>{});
+  window.addEventListener('pageshow',reconcile);
+  window.addEventListener('focus',reconcile);
+  window.addEventListener('online',reconcile);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});
+  navigator.serviceWorker?.ready?.then(reg=>{postPwaClientReady(reg);reconcile()}).catch(()=>{});
+}
+function registerPwa(){
+  if('serviceWorker' in navigator){
+    const hadController=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('/service-worker.js',{updateViaCache:'none'}).then(async reg=>{try{await reg.update()}catch{}postPwaClientReady(reg);reconcilePwaRelease('register').catch(()=>{})}).catch(()=>{});
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(!hadController)return;
+      const build=pwaBuildId()||'unknown',key=`sleepmate-controller-reload:${build}`;
+      if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');setTimeout(()=>location.reload(),80)}
+    });
+  }
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();state.pwaPrompt=e;const b=$('#pwaInstallButton');if(b){b.disabled=false;$('#pwaInstallHint').textContent='A SleepMate telepíthető ezen az eszközön.'}});
+  window.addEventListener('appinstalled',()=>{state.pwaPrompt=null;const b=$('#pwaInstallButton');if(b)b.disabled=true;if($('#pwaInstallHint'))$('#pwaInstallHint').textContent='A SleepMate telepítve van ezen az eszközön.';updatePwaStatus()});
+  const standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  if(standalone&&$('#pwaInstallHint')){$('#pwaInstallHint').textContent='A SleepMate már alkalmazásnézetben fut.';$('#pwaInstallButton').disabled=true}
+  else if(!state.pwaPrompt&&$('#pwaInstallHint')){const ios=/iPhone|iPad|iPod/.test(navigator.userAgent);$('#pwaInstallHint').textContent=ios?'iPhone/iPad: Safari → Megosztás → Főképernyőhöz adás.':'HTTPS-es Tailscale vagy Cloudflare címen a böngésző felajánlja a telepítést.'}
+  bindPwaReleaseRecovery();
+}
+'''
+          app = app[:start] + register + app[end:]
+          write(app_path, app)
+
+          # ------------------------------------------------------------------
+          # 3) Never let the frozen UI generation delete release caches itself.
+          #    The worker is the only cache-generation owner.
+          # ------------------------------------------------------------------
+          frontend_path = 'web/frontend-v534.js'
+          frontend = read(frontend_path)
+          f_start = frontend.index('async function enforceFrontendGeneration(){')
+          f_end = frontend.index('\nfunction ', f_start)
+          safe_frontend = r'''async function enforceFrontendGeneration(){
+  // VERSION is the long-lived UI generation, not the application release.
+  // Cache ownership and stale-generation cleanup belong exclusively to the
+  // Service Worker after a matching client confirms the new build is alive.
+  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
+}'''
+          frontend = frontend[:f_start] + safe_frontend + frontend[f_end:]
+          write(frontend_path, frontend)
+
+          # ------------------------------------------------------------------
+          # 4) Server-side v5.3 shell: same build id for HTML and every dynamic
+          #    O2 asset, plus idempotent/safe runtime patching.
+          # ------------------------------------------------------------------
+          shell_path = 'cpap/v530_features.py'
+          shell = read(shell_path)
+          shell = replace_once(shell, 'import urllib.parse\n', 'import urllib.parse\nimport re\n\nfrom .version import APP_VERSION\n', 'v530 imports')
+
+          sf_start = shell.index('def _patch_frontend_v534')
+          sf_end = shell.index('\ndef _patch_sleepmate_v530', sf_start)
+          safe_patch = r'''def _patch_frontend_v534(text: str) -> str:
+    """Keep the frozen UI marker from owning release-cache cleanup."""
+    safe = """async function enforceFrontendGeneration(){
+  // VERSION is the long-lived UI generation, not the application release.
+  // Cache ownership and stale-generation cleanup belong exclusively to the
+  // Service Worker after a matching client confirms the new build is alive.
+  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
+}"""
+    if safe in text:
+        return text
+    old = """async function enforceFrontendGeneration(){
+  const meta=q('meta[name=\"sleepmate-ui-version\"]')?.content||'';let backend='';try{backend=String((await api('/api/version')).version||'')}catch{}const expected=backend||VERSION;if(expected!==VERSION)return;
+  try{const keys=await caches.keys();const stale=keys.filter(k=>k.startsWith('sleepmate-')&&!k.includes(`v${VERSION}`));if(stale.length)await Promise.all(stale.map(k=>caches.delete(k)))}catch{}
+  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
+  if(meta&&meta!==expected&&!sessionStorage.getItem('sm-v534-reloaded')){sessionStorage.setItem('sm-v534-reloaded','1');location.reload();return}sessionStorage.removeItem('sm-v534-reloaded');
+}"""
+    return _replace_required(text, old, safe, "frontend cache generation")
+'''
+          shell = shell[:sf_start] + safe_patch + shell[sf_end:]
+
+          ss_start = shell.index('def _patch_sleepmate_v530')
+          ss_end = shell.index('\ndef _patch_o2ring', ss_start)
+          sleepmate_patch = r'''def _patch_sleepmate_v530(text: str) -> str:
+    """Use one build generation and self-heal the complete O2 runtime."""
+    version_marker = "const VERSION='5.3.4';"
+    asset_marker = "const ASSET_VERSION=(()=>{try{return new URL(document.currentScript?.src||location.href,location.href).searchParams.get('v')||document.querySelector('meta[name=\\\"sleepmate-build-id\\\"]')?.content||VERSION}catch{return VERSION}})();"
+    if asset_marker not in text:
+        text = _replace_required(text, version_marker, version_marker + "\\n" + asset_marker, "O2 build asset generation")
+
+    old_loader = """function loadScript(src,id){return new Promise((resolve,reject)=>{if(document.getElementById(id))return resolve();const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}"""
+    new_loader = """function loadScript(src,id,ready){return new Promise((resolve,reject)=>{const wanted=new URL(src,location.href).href,existing=document.getElementById(id);if(existing){if(existing.src===wanted&&(existing.dataset.smLoaded==='1'||ready?.()))return resolve();existing.remove()}const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=()=>{s.dataset.smLoaded='1';resolve()};s.onerror=()=>{s.remove();reject(new Error(`Nem tölthető be: ${src}`))};document.head.appendChild(s)})}"""
+    if new_loader not in text:
+        text = _replace_required(text, old_loader, new_loader, "retryable O2 script loader")
+
+    old_css = """function loadCss(href,id){if(document.getElementById(id))return;const l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l)}"""
+    new_css = """function loadCss(href,id){const wanted=new URL(href,location.href).href,existing=document.getElementById(id);if(existing?.href===wanted)return;if(existing)existing.remove();const l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;l.onerror=()=>l.remove();document.head.appendChild(l)}"""
+    if new_css not in text:
+        text = _replace_required(text, old_css, new_css, "generation-aware O2 CSS loader")
+
+    old_modules = """async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;if(o2ScriptsLoaded){window.SleepMateO2Ring?.install?.();return}loadCss(`/o2ring.css?v=${VERSION}`,'smO2Css');await loadScript(`/o2ring.js?v=${VERSION}`,'smO2Js');await loadScript(`/o2ring-report-ui.js?v=${VERSION}`,'smO2ReportJs');o2ScriptsLoaded=true;window.SleepMateO2Ring?.install?.()}"""
+    new_modules = """function o2RuntimeMissing(){return activeO2()&&(!window.SleepMateO2Ring||!document.querySelector('#sidebar [data-page=\\\"oximetry\\\"]')||!document.getElementById('page-oximetry')||!document.getElementById('smO2Master'))}
+  async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;loadCss(`/o2ring.css?v=${ASSET_VERSION}`,'smO2Css');if(!o2ScriptsLoaded||!window.SleepMateO2Ring){await loadScript(`/o2ring.js?v=${ASSET_VERSION}`,'smO2Js',()=>!!window.SleepMateO2Ring);if(!window.SleepMateO2Ring){document.getElementById('smO2Js')?.remove();throw new Error('Az O2Ring runtime nem inicializálódott.')}await loadScript(`/o2ring-report-ui.js?v=${ASSET_VERSION}`,'smO2ReportJs',()=>!!window.SleepMateO2RingReport);o2ScriptsLoaded=true}installO2MasterPanel();hydrateO2Master();await Promise.resolve(window.SleepMateO2Ring?.install?.());if(!document.querySelector('#sidebar [data-page=\\\"oximetry\\\"]')||!document.getElementById('page-oximetry')){window.SleepMateO2Ring?.uninstall?.();await Promise.resolve(window.SleepMateO2Ring?.install?.())}window.SleepMateO2RingReport?.install?.()}"""
+    if new_modules not in text:
+        text = _replace_required(text, old_modules, new_modules, "O2 module installation")
+
+    old_apply = """async function applyO2Status(next){const enabled=next?.settings?.o2ring_enabled;if(typeof enabled!=='boolean')throw new Error('Az O2Ring master beállítás nem érkezett meg.');o2=next;o2State=enabled?O2_STATE.ENABLED:O2_STATE.DISABLED;setO2FeatureState();hydrateO2Master();if(activeO2()){await ensureO2Modules();Promise.resolve(window.SleepMateO2Ring?.refresh?.()).catch(e=>o2Msg(`O2Ring UI frissítési hiba: ${e.message}`))}else disableO2Ui();renderBottomNav();renderPwaEditor();window.dispatchEvent(new CustomEvent('sleepmate-o2-config-ready',{detail:{enabled,state:o2State}}));return o2}"""
+    new_apply = """function resetO2Recovery(){clearTimeout(scheduleO2Recovery.timer);scheduleO2Recovery.timer=null;scheduleO2Recovery.attempt=0}
+  function scheduleO2Recovery(){if(scheduleO2Recovery.timer||o2State===O2_STATE.DISABLED)return;const delays=[600,1500,3500,7000,12000],i=Math.min(Number(scheduleO2Recovery.attempt)||0,delays.length-1);scheduleO2Recovery.attempt=Math.min(i+1,delays.length-1);scheduleO2Recovery.timer=setTimeout(()=>{scheduleO2Recovery.timer=null;refreshO2State().catch(()=>scheduleO2Recovery())},delays[i])}
+  async function applyO2Status(next){const enabled=next?.settings?.o2ring_enabled;if(typeof enabled!=='boolean')throw new Error('Az O2Ring master beállítás nem érkezett meg.');o2=next;o2State=enabled?O2_STATE.ENABLED:O2_STATE.DISABLED;setO2FeatureState();installO2MasterPanel();hydrateO2Master();if(activeO2()){await ensureO2Modules();resetO2Recovery();Promise.resolve(window.SleepMateO2Ring?.refresh?.()).catch(e=>o2Msg(`O2Ring UI frissítési hiba: ${e.message}`))}else{resetO2Recovery();disableO2Ui()}renderBottomNav();renderPwaEditor();window.dispatchEvent(new CustomEvent('sleepmate-o2-config-ready',{detail:{enabled,state:o2State}}));return o2}"""
+    if new_apply not in text:
+        text = _replace_required(text, old_apply, new_apply, "O2 status apply/retry")
+
+    old_refresh = """async function refreshO2State(){if(o2RefreshPromise)return o2RefreshPromise;o2RefreshPromise=api('/api/o2ring/status').then(applyO2Status).catch(e=>{if(!resolvedO2()){setO2FeatureState();hydrateO2Master();o2Msg('Az O2Ring beállítás betöltése folyamatban van.')}throw e}).finally(()=>{o2RefreshPromise=null});return o2RefreshPromise}"""
+    new_refresh = """async function refreshO2State(){if(o2RefreshPromise)return o2RefreshPromise;o2RefreshPromise=api('/api/o2ring/status').then(applyO2Status).catch(e=>{if(!resolvedO2()){setO2FeatureState();hydrateO2Master();o2Msg('Az O2Ring beállítás betöltése folyamatban van.')}if(o2State!==O2_STATE.DISABLED)scheduleO2Recovery();throw e}).finally(()=>{o2RefreshPromise=null});return o2RefreshPromise}"""
+    if new_refresh not in text:
+        text = _replace_required(text, old_refresh, new_refresh, "O2 refresh retry")
+
+    old_recovery = """function bindO2HydrationRecovery(){const reconcile=()=>{if(!resolvedO2())refreshO2State().catch(()=>{})};window.addEventListener('online',reconcile);window.addEventListener('pageshow',reconcile);window.addEventListener('focus',reconcile);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});navigator.serviceWorker?.addEventListener?.('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_READY')reconcile()})}"""
+    new_recovery = """function bindO2HydrationRecovery(){const reconcile=()=>{installO2MasterPanel();resetO2Recovery();if(!resolvedO2()||o2RuntimeMissing())refreshO2State().catch(()=>scheduleO2Recovery());else{hydrateO2Master();window.SleepMateFrontendV534?.normalize?.()}};window.addEventListener('online',reconcile);window.addEventListener('pageshow',reconcile);window.addEventListener('focus',reconcile);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});navigator.serviceWorker?.addEventListener?.('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_READY')reconcile()})}"""
+    if new_recovery not in text:
+        text = _replace_required(text, old_recovery, new_recovery, "PWA O2 hydration recovery")
+
+    old_api = """window.SleepMateV530={ICONS,NAV,renderBottomNav,renderPwaEditor,preferences:()=>({...prefs}),o2State:()=>o2State,refreshO2:refreshO2State};"""
+    new_api = """window.SleepMateV530={ICONS,NAV,renderBottomNav,renderPwaEditor,preferences:()=>({...prefs}),o2State:()=>o2State,refreshO2:refreshO2State,ensureO2:ensureO2Modules,installO2Master:installO2MasterPanel};"""
+    if new_api not in text:
+        text = _replace_required(text, old_api, new_api, "O2 recovery API")
+    return text
+'''
+          shell = shell[:ss_start] + sleepmate_patch + shell[ss_end:]
+
+          source_read = '                text = index_path.read_text(encoding="utf-8")\n'
+          source_read_new = source_read + '''                release_match = re.search(r'<meta name="sleepmate-release-version" content="([^"]+)">', text)\n                build_match = re.search(r'<meta name="sleepmate-build-id" content="([^"]+)">', text)\n                release_version = release_match.group(1) if release_match else APP_VERSION\n                asset_version = build_match.group(1) if build_match else release_version\n'''
+          shell = replace_once(shell, source_read, source_read_new, 'index build metadata extraction')
+
+          ui_meta = '''                if 'name="sleepmate-ui-version"' not in text:\n                    head_assets.append(f'<meta name="sleepmate-ui-version" content="{UI_VERSION}">')\n'''
+          ui_meta_new = ui_meta + '''                if 'name="sleepmate-release-version"' not in text:\n                    head_assets.append(f'<meta name="sleepmate-release-version" content="{release_version}">')\n                if 'name="sleepmate-build-id"' not in text:\n                    head_assets.append(f'<meta name="sleepmate-build-id" content="{asset_version}">')\n'''
+          shell = replace_once(shell, ui_meta, ui_meta_new, 'release/build meta injection')
+          shell = shell.replace("f'<link rel=\"stylesheet\" href=\"/sleepmate-aurora.css?v={UI_VERSION}\">'", "f'<link rel=\"stylesheet\" href=\"/sleepmate-aurora.css?v={asset_version}\">'")
+          shell = shell.replace("f'<link rel=\"stylesheet\" href=\"/sleepmate-v530.css?v={UI_VERSION}\">'", "f'<link rel=\"stylesheet\" href=\"/sleepmate-v530.css?v={asset_version}\">'")
+          shell = shell.replace("f'<link rel=\"stylesheet\" href=\"/o2ring-v534.css?v={UI_VERSION}\">'", "f'<link rel=\"stylesheet\" href=\"/o2ring-v534.css?v={asset_version}\">'")
+          shell = shell.replace("scripts.append(f'<script src=\"/sleepmate-v530.js?v={UI_VERSION}\"></script>')", "scripts.append(f'<script src=\"/sleepmate-v530.js?v={asset_version}\"></script>')")
+
+          header_marker = '                self.send_header("X-SleepMate-UI-Version", UI_VERSION)\n'
+          shell = replace_once(shell, header_marker, header_marker + '                self.send_header("X-SleepMate-Release-Version", release_version)\n                self.send_header("X-SleepMate-Build-ID", asset_version)\n', 'index generation headers')
+
+          # Critical frontend routes must never silently fall back to unpatched raw files.
+          shell = shell.replace('''            except Exception:\n                pass\n\n        if parsed.path == "/o2ring.js":''', '''            except Exception as exc:\n                self.send_error(500, f"SleepMate frontend bootstrap failed: {type(exc).__name__}")\n                return\n\n        if parsed.path == "/o2ring.js":''', 1)
+          shell = shell.replace('''            except Exception:\n                pass\n\n        if parsed.path in {"/", "/index.html"}:''', '''            except Exception as exc:\n                self.send_error(500, f"SleepMate O2 frontend bootstrap failed: {type(exc).__name__}")\n                return\n\n        if parsed.path in {"/", "/index.html"}:''', 1)
+          # Last except in the index handler, immediately before previous_get.
+          index_tail = '''            except Exception:\n                pass\n        return previous_get(self)'''
+          index_tail_new = '''            except Exception as exc:\n                self.send_error(500, f"SleepMate shell generation failed: {type(exc).__name__}")\n                return\n        return previous_get(self)'''
+          shell = replace_once(shell, index_tail, index_tail_new, 'index critical fallback')
+          write(shell_path, shell)
+
+          # ------------------------------------------------------------------
+          # 5) Packaging: ship the canonical current worker, not a frozen copy;
+          #    bind HTML, SW and dynamic O2/SleepSync to one FRONTEND_ID.
+          # ------------------------------------------------------------------
+          spec_path = 'build/windows/SleepMate.spec'
+          spec = read(spec_path)
+          old_frozen = '''# For integration test builds start from the exact PWA worker that shipped with\n# the known-good v5.0.8 frontend. Extra SleepSync/v5.3 assets are added below,\n# but the navigation/cache algorithm itself stays identical to that release.\nproven_sw = WEB_GENERATED / 'service-worker-v508-base.js'\nif proven_sw.exists():\n    shutil.copy2(proven_sw, WEB_GENERATED / 'service-worker.js')\n\n'''
+          spec = replace_once(spec, old_frozen, '''# service-worker.js is the canonical release worker. Historical worker files stay\n# in the tree only as references; packaging must never overwrite the current one.\n\n''', 'canonical service worker packaging')
+
+          sw_block_start = spec.index("replace_exact(\n    'service-worker.js',\n    r'sleepmate-shell")
+          sw_block_end = spec.index('# ---------------------------------------------------------------------------\n# Mobile/PWA stability contract', sw_block_start)
+          spec = spec[:sw_block_start] + '''# Service-worker release/build identity is finalized atomically below.\n\n''' + spec[sw_block_end:]
+
+          dash_tail = '''    if index_text.count(dashboard_pwa_link) != 1:\n        raise RuntimeError('generated index does not contain exactly one PWA Dashboard stylesheet link')\n    index_path.write_text(index_text, encoding='utf-8')\n'''
+          dash_tail_new = '''    if index_text.count(dashboard_pwa_link) != 1:\n        raise RuntimeError('generated index does not contain exactly one PWA Dashboard stylesheet link')\n    release_meta = f'<meta name="sleepmate-release-version" content="{APP_VERSION}">'\n    build_meta = f'<meta name="sleepmate-build-id" content="{FRONTEND_ID}">'\n    for marker, meta in ((\'name="sleepmate-release-version"\', release_meta),(\'name="sleepmate-build-id"\', build_meta)):\n        if marker not in index_text:\n            index_text = index_text.replace('</head>', '  ' + meta + '\\n</head>', 1)\n    index_path.write_text(index_text, encoding='utf-8')\n'''
+          spec = replace_once(spec, dash_tail, dash_tail_new, 'packaged build meta')
+
+          old_sw_identity = '''    sw = sw_path.read_text(encoding='utf-8')\n    sw = sw.replace(f'sleepmate-shell-v{APP_VERSION}', f'sleepmate-shell-v{APP_VERSION}-b{BUILD_ID}')\n    sw = sw.replace(f'sleepmate-api-v{APP_VERSION}', f'sleepmate-api-v{APP_VERSION}-b{BUILD_ID}')\n    sw = sw.replace(f"'/style.css?v={APP_VERSION}'", f"'/style.css?v={FRONTEND_ID}'")\n    sw = sw.replace(f"'/app.js?v={APP_VERSION}'", f"'/app.js?v={FRONTEND_ID}'")\n    sw = sw.replace("'/dashboard-pwa-v5312.css?v=2'", f"'/dashboard-pwa-v5312.css?v={FRONTEND_ID}'")\n'''
+          new_sw_identity = '''    sw = sw_path.read_text(encoding='utf-8')\n    sw, count = re.subn(r"const CACHE='[^']+';", f"const CACHE='sleepmate-shell-v{FRONTEND_ID}';", sw, count=1)\n    if count != 1: raise RuntimeError('canonical worker CACHE marker missing')\n    sw, count = re.subn(r"const API_CACHE='[^']+';", f"const API_CACHE='sleepmate-api-v{FRONTEND_ID}';", sw, count=1)\n    if count != 1: raise RuntimeError('canonical worker API_CACHE marker missing')\n    sw, count = re.subn(r"const RELEASE_VERSION='[^']+';", f"const RELEASE_VERSION='{APP_VERSION}';", sw, count=1)\n    if count != 1: raise RuntimeError('canonical worker RELEASE_VERSION marker missing')\n    sw, count = re.subn(r"const BUILD_ID='[^']+';", f"const BUILD_ID='{FRONTEND_ID}';", sw, count=1)\n    if count != 1: raise RuntimeError('canonical worker BUILD_ID marker missing')\n    for asset in ('/style.css','/app.js','/sleepmate-aurora.css','/sleepmate-v530.css','/dashboard-pwa-v5312.css','/sleepmate-v530.js','/o2ring.css','/o2ring.js','/o2ring-report-ui.js','/o2ring-v534.css','/frontend-v534.js'):\n        sw = re.sub(re.escape(asset) + r"\\?v=[^'\\\"]+", asset + f'?v={FRONTEND_ID}', sw)\n'''
+          spec = replace_once(spec, old_sw_identity, new_sw_identity, 'atomic worker build identity')
+
+          extra_start = spec.index('    extra_shell = (', spec.index("app_entry = f\"'/app.js?v={FRONTEND_ID}'\""))
+          extra_end = spec.index('    if app_entry not in sw:', extra_start)
+          new_extra = '''    extra_shell = (\n        app_entry\n        + f",'/mobile-boot-diagnostics.js?v={FRONTEND_ID}'"\n        + f",'/sleepsync-bootstrap.js?v={FRONTEND_ID}'"\n        + f",'/sleepsync-integration.js?v={FRONTEND_ID}'"\n        + f",'/sleepsync-polish.js?v={FRONTEND_ID}'"\n        + f",'/sleepsync.css?v={FRONTEND_ID}'"\n        + f",'/sleepsync-polish.css?v={FRONTEND_ID}'"\n        + f",'/sleepsync-notice.css?v={FRONTEND_ID}'"\n    )\n'''
+          spec = spec[:extra_start] + new_extra + spec[extra_end:]
+
+          contract_start = spec.index('    # Keep the current proven worker\'s code-asset contract')
+          contract_end = spec.index("    sleepsync_css = WEB_GENERATED / 'sleepsync.css'", contract_start)
+          new_contract = '''    # Extend the canonical CODE_ASSETS set with generated integration assets.\n    code_asset_match = re.search(\n        r"const CODE_ASSETS=new Set\\(\\[(?P<items>[^\\]]*)\\]\\);",\n        sw,\n    )\n    if not code_asset_match:\n        raise RuntimeError('canonical service worker CODE_ASSETS rule is missing')\n    code_items = code_asset_match.group('items')\n    protected_base_assets = (\n        '/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js',\n        '/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js',\n        '/sleepmate-aurora.css','/sleepmate-v530.css','/dashboard-pwa-v5312.css',\n        '/sleepmate-v530.js','/o2ring.css','/o2ring.js','/o2ring-report-ui.js',\n        '/o2ring-v534.css','/frontend-v534.js',\n    )\n    for asset in protected_base_assets:\n        if repr(asset) not in code_items:\n            raise RuntimeError(f'canonical service worker lost network-first asset: {asset}')\n    for obsolete in ('/o2ring-v532.css','/o2ring-v532.js','/frontend-v533.js'):\n        if repr(obsolete) in code_items:\n            raise RuntimeError(f'obsolete O2 frontend asset returned to active worker: {obsolete}')\n    for asset in (\n        '/mobile-boot-diagnostics.js','/sleepsync-bootstrap.js','/sleepsync-integration.js',\n        '/sleepsync-polish.js','/sleepsync.css','/sleepsync-polish.css','/sleepsync-notice.css',\n    ):\n        token = repr(asset)\n        if token not in code_items:\n            code_items += (',' if code_items else '') + token\n    new_code = f"const CODE_ASSETS=new Set([{code_items}]);"\n    sw = sw[:code_asset_match.start()] + new_code + sw[code_asset_match.end():]\n    sw_path.write_text(sw, encoding='utf-8')\n\n'''
+          spec = spec[:contract_start] + new_contract + spec[contract_end:]
+
+          old_boot_loader = '''  function loadScript(src,onload){{\n    const s=document.createElement('script');\n    s.src=src;s.async=false;\n    if(onload)s.onload=onload;\n    s.onerror=()=>{{try{{fetch('/api/mobile-boot',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{stage:'script-error',build:ID,details:{{src}}}}),keepalive:true,cache:'no-store'}})}}catch{{}}}};\n    document.head.appendChild(s);\n  }}\n'''
+          new_boot_loader = '''  function loadScript(src,onload,retries=3){{\n    let attempt=0;\n    const run=()=>{{\n      const existing=[...document.scripts].find(x=>x.dataset.smBootSrc===src);\n      if(existing?.dataset.smLoaded==='1'){{onload?.();return}}\n      existing?.remove();\n      const s=document.createElement('script');s.src=src;s.async=false;s.dataset.smBootSrc=src;\n      s.onload=()=>{{s.dataset.smLoaded='1';onload?.()}};\n      s.onerror=()=>{{s.remove();attempt++;try{{fetch('/api/mobile-boot',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{stage:'script-error',build:ID,details:{{src,attempt}}}}),keepalive:true,cache:'no-store'}})}}catch{{}};if(attempt<retries)setTimeout(run,180*attempt);else{{started=false;setTimeout(start,900)}}}};\n      document.head.appendChild(s);\n    }};\n    run();\n  }}\n'''
+          spec = replace_once(spec, old_boot_loader, new_boot_loader, 'SleepSync resilient script loader')
+          old_boot_end = '''  setTimeout(start,0);\n}})();\n"""\n'''
+          new_boot_end = '''  setTimeout(start,0);\n  window.addEventListener('pageshow',()=>{{if(!started)setTimeout(start,0)}});\n  window.addEventListener('focus',()=>{{if(!started)setTimeout(start,0)}});\n  window.addEventListener('online',()=>{{if(!started)setTimeout(start,0)}});\n  document.addEventListener('visibilitychange',()=>{{if(document.visibilityState==='visible'&&!started)setTimeout(start,0)}});\n}})();\n"""\n'''
+          spec = replace_once(spec, old_boot_end, new_boot_end, 'SleepSync wake retry')
+          write(spec_path, spec)
+
+          # ------------------------------------------------------------------
+          # 6) Tests: replace the old no-claim policy and add end-to-end
+          #    generation invariants so this cannot regress silently again.
+          # ------------------------------------------------------------------
+          for path in Path('tests').glob('test_*.py'):
+              text = path.read_text(encoding='utf-8')
+              text = text.replace('assert "clients.claim()" not in worker', 'assert "await self.clients.claim()" in worker')
+              text = text.replace('assert "clients.claim()" not in sw', 'assert "await self.clients.claim()" in sw')
+              path.write_text(text, encoding='utf-8')
+
+          test_path = Path('tests/test_v5317_pwa_generation_handover.py')
+          test_path.write_text(r'''from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+def read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+def test_packager_ships_canonical_worker_and_one_build_identity():
+    spec = read("build/windows/SleepMate.spec")
+    assert "shutil.copy2(proven_sw, WEB_GENERATED / 'service-worker.js')" not in spec
+    assert "sleepmate-release-version" in spec
+    assert "sleepmate-build-id" in spec
+    assert "const CACHE='sleepmate-shell-v{FRONTEND_ID}'" in spec
+    assert "const BUILD_ID='{FRONTEND_ID}'" in spec
+    assert "const CODE_ASSETS=new Set" in spec
+    assert "'/o2ring.js?v={FRONTEND_ID}'" not in spec  # no duplicate extra-shell O2 generation
+
+def test_worker_handover_is_atomic_and_keeps_old_cache_until_new_client_ready():
+    for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
+        sw = read(path)
+        assert "precacheShellAtomic" in sw
+        assert "if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error" in sw
+        assert "await self.skipWaiting()" in sw
+        assert "await self.clients.claim()" in sw
+        assert "hadPreviousShell" in sw
+        assert "await client.navigate(client.url)" in sw
+        assert "SLEEPMATE_CLIENT_READY" in sw
+        assert "data.buildId!==BUILD_ID" in sw
+        assert "cleanupStaleSleepMateCaches" in sw
+        activate = sw.split("self.addEventListener('activate'",1)[1].split("function backendUnavailable",1)[0]
+        assert "caches.delete" not in activate
+        assert "key.startsWith('sleepmate-shell-')||key.startsWith('sleepmate-api-')" in sw
+
+def test_page_reconciles_release_on_wake_including_installed_ios_pwa():
+    app = read("web/app-core.js")
+    assert "sleepmate-release-version" in app
+    assert "sleepmate-build-id" in app
+    assert "SLEEPMATE_CLIENT_READY" in app
+    assert "reconcilePwaRelease" in app
+    assert "window.addEventListener('pageshow',reconcile)" in app
+    assert "window.addEventListener('focus',reconcile)" in app
+    assert "document.visibilityState==='visible'" in app
+    controller = app.split("navigator.serviceWorker.addEventListener('controllerchange'",1)[1].split("});",1)[0]
+    assert "standalonePwa()" not in controller
+    assert "location.reload()" in controller
+
+def test_o2_dynamic_modules_use_the_same_build_id_as_the_page_and_recover_forever():
+    shell = read("cpap/v530_features.py")
+    assert "const ASSET_VERSION=" in shell
+    assert "/o2ring.js?v=${ASSET_VERSION}" in shell
+    assert "/o2ring-report-ui.js?v=${ASSET_VERSION}" in shell
+    assert "existing.src===wanted" in shell
+    assert "existing?.href===wanted" in shell
+    assert "o2RuntimeMissing" in shell
+    assert "scheduleO2Recovery" in shell
+    assert "Math.min(Number(scheduleO2Recovery.attempt)" in shell
+    assert "sleepmate-build-id" in shell
+    assert "asset_version" in shell
+
+def test_frozen_frontend_never_deletes_release_caches():
+    frontend = read("web/frontend-v534.js")
+    patcher = read("cpap/v530_features.py")
+    assert "caches.delete" not in frontend
+    assert "stale=keys.filter" not in frontend
+    assert "Cache ownership and stale-generation cleanup belong exclusively" in frontend
+    assert "if safe in text" in patcher
+
+def test_generated_sleepsync_bootstrap_retries_transient_script_failures():
+    spec = read("build/windows/SleepMate.spec")
+    assert "if(attempt<retries)setTimeout(run,180*attempt)" in spec
+    assert "started=false;setTimeout(start,900)" in spec
+    assert "window.addEventListener('pageshow'" in spec
+    assert "document.visibilityState==='visible'&&!started" in spec
+''', encoding='utf-8')
+          PY
+
+          python -m pip install -q pytest
+          python -m pytest -q \
+            tests/test_v5317_pwa_generation_handover.py \
+            tests/test_v537_targeted_fixes.py \
+            tests/test_pwa_sleep_shell_v526.py \
+            tests/test_o2ring_v534_release_contract.py \
+            tests/test_v5315_pwa_daily_delivery_and_o2.py \
+            tests/test_v5316_daily_o2_format_and_ahi_span.py
+
+          echo "Remaining legacy worker expectations, if any:"
+          grep -R "clients.claim.*not in\|copy2(proven_sw" tests build/windows web cpap || true
+
+          git add \
+            web/service-worker.js web/service-worker-v508-base.js web/app-core.js web/frontend-v534.js \
+            cpap/v530_features.py build/windows/SleepMate.spec tests/
+          git commit -m "Rebuild PWA generation handover and O2 bootstrap reliability"
+          git push origin HEAD:v5.3.16-fixes
