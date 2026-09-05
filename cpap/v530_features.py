@@ -7,6 +7,81 @@ _installed = False
 UI_VERSION = "5.3.4"
 
 
+def _replace_required(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        raise RuntimeError(f"Hiányzik a v5.3.10 célzott frontend marker: {label}")
+    return text.replace(old, new, 1)
+
+
+def _patch_frontend_v534(text: str) -> str:
+    """Keep PWA recovery from deleting release caches using the frozen UI marker."""
+    old = """async function enforceFrontendGeneration(){
+  const meta=q('meta[name=\"sleepmate-ui-version\"]')?.content||'';let backend='';try{backend=String((await api('/api/version')).version||'')}catch{}const expected=backend||VERSION;if(expected!==VERSION)return;
+  try{const keys=await caches.keys();const stale=keys.filter(k=>k.startsWith('sleepmate-')&&!k.includes(`v${VERSION}`));if(stale.length)await Promise.all(stale.map(k=>caches.delete(k)))}catch{}
+  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
+  if(meta&&meta!==expected&&!sessionStorage.getItem('sm-v534-reloaded')){sessionStorage.setItem('sm-v534-reloaded','1');location.reload();return}sessionStorage.removeItem('sm-v534-reloaded');
+}"""
+    new = """async function enforceFrontendGeneration(){
+  // VERSION is the long-lived UI generation (5.3.4), not the application release.
+  // Never compare it to /api/version and never delete v5.3.x release caches from it.
+  // The service worker owns shell-generation cleanup; here we only ask it to update.
+  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
+}"""
+    return _replace_required(text, old, new, "frontend cache generation")
+
+
+def _patch_sleepmate_v530(text: str) -> str:
+    """Make O2 dynamic-module hydration self-healing after PWA wake/update races."""
+    old_loader = """function loadScript(src,id){return new Promise((resolve,reject)=>{if(document.getElementById(id))return resolve();const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}"""
+    new_loader = """function loadScript(src,id,ready){return new Promise((resolve,reject)=>{const existing=document.getElementById(id);if(existing){if(existing.dataset.smLoaded==='1'||ready?.())return resolve();existing.remove()}const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=()=>{s.dataset.smLoaded='1';resolve()};s.onerror=()=>{s.remove();reject(new Error(`Nem tölthető be: ${src}`))};document.head.appendChild(s)})}"""
+    text = _replace_required(text, old_loader, new_loader, "retryable O2 script loader")
+
+    old_modules = """async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;if(o2ScriptsLoaded){window.SleepMateO2Ring?.install?.();return}loadCss(`/o2ring.css?v=${VERSION}`,'smO2Css');await loadScript(`/o2ring.js?v=${VERSION}`,'smO2Js');await loadScript(`/o2ring-report-ui.js?v=${VERSION}`,'smO2ReportJs');o2ScriptsLoaded=true;window.SleepMateO2Ring?.install?.()}"""
+    new_modules = """function o2RuntimeMissing(){return activeO2()&&(!window.SleepMateO2Ring||!document.querySelector('#sidebar [data-page=\"oximetry\"]')||!document.getElementById('page-oximetry')||!document.getElementById('smO2Master'))}
+  async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;loadCss(`/o2ring.css?v=${VERSION}`,'smO2Css');if(!o2ScriptsLoaded||!window.SleepMateO2Ring){await loadScript(`/o2ring.js?v=${VERSION}`,'smO2Js',()=>!!window.SleepMateO2Ring);if(!window.SleepMateO2Ring){document.getElementById('smO2Js')?.remove();throw new Error('Az O2Ring runtime nem inicializálódott.')}await loadScript(`/o2ring-report-ui.js?v=${VERSION}`,'smO2ReportJs',()=>!!window.SleepMateO2RingReport);o2ScriptsLoaded=true}installO2MasterPanel();hydrateO2Master();await Promise.resolve(window.SleepMateO2Ring?.install?.());if(!document.querySelector('#sidebar [data-page=\"oximetry\"]')||!document.getElementById('page-oximetry')){window.SleepMateO2Ring?.uninstall?.();await Promise.resolve(window.SleepMateO2Ring?.install?.())}window.SleepMateO2RingReport?.install?.()}"""
+    text = _replace_required(text, old_modules, new_modules, "O2 module installation")
+
+    old_apply = """async function applyO2Status(next){const enabled=next?.settings?.o2ring_enabled;if(typeof enabled!=='boolean')throw new Error('Az O2Ring master beállítás nem érkezett meg.');o2=next;o2State=enabled?O2_STATE.ENABLED:O2_STATE.DISABLED;setO2FeatureState();hydrateO2Master();if(activeO2()){await ensureO2Modules();Promise.resolve(window.SleepMateO2Ring?.refresh?.()).catch(e=>o2Msg(`O2Ring UI frissítési hiba: ${e.message}`))}else disableO2Ui();renderBottomNav();renderPwaEditor();window.dispatchEvent(new CustomEvent('sleepmate-o2-config-ready',{detail:{enabled,state:o2State}}));return o2}"""
+    new_apply = """function resetO2Recovery(){clearTimeout(scheduleO2Recovery.timer);scheduleO2Recovery.timer=null;scheduleO2Recovery.attempt=0}
+  function scheduleO2Recovery(){if(scheduleO2Recovery.timer)return;const delays=[600,1500,3500,7000,12000],i=Number(scheduleO2Recovery.attempt)||0;if(i>=delays.length)return;scheduleO2Recovery.attempt=i+1;scheduleO2Recovery.timer=setTimeout(()=>{scheduleO2Recovery.timer=null;refreshO2State().catch(()=>{})},delays[i])}
+  async function applyO2Status(next){const enabled=next?.settings?.o2ring_enabled;if(typeof enabled!=='boolean')throw new Error('Az O2Ring master beállítás nem érkezett meg.');o2=next;o2State=enabled?O2_STATE.ENABLED:O2_STATE.DISABLED;setO2FeatureState();installO2MasterPanel();hydrateO2Master();if(activeO2()){await ensureO2Modules();resetO2Recovery();Promise.resolve(window.SleepMateO2Ring?.refresh?.()).catch(e=>o2Msg(`O2Ring UI frissítési hiba: ${e.message}`))}else{resetO2Recovery();disableO2Ui()}renderBottomNav();renderPwaEditor();window.dispatchEvent(new CustomEvent('sleepmate-o2-config-ready',{detail:{enabled,state:o2State}}));return o2}"""
+    text = _replace_required(text, old_apply, new_apply, "O2 status apply/retry")
+
+    old_refresh = """async function refreshO2State(){if(o2RefreshPromise)return o2RefreshPromise;o2RefreshPromise=api('/api/o2ring/status').then(applyO2Status).catch(e=>{if(!resolvedO2()){setO2FeatureState();hydrateO2Master();o2Msg('Az O2Ring beállítás betöltése folyamatban van.')}throw e}).finally(()=>{o2RefreshPromise=null});return o2RefreshPromise}"""
+    new_refresh = """async function refreshO2State(){if(o2RefreshPromise)return o2RefreshPromise;o2RefreshPromise=api('/api/o2ring/status').then(applyO2Status).catch(e=>{if(!resolvedO2()){setO2FeatureState();hydrateO2Master();o2Msg('Az O2Ring beállítás betöltése folyamatban van.')}if(o2State!==O2_STATE.DISABLED)scheduleO2Recovery();throw e}).finally(()=>{o2RefreshPromise=null});return o2RefreshPromise}"""
+    text = _replace_required(text, old_refresh, new_refresh, "O2 refresh retry")
+
+    old_recovery = """function bindO2HydrationRecovery(){const reconcile=()=>{if(!resolvedO2())refreshO2State().catch(()=>{})};window.addEventListener('online',reconcile);window.addEventListener('pageshow',reconcile);window.addEventListener('focus',reconcile);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});navigator.serviceWorker?.addEventListener?.('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_READY')reconcile()})}"""
+    new_recovery = """function bindO2HydrationRecovery(){const reconcile=()=>{installO2MasterPanel();if(!resolvedO2()||o2RuntimeMissing()){resetO2Recovery();refreshO2State().catch(()=>{})}else{hydrateO2Master();window.SleepMateFrontendV534?.normalize?.()}};window.addEventListener('online',reconcile);window.addEventListener('pageshow',reconcile);window.addEventListener('focus',reconcile);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});navigator.serviceWorker?.addEventListener?.('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_READY')reconcile()})}"""
+    text = _replace_required(text, old_recovery, new_recovery, "PWA O2 hydration recovery")
+
+    old_api = """window.SleepMateV530={ICONS,NAV,renderBottomNav,renderPwaEditor,preferences:()=>({...prefs}),o2State:()=>o2State,refreshO2:refreshO2State};"""
+    new_api = """window.SleepMateV530={ICONS,NAV,renderBottomNav,renderPwaEditor,preferences:()=>({...prefs}),o2State:()=>o2State,refreshO2:refreshO2State,ensureO2:ensureO2Modules,installO2Master:installO2MasterPanel};"""
+    return _replace_required(text, old_api, new_api, "O2 recovery API")
+
+
+def _patch_o2ring(text: str) -> str:
+    """Render Dashboard O2 history with the same day-trend contract as AHI."""
+    old_draw = """function drawDashboardO2Mini(){const rows=R.dashboardTrendRows||[],range=R.dashboardTrendZoom||bounds(rows),set=v=>R.dashboardTrendZoom=v,reset=()=>R.dashboardTrendZoom=null,redraw=drawDashboardO2Mini,defs=[['smDashO2Trend',[{key:'spo2',label:'SpO₂',unit:'%',color:COLORS.spo2,fixed:[75,100]}]],['smDashHrTrend',[{key:'heart_rate',label:'Pulzus',unit:' bpm',color:COLORS.hr}]]];for(const[cid,ss]of defs){const c=id(cid);chartDraw(c,rows,{range,series:ss,syncGroup:'dash-o2',rightAxis:false,smooth:true,points:true,connectGaps:true,lineWidth:2,xLabel:date,tooltipLabel:ts=>`${date(ts)} ${clock(ts)}`,redraw});bindChart(c,{setRange:set,resetRange:reset,redraw,syncGroup:'dash-o2'})}}"""
+    new_draw = """function drawDashboardO2Mini(){const rows=R.dashboardTrendRows||[],draw=typeof window.drawTrendLine==='function'?window.drawTrendLine:(typeof drawTrendLine==='function'?drawTrendLine:null);if(!draw)return;draw(id('smDashO2Trend'),rows,[{name:'SpO₂',color:COLORS.spo2,get:r=>r.spo2,unit:'%',decimals:1}]);draw(id('smDashHrTrend'),rows,[{name:'Pulzus',color:COLORS.hr,get:r=>r.heart_rate,unit:' bpm',decimals:1}])}"""
+    text = _replace_required(text, old_draw, new_draw, "Dashboard O2 AHI-style renderer")
+
+    old_refresh = """async function refreshDashboardO2(force=false){const sec=ensureDashboardO2Section();if(!sec)return;let rows=[];try{rows=state.dashboardOverview?.rows||[]}catch{}if(!rows.length){R.dashboardTrendRows=[];id('smDashO2Empty')?.classList.remove('hidden');drawDashboardO2Mini();return}const data=await getBatch(rows.map(r=>r.day),force),avail=data.filter(x=>x.available&&x.summary).sort((a,b)=>String(a.day).localeCompare(String(b.day))),av=key=>{const v=avail.map(x=>num(x.summary?.[key])).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null},mins=avail.map(x=>num(x.summary?.spo2_minimum)).filter(x=>x!=null),spo2Med=av('spo2_median')??av('spo2_average'),hrMed=av('heart_rate_median')??av('heart_rate_average');id('smDashO2Avg').textContent=spo2Med==null?'—':`${fmt(spo2Med,1)}%`;id('smDashO2Min').textContent=mins.length?`${Math.min(...mins)}%`:'—';id('smDashHrAvg').textContent=hrMed==null?'—':`${fmt(hrMed,1)} bpm`;id('smDashT90').textContent=av('t90_seconds')==null?'—':dur(av('t90_seconds'));id('smDashO2Empty').classList.toggle('hidden',avail.length>0);R.dashboardTrendRows=avail.map((x,i)=>({timestamp:num(x.matches?.[0]?.cpap_start)||dayTrendTs(x.day)||Date.now()/1000+i*86400,spo2:num(x.summary?.spo2_median)??num(x.summary?.spo2_average),heart_rate:num(x.summary?.heart_rate_median)??num(x.summary?.heart_rate_average)}));if(force)R.dashboardTrendZoom=null;drawDashboardO2Mini()}"""
+    new_refresh = """async function refreshDashboardO2(force=false){const sec=ensureDashboardO2Section();if(!sec)return;let rows=[];try{rows=state.dashboardOverview?.rows||[]}catch{}if(!rows.length){R.dashboardTrendRows=[];id('smDashO2Empty')?.classList.remove('hidden');drawDashboardO2Mini();return}const data=await getBatch(rows.map(r=>r.day),force),key=v=>String(v||'').replace(/-/g,'').slice(0,8),byDay=new Map(data.map(x=>[key(x.day),x])),avail=data.filter(x=>x.available&&x.summary).sort((a,b)=>String(a.day).localeCompare(String(b.day))),av=field=>{const v=avail.map(x=>num(x.summary?.[field])).filter(x=>x!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null},mins=avail.map(x=>num(x.summary?.spo2_minimum)).filter(x=>x!=null),spo2Med=av('spo2_median')??av('spo2_average'),hrMed=av('heart_rate_median')??av('heart_rate_average');id('smDashO2Avg').textContent=spo2Med==null?'—':`${fmt(spo2Med,1)}%`;id('smDashO2Min').textContent=mins.length?`${Math.min(...mins)}%`:'—';id('smDashHrAvg').textContent=hrMed==null?'—':`${fmt(hrMed,1)} bpm`;id('smDashT90').textContent=av('t90_seconds')==null?'—':dur(av('t90_seconds'));id('smDashO2Empty').classList.toggle('hidden',avail.length>0);R.dashboardTrendRows=rows.map(r=>{const x=byDay.get(key(r.day)),s=x?.available?x.summary:null;return{...r,spo2:s?(num(s.spo2_median)??num(s.spo2_average)):null,heart_rate:s?(num(s.heart_rate_median)??num(s.heart_rate_average)):null}});R.dashboardTrendZoom=null;drawDashboardO2Mini()}"""
+    return _replace_required(text, old_refresh, new_refresh, "Dashboard O2 historical rows")
+
+
+def _send_javascript(handler, text: str) -> None:
+    body = text.encode("utf-8")
+    handler.send_response(200)
+    handler.send_header("Content-Type", "application/javascript; charset=utf-8")
+    handler.send_header("Content-Length", str(len(body)))
+    handler.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+    handler.send_header("Pragma", "no-cache")
+    handler.end_headers()
+    handler.wfile.write(body)
+
+
 def install_v530_features(app_module) -> None:
     """Install the v5.3.4 frontend shell over the stable SleepMate data core.
 
@@ -39,6 +114,23 @@ def install_v530_features(app_module) -> None:
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
+
+        if parsed.path == "/sleepmate-v530.js":
+            try:
+                source = (app_module.WEB / "sleepmate-v530.js").read_text(encoding="utf-8")
+                _send_javascript(self, _patch_sleepmate_v530(source))
+                return
+            except Exception:
+                pass
+
+        if parsed.path == "/o2ring.js":
+            try:
+                source = (app_module.WEB / "o2ring.js").read_text(encoding="utf-8")
+                _send_javascript(self, _patch_o2ring(source))
+                return
+            except Exception:
+                pass
+
         if parsed.path in {"/", "/index.html"}:
             try:
                 index_path = app_module.WEB / "index.html"
@@ -95,7 +187,8 @@ def install_v530_features(app_module) -> None:
                 # the later O2 network await and reach a painted frame.
                 frontend_path = app_module.WEB / "frontend-v534.js"
                 if frontend_path.is_file() and "sm-frontend-v534-inline" not in text:
-                    feature_js = frontend_path.read_text(encoding="utf-8").replace("</script", "<\\/script")
+                    feature_js = _patch_frontend_v534(frontend_path.read_text(encoding="utf-8"))
+                    feature_js = feature_js.replace("</script", "<\\/script")
                     scripts.append(f'<script id="sm-frontend-v534-inline">{feature_js}</script>')
 
                 if "sleepmate-v530.js" not in text:
