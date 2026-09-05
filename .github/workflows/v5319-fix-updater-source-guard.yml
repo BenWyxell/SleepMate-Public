@@ -1,0 +1,57 @@
+name: v5.3.19 fix updater source guard
+
+on:
+  push:
+    branches:
+      - release-v5.3.19-source
+    paths:
+      - '.github/workflows/v5319-fix-updater-source-guard.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use repository blob identity instead of checkout line endings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          build = Path('build/windows/build_release.ps1')
+          text = build.read_text(encoding='utf-8')
+          old = "$CurrentUpdaterSourceBlob = (& git hash-object update_worker.py).Trim()\nAssert-LastExitCode 'hash update_worker.py'"
+          new = "$CurrentUpdaterSourceBlob = (& git rev-parse HEAD:update_worker.py).Trim()\nAssert-LastExitCode 'read update_worker.py repository blob'"
+          if old not in text:
+              raise SystemExit('Expected updater source guard was not found in build_release.ps1')
+          build.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          test = Path('tests/test_v5319_o2_and_updater_regressions.py')
+          text = test.read_text(encoding='utf-8')
+          old = 'assert "git hash-object update_worker.py" in build'
+          new = 'assert "git rev-parse HEAD:update_worker.py" in build'
+          if old not in text:
+              raise SystemExit('Expected updater source-guard assertion was not found')
+          test.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+          git diff --check
+          git diff -- build/windows/build_release.ps1 tests/test_v5319_o2_and_updater_regressions.py
+
+      - name: Commit exact guard fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add build/windows/build_release.ps1 tests/test_v5319_o2_and_updater_regressions.py
+          git commit -m 'fix(updater): compare canonical source blob across Windows checkout'
+          git push origin "HEAD:$GITHUB_REF_NAME"
