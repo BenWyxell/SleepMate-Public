@@ -33,6 +33,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           python .helper/.github/scripts/apply_v5317_pwa_generation_fix.py
+          python .helper/.github/scripts/update_v5317_tests.py
 
       - name: Run focused regression suite
         shell: bash
