@@ -14,7 +14,7 @@ FRONT = read('web/frontend-v534.js')
 HTML = read('web/index.html')
 DOMAIN = read('cpap/oximetry.py')
 BROWSER = read('scripts/v534_browser_acceptance.py')
-RELEASE_NOTES = read('RELEASE_NOTES.md')
+RELEASE_NOTES = read('release-notes/v5.3.19.md')
 SW = read('web/service-worker.js')
 SW_BASE = read('web/service-worker-v508-base.js')
 
@@ -186,10 +186,9 @@ def test_mobile_oximetry_landscape_is_behaviorally_covered():
 
 def test_release_identity_is_v535():
     assert APP_VERSION == '5.3.19'
-    assert RELEASE_NOTES.startswith('# SleepMate 5.3.19\n')
-    section = RELEASE_NOTES.split('\n---\n', 1)[0]
-    assert 'Release build: **5.3.19**.' in section
-    assert 'Kiadási csatorna: **stable**.' in section
+    assert RELEASE_NOTES.startswith('# SleepMate 5.3.19')
+    assert 'Release build: **5.3.19**.' in RELEASE_NOTES
+    assert 'Kiadási csatorna: **stable**.' in RELEASE_NOTES
 
 
 def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():
