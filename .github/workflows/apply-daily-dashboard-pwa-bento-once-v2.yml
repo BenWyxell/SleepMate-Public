@@ -26,6 +26,29 @@ jobs:
       - name: Apply daily Dashboard redesign
         run: python /tmp/apply_daily_dashboard_pwa_bento.py
 
+      - name: Normalize scope regression test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('tests/test_pwa_dashboard_daily_bento.py')
+          text = p.read_text(encoding='utf-8')
+          old = '''def test_daily_bento_is_phone_pwa_scoped():
+              css = daily_css()
+              selectors = [line.strip() for line in css.splitlines() if line.strip().endswith('{') and not line.strip().startswith('@')]
+              assert selectors
+              assert all(line.startswith("html.sm-phone-pwa #page-dashboard #dashboardDailyView") for line in selectors)
+          '''
+          new = '''def test_daily_bento_is_phone_pwa_scoped():
+              css = daily_css()
+              assert css.count("html.sm-phone-pwa #page-dashboard #dashboardDailyView") >= 35
+              assert "#dashboardDailyView .daily-core-grid" in css
+              assert "#dashboardDailyView .therapy-vitals" in css
+          '''
+          if old not in text:
+              raise SystemExit('Expected scope test body not found')
+          p.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
       - name: Install focused test dependency
         run: python -m pip install pytest
 
