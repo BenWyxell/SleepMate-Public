@@ -11,6 +11,15 @@ def test_app_boots_o2_recovery_independently():
     assert "data-sleepmate-o2-recovery" in app
 
 
+def test_packaged_frontend_also_boots_o2_recovery_after_app_core_replacement():
+    frontend = (WEB / "frontend-v534.js").read_text(encoding="utf-8")
+    spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
+    assert "shutil.copy2(core_app, WEB_GENERATED / 'app.js')" in spec
+    assert "function ensureO2Recovery()" in frontend
+    assert "/o2ring-recovery-v5318.js?v=" in frontend
+    assert "ensureO2Recovery();bind();" in frontend
+
+
 def test_recovery_detects_missing_desktop_oximetry_ui():
     js = (WEB / "o2ring-recovery-v5318.js").read_text(encoding="utf-8")
     assert "/api/o2ring/status" in js
