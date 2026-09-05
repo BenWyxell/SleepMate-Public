@@ -3,7 +3,7 @@ from cpap.version import API_VERSION, APP_VERSION, BUILD_CHANNEL
 ROOT=Path(__file__).resolve().parents[1]
 def read(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 def test_current_release_identity_supersedes_historical_v532_contract():
-    assert APP_VERSION=="5.3.14" and API_VERSION==19 and BUILD_CHANNEL=="stable"
+    assert APP_VERSION=="5.3.15" and API_VERSION==19 and BUILD_CHANNEL=="stable"
     assert read("RELEASE_NOTES_5_3_4.md").startswith("# SleepMate 5.3.4\n")
 def test_current_packaged_pwa_keeps_authoritative_o2_assets_network_first():
     for path in ("web/service-worker.js","web/service-worker-v508-base.js"):
