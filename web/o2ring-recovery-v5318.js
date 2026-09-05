@@ -5,6 +5,7 @@ window.__sleepmateO2RecoveryV5318=true;
 
 const BUILD='5.3.18-recovery';
 const q=(selector,root=document)=>root.querySelector(selector);
+const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let running=null;
 let retryTimer=null;
 let attempts=0;
@@ -39,12 +40,12 @@ function loadScript(src,id,ready){
     const wanted=new URL(src,location.href).href;
     const current=document.getElementById(id);
     if(current){
-      if(current.src===wanted&&current.dataset.smLoaded==='1')return resolve();
+      if(current.src===wanted&&current.dataset.smLoaded==='1'&&ready?.())return resolve();
       current.remove();
     }
     const script=document.createElement('script');
     script.id=id;script.src=src;script.async=false;
-    script.onload=()=>{script.dataset.smLoaded='1';resolve();};
+    script.onload=()=>{script.dataset.smLoaded='1';ready?.()?resolve():reject(new Error(`A script betöltődött, de nem inicializálódott: ${src}`));};
     script.onerror=()=>{script.remove();reject(new Error(`Nem tölthető be: ${src}`));};
     document.head.appendChild(script);
   });
@@ -66,7 +67,7 @@ function showRecoveryError(message){
     box=document.createElement('section');box.id='smO2RecoveryError';box.className='error';box.dataset.o2ringFeature='1';
     const main=q('main');if(main)main.prepend(box);
   }
-  box.innerHTML=`<div class="error-copy"><strong>Az Oximetria modul nem tudott elindulni</strong><span>${String(message||'Ismeretlen O2Ring betöltési hiba.')}</span></div>`;
+  box.innerHTML=`<div class="error-copy"><strong>Az Oximetria modul nem tudott elindulni</strong><span>${esc(message||'Ismeretlen O2Ring betöltési hiba.')}</span></div>`;
 }
 function clearRecoveryError(){document.getElementById('smO2RecoveryError')?.remove();}
 function scheduleRetry(){
@@ -93,6 +94,11 @@ async function recover(reason='boot'){
     ensureCss(`/o2ring-v534.css?v=${encodeURIComponent(BUILD)}`,'smO2CssV534Recovery');
 
     if(!window.SleepMateO2Ring){
+      // o2ring.js sets its generation guard before defining the public runtime.
+      // If an earlier execution died halfway through, the guard would otherwise
+      // make every retry return immediately and leave desktop permanently empty.
+      if(window.__sleepmateO2RuntimeV534)delete window.__sleepmateO2RuntimeV534;
+      document.getElementById('smO2JsRecovery')?.remove();
       await loadScript(`/o2ring.js?v=${encodeURIComponent(BUILD)}`,'smO2JsRecovery',()=>!!window.SleepMateO2Ring);
     }
     if(!window.SleepMateO2Ring)throw new Error('Az O2Ring runtime nem inicializálódott.');
