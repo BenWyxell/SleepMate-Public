@@ -1,0 +1,38 @@
+name: Apply daily Dashboard PWA bento once v2
+
+on:
+  push:
+    branches:
+      - daily-dashboard-pwa-bento-helper
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fixes branch
+        uses: actions/checkout@v4
+        with:
+          ref: v5.3.13-fixes
+          fetch-depth: 0
+
+      - name: Fetch patch script from helper branch
+        run: |
+          git fetch origin daily-dashboard-pwa-bento-helper
+          git show origin/daily-dashboard-pwa-bento-helper:scripts/apply_daily_dashboard_pwa_bento.py > /tmp/apply_daily_dashboard_pwa_bento.py
+
+      - name: Apply daily Dashboard redesign
+        run: python /tmp/apply_daily_dashboard_pwa_bento.py
+
+      - name: Run focused regressions
+        run: python -m pytest -q tests/test_pwa_dashboard_packaging.py tests/test_pwa_dashboard_daily_bento.py
+
+      - name: Commit and push fixes branch
+        run: |
+          git config user.name "BenWyxell"
+          git config user.email "201330618+BenWyxell@users.noreply.github.com"
+          git add web/dashboard-pwa-v5312.css tests/test_pwa_dashboard_daily_bento.py
+          git commit -m "Redesign phone PWA daily Dashboard as compact bento"
+          git push origin HEAD:v5.3.13-fixes
