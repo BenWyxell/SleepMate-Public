@@ -187,7 +187,7 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
           window.__smAcceptanceO2 = {
             liveRows,
             bufferCalls:0,
-            dailyDay,daily,flowSignal,batchRows,dayCalls:0,invalidationHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
+            dailyDay,daily,flowSignal,batchRows,dayCalls:0,invalidationHandlers:[],liveSampleHandlers:[],canvasText:[],pathRecords:[],rectRecords:[],
             trendRows:[0,1,2,3,4].map(i => ({
               start_ts:now-(4-i)*86400,
               summary:summary(96.2+i*.15,91+i%2,63+i,30+i*8,1.0+i*.2,.5+i*.1)
@@ -209,15 +209,27 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
               if(type==='invalidation'&&String(this.url||'').includes('/api/o2ring/events')){
                 window.__smAcceptanceO2.invalidationHandlers.push(listener);
               }
+              if(type==='sample'&&String(this.url||'').includes('/api/o2ring/live-stream')){
+                window.__smAcceptanceO2.liveSampleHandlers.push(listener);
+                return;
+              }
               return nativeEventAdd.call(this,type,listener,options);
             };
           }
+          window.__smAcceptanceO2.emitLive=function(row){
+            const f=window.__smAcceptanceO2;
+            const measuring=row.measuring!==false;
+            const payload={connected:true,scanning:false,device_name:'O2Ring Acceptance',device_model:'O2Ring',remembered_address:'ACCEPTANCE',spo2:measuring?row.spo2:null,heart_rate:measuring?row.heart_rate:null,battery_percent:96,motion:row.motion||0,signal_strength:9,worn:measuring,calibrating:false,measuring,last_sample_ts:row.timestamp,last_error:null};
+            const event={data:JSON.stringify(payload)};
+            for(const listener of [...f.liveSampleHandlers])if(typeof listener==='function')listener.call(null,event);
+          };
           const nativeBeginPath=CanvasRenderingContext2D.prototype.beginPath;
           const nativeMoveTo=CanvasRenderingContext2D.prototype.moveTo;
           const nativeLineTo=CanvasRenderingContext2D.prototype.lineTo;
+          const nativeQuadraticCurveTo=CanvasRenderingContext2D.prototype.quadraticCurveTo;
           const nativeStroke=CanvasRenderingContext2D.prototype.stroke;
           CanvasRenderingContext2D.prototype.beginPath=function(...args){
-            this.__smAcceptancePath={moves:0,lines:0};
+            this.__smAcceptancePath={moves:0,lines:0,curves:0};
             return nativeBeginPath.apply(this,args);
           };
           CanvasRenderingContext2D.prototype.moveTo=function(...args){
@@ -228,10 +240,14 @@ def install_o2_acceptance_fixtures(page: Page) -> None:
             if(this.__smAcceptancePath)this.__smAcceptancePath.lines++;
             return nativeLineTo.apply(this,args);
           };
+          CanvasRenderingContext2D.prototype.quadraticCurveTo=function(...args){
+            if(this.__smAcceptancePath)this.__smAcceptancePath.curves++;
+            return nativeQuadraticCurveTo.apply(this,args);
+          };
           CanvasRenderingContext2D.prototype.stroke=function(...args){
             const f=window.__smAcceptanceO2,p=this.__smAcceptancePath||{};
             if(f&&this.canvas?.id&&f.pathRecords.length<6000){
-              f.pathRecords.push({id:this.canvas.id,style:String(this.strokeStyle),width:Number(this.lineWidth)||0,moves:p.moves||0,lines:p.lines||0});
+              f.pathRecords.push({id:this.canvas.id,style:String(this.strokeStyle),width:Number(this.lineWidth)||0,moves:p.moves||0,lines:p.lines||0,curves:p.curves||0});
             }
             return nativeStroke.apply(this,args);
           };
@@ -824,13 +840,13 @@ def main() -> int:
         )
         page.evaluate("() => window.SleepMateO2Ring.refresh()")
         page.wait_for_function("() => document.getElementById('smDashO2Trend')?._smO2Meta?.rows?.length === 4")
-        missing_night_paths = page.evaluate(
+        smooth_dashboard_paths = page.evaluate(
             """() => window.__smAcceptanceO2.pathRecords.filter(x =>
-              x.id==='smDashO2Trend' && x.lines>0 &&
+              x.id==='smDashO2Trend' && x.curves>0 &&
               ['#55d8ff','rgb(85, 216, 255)'].includes(String(x.style).toLowerCase())
             )"""
         )
-        require(len(missing_night_paths) >= 2, f"Dashboard O2 trend bridged a missing night: {missing_night_paths}")
+        require(any(x.get("curves",0) >= 2 for x in smooth_dashboard_paths), f"Dashboard O2 trend is not smoothed like the core Dashboard trends: {smooth_dashboard_paths}")
         dashboard_date_labels = page.evaluate("() => window.__smAcceptanceO2.canvasText.filter(x=>x.id==='smDashO2Trend').map(x=>x.text)")
         require(any(x.count('.') >= 2 and ':' not in x for x in dashboard_date_labels), f"O2 trend X-axis did not render dates: {dashboard_date_labels}")
 
@@ -947,42 +963,69 @@ def main() -> int:
         require(page.locator("#page-oximetry").count() == 1, "Oximetria tab switching duplicated page")
         require(page.locator("#page-oximetry canvas").count() == initial_canvas_count, "Oximetria tab switching leaked charts")
 
-        progress("Live O2 only runs while visible and batch-refills on return")
+        progress("Live O2 uses only the current visible measurement session")
         page.locator('[data-o2r-tab="live"]').click()
-        page.wait_for_function("() => window.__smAcceptanceO2.bufferCalls > 0")
-        page.wait_for_function("() => document.getElementById('o2rLiveDual')?._smO2Meta?.rows?.length >= 3")
-        page.wait_for_timeout(300)
-        require(len(live_stream_requests) >= 1, "visible Oximetria Live did not open a real SSE stream")
-        before_streams = len(live_stream_requests)
-        before_buffers = page.evaluate("() => window.__smAcceptanceO2.bufferCalls")
-        latest_before = page.evaluate("() => window.__smAcceptanceO2.liveRows.at(-1).timestamp")
-
-        navigate(page, "dashboard")
+        page.wait_for_function("() => window.__smAcceptanceO2.liveSampleHandlers.length > 0")
+        require(page.evaluate("() => window.__smAcceptanceO2.bufferCalls") == 0, "opening Live unexpectedly hydrated historical live-buffer data")
+        live_window_values = page.evaluate("() => [...document.getElementById('o2rLiveWindow').options].map(o=>o.value)")
+        require(live_window_values[:2] == ['instant','1'], f"Live O2 fast windows are missing or misordered: {live_window_values}")
+        require(page.locator('#o2rLiveWindow').input_value() == 'instant', "Azonnali is not the default Live O2 window")
         page.evaluate(
             """() => {
-              const f=window.__smAcceptanceO2, t=f.liveRows.at(-1).timestamp;
-              f.liveRows.push(
-                {timestamp:t+5,spo2:94,heart_rate:68,motion:0},
-                {timestamp:t+10,spo2:96,heart_rate:65,motion:0}
-              );
+              const f=window.__smAcceptanceO2, now=Math.floor(Date.now()/1000);
+              f.emitLive({timestamp:now-18,spo2:97,heart_rate:62,motion:0});
+              f.emitLive({timestamp:now-9,spo2:96,heart_rate:64,motion:0});
+              f.emitLive({timestamp:now-1,spo2:95,heart_rate:66,motion:1});
+              f.latestAcceptanceLive=now-1;
             }"""
         )
-        page.wait_for_timeout(900)
+        page.wait_for_function("() => document.getElementById('o2rLiveDual')?._smO2Meta?.rows?.length >= 3")
+        page.wait_for_timeout(200)
+        require(len(live_stream_requests) >= 1, "visible Oximetria Live did not open a real SSE stream")
+        instant_span = page.evaluate("() => {const m=document.getElementById('o2rLiveDual')._smO2Meta;return m.b-m.a}")
+        require(5 <= instant_span <= 31, f"Azonnali Live O2 window did not fit the immediate measurement: {instant_span}")
+        before_streams = len(live_stream_requests)
+        latest_before = page.evaluate("() => window.__smAcceptanceO2.latestAcceptanceLive")
+
+        navigate(page, "dashboard")
+        page.wait_for_timeout(500)
         require(len(live_stream_requests) == before_streams, "hidden Dashboard state spawned additional live O2 streams")
-        require(
-            page.evaluate("() => window.__smAcceptanceO2.bufferCalls") == before_buffers,
-            "hidden Dashboard state performed live-buffer refills/repaints",
-        )
+        require(page.evaluate("() => window.__smAcceptanceO2.bufferCalls") == 0, "hidden Dashboard state performed historical live-buffer hydration")
 
         page.locator('#sidebar [data-page="oximetry"]').click()
         page.wait_for_function("() => document.querySelector('#page-oximetry')?.classList.contains('active')")
-        page.wait_for_function("n => window.__smAcceptanceO2.bufferCalls > n", arg=before_buffers)
-        page.wait_for_function(
-            "t => document.getElementById('o2rLiveDual')?._smO2Meta?.rows?.some(r => r.timestamp > t)",
-            arg=latest_before,
-        )
-        page.wait_for_timeout(300)
+        page.wait_for_timeout(120)
+        require(page.evaluate("() => !document.getElementById('o2rLiveDual')?._smO2Meta"), "returning to Live restored an old measurement buffer")
         require(len(live_stream_requests) > before_streams, "returning to Oximetria Live did not reopen the SSE stream")
+        page.evaluate(
+            """t => {
+              const f=window.__smAcceptanceO2;
+              f.emitLive({timestamp:t+5,spo2:94,heart_rate:68,motion:0});
+            }""",
+            latest_before,
+        )
+        page.wait_for_function("t => {const rows=document.getElementById('o2rLiveDual')?._smO2Meta?.rows||[];return rows.length===1&&rows.every(r=>r.timestamp>t)}", arg=latest_before)
+
+        page.evaluate(
+            """() => {
+              const f=window.__smAcceptanceO2, t=Math.floor(Date.now()/1000);
+              f.emitLive({timestamp:t,spo2:null,heart_rate:null,motion:0,measuring:false});
+            }"""
+        )
+        page.wait_for_function("() => document.getElementById('o2rLiveSpo2')?.textContent.trim()==='–' && document.getElementById('o2rLiveHr')?.textContent.trim()==='–'")
+        require(page.locator('#o2rLiveIdle').is_visible(), "Live O2 idle state is not visible after measurement stops")
+        require(page.evaluate("() => !document.getElementById('o2rLiveDual')?._smO2Meta"), "stopped measurement left stale samples in the Live chart")
+
+        page.evaluate(
+            """() => {
+              const f=window.__smAcceptanceO2, now=Math.floor(Date.now()/1000);
+              f.emitLive({timestamp:now-16,spo2:97,heart_rate:63,motion:0});
+              f.emitLive({timestamp:now-8,spo2:96,heart_rate:64,motion:0});
+              f.emitLive({timestamp:now-1,spo2:95,heart_rate:66,motion:1});
+            }"""
+        )
+        page.wait_for_function("() => document.getElementById('o2rLiveDual')?._smO2Meta?.rows?.length >= 3")
+        require(page.locator('#o2rLiveIdle').is_hidden(), "Live O2 idle state stayed visible during a real measurement")
 
         progress("exact O2 crosshair tooltips and live zoom")
         hover_canvas(page, "o2rLiveDual", ("SpO₂", "Pulzus"))

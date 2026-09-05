@@ -138,20 +138,24 @@ def test_stability_peer_mode_switch_reuses_loaded_daily_o2():
     assert "ox?.classList.remove('hidden');loadDaily(false).then(drawDaily)" in JS
     assert "peer-mode switching force-refetched daily O2 data" in BROWSER
 
-def test_stability_trends_break_missing_nights_and_use_date_axis():
-    assert JS.count("gapSeconds:36*3600") >= 2
+def test_stability_trends_use_date_axis_and_dashboard_o2_matches_smooth_core_style():
+    assert JS.count("gapSeconds:36*3600") >= 1
     assert JS.count("xLabel:date") >= 2
     assert "tooltipLabel:ts=>`${date(ts)} ${clock(ts)}`" in JS
-    assert "Dashboard O2 trend bridged a missing night" in BROWSER
+    assert "smooth:true,points:true,connectGaps:true,lineWidth:2" in JS
+    assert "Dashboard O2 trend is not smoothed like the core Dashboard trends" in BROWSER
     assert "O2 trend X-axis did not render dates" in BROWSER
 
 
-def test_stability_live_return_opens_stream_before_bounded_refill():
+def test_stability_live_view_starts_fresh_and_never_refills_historical_buffer():
     resume = JS[JS.index('async function resumeLive()'):JS.index('function updateLiveLifecycle()')]
-    assert resume.index('openLiveStream()') < resume.index('await refillLive(since)')
+    assert 'openLiveStream()' in resume
+    assert 'await refillLive(' not in resume
     assert 'if(R.liveResumePromise)return R.liveResumePromise' in resume
-    assert "return;mergeLive(x.rows||[]);applied=true" in JS
-    assert 'Live O2 only runs while visible and batch-refills on return' in BROWSER
+    assert 'R.livePageActive=true;R.live=[];R.liveZoom=null;drawLive()' in JS
+    assert 'if(!measuring&&R.live.length){R.live=[];R.liveZoom=null;drawLive()}' in JS
+    assert 'Live O2 uses only the current visible measurement session' in BROWSER
+
 
 def test_request_05_edge_compares_o2_hero_to_real_core_hero_width():
     assert "normal_hero_widths" in BROWSER
@@ -181,16 +185,16 @@ def test_mobile_oximetry_landscape_is_behaviorally_covered():
 
 
 def test_release_identity_is_v535():
-    assert APP_VERSION == '5.3.9'
-    assert RELEASE_NOTES.startswith('# SleepMate 5.3.9\n')
+    assert APP_VERSION == '5.3.10'
+    assert RELEASE_NOTES.startswith('# SleepMate 5.3.10\n')
     section = RELEASE_NOTES.split('\n---\n', 1)[0]
-    assert 'Release build: **5.3.9**.' in section
+    assert 'Release build: **5.3.10**.' in section
     assert 'Kiadási csatorna: **stable**.' in section
 
 
 def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():
     for worker in (SW, SW_BASE):
-        assert "const CACHE='sleepmate-shell-v5.3.9-o2-hydration-1';" in worker
+        assert "const CACHE='sleepmate-shell-v5.3.10-o2-hydration-1';" in worker
         assert "const API_CACHE='sleepmate-api-v5.3.9-refactor';" in worker
         assert "const UI_VERSION='5.3.4';" in worker
         assert '/frontend-v534.js?v=5.3.4' in worker

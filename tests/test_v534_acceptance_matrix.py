@@ -16,14 +16,14 @@ def test_acceptance_p0_single_frontend_owner_and_stale_pwa_recovery():
     shell = read("cpap/v530_features.py")
     sw = read("web/service-worker.js")
     base = read("web/service-worker-v508-base.js")
-    assert APP_VERSION == "5.3.9"
+    assert APP_VERSION == "5.3.10"
     assert 'UI_VERSION = "5.3.4"' in shell
     assert "o2ring-v532.js" not in shell
     assert "frontend-v533.js" not in shell
     assert "frontend-v534.js" in shell
     assert "o2ring-v534.css" in shell
     for worker in (sw, base):
-        assert "sleepmate-shell-v5.3.9-o2-hydration-1" in worker
+        assert "sleepmate-shell-v5.3.10-o2-hydration-1" in worker
         assert "sleepmate-api-v5.3.9-refactor" in worker
         assert "/o2ring.js" in worker
         assert "/frontend-v534.js?v=5.3.4" in worker
@@ -55,7 +55,7 @@ def test_acceptance_p0_dashboard_three_modes_and_route_lifecycle_are_single_owne
     assert "setInterval(" not in js
 
 
-def test_acceptance_p0_live_o2_only_paints_when_visible_and_batch_refills_on_return():
+def test_acceptance_p0_live_o2_is_visible_scoped_and_current_measurement_only():
     js = read("web/o2ring.js")
     stream = read("cpap/o2ring_stream.py")
     for marker in (
@@ -65,13 +65,20 @@ def test_acceptance_p0_live_o2_only_paints_when_visible_and_batch_refills_on_ret
         "function closeLiveStream()",
         "async function resumeLive()",
         "R.liveResumePromise",
-        "await refillLive(since)",
-        "if(o2PageVisible())openLiveStream()",
-        "/api/o2ring/live-buffer?since=",
+        "livePageActive:false",
+        "R.livePageActive=true;R.live=[];R.liveZoom=null;drawLive()",
+        "x.measuring===true&&x.last_sample_ts",
+        "if(!measuring&&R.live.length){R.live=[];R.liveZoom=null;drawLive()}",
+        'value="instant" selected>Azonnali',
+        'value="1">1 perc',
+        "Jelenleg nincs mérés folyamatban.",
         "R.liveRaf=requestAnimationFrame(()=>{R.liveRaf=0;drawLive()})",
     ):
         assert marker in js
+    resume = js[js.index("async function resumeLive()"):js.index("function updateLiveLifecycle()")]
+    assert "await refillLive(" not in resume
     assert "function o2PageVisible(){return document.visibilityState==='visible'&&location.hash.startsWith('#oximetry')" in js
+    # Backend buffer remains available for compatibility, but opening Live no longer hydrates from it.
     assert "class _LiveBuffer" in stream
     assert 'path == "/api/o2ring/live-buffer"' in stream
     assert "service.manager.add_listener(BUFFER.append_snapshot)" in stream
@@ -256,14 +263,14 @@ def test_acceptance_o2_trends_live_handoff_and_hover_redraw_are_gap_safe():
         "const seen=new Set()",
         "!seen.has(fn)",
         "R.hoverRaf.delete(group)",
-        "const since=R.live.at(-1)?.timestamp||0",
-        "openLiveStream();await refillLive(since)",
-        "liveAbort:null",
-        "new AbortController()",
-        "signal:ctl.signal",
-        "R.liveAbort.abort()",
+        "livePageActive:false",
+        "x.measuring===true&&x.last_sample_ts",
+        "if(!measuring&&R.live.length){R.live=[];R.liveZoom=null;drawLive()}",
         "if(R.liveResumePromise===work)",
         "function closeMobileO2Drawer()",
+        "smooth:true,points:true,connectGaps:true,lineWidth:2",
     ):
         assert marker in js
-    assert js.count("trendGap:true") >= 2
+    resume = js[js.index("async function resumeLive()"):js.index("function updateLiveLifecycle()")]
+    assert "await refillLive(" not in resume
+    assert js.count("trendGap:true") >= 1
