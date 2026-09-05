@@ -1,3 +1,35 @@
+# SleepMate 5.3.12
+
+Release build: **5.3.12**.
+Kiadási csatorna: **stable**.
+
+A 5.3.12 a telefonos, telepített PWA Dashboard teljes vizuális újraszervezése. A cél, hogy ugyanazok az adatok sokkal rövidebb, áttekinthetőbb és látványosabb mobil dashboardon jelenjenek meg, adat elrejtése nélkül.
+
+## PWA Dashboard redesign
+
+- A telefonos standalone PWA Dashboard külön, célzott **bento / kompakt dashboard** réteget kap.
+- A legutóbbi alvás 6 fő mutatója kétoszlopos, sűrűbb KPI-rácsban jelenik meg a korábbi hosszú, teljes szélességű kártyalista helyett.
+- A „Mi változott az előző éjszakához képest?” mutatói 2×2-es, kompakt összehasonlító blokkot használnak.
+- A Terápiás összesítő négy fő KPI-ja 2×2-es rácsot kap, miközben a 7 / 30 / 90 napos és teljes időszak választó változatlanul elérhető.
+- Az Oximetriai összegzés négy fő mutatója ugyanebbe a sűrű, mobilbarát vizuális rendszerbe illeszkedik.
+- Az eseményjelzők kompakt műszersávként jelennek meg, így kevesebb függőleges helyet használnak.
+- A trendgrafikonok **nem kerülnek elrejtésre és nem lesznek accordion mögé téve**; továbbra is minden adat közvetlenül elérhető, de a mobil trendkártyák alacsonyabb, feszesebb megjelenést kapnak.
+- A Legutóbbi alvás fejléc és a Részletes napi nézet művelet egységesebb, prémium hero-blokkot alkot.
+- Az AHI, használat, szivárgás, esemény, nyomás és alvásidő kártyák saját finom accent/glow kezelést kapnak a meglévő SleepMate Aurora vizuális rendszerén belül.
+
+## Hatókör és kompatibilitás
+
+- A redesign kizárólag a **telefonos telepített PWA Dashboardra** érvényes (`sm-phone-pwa`).
+- A Windows/desktop Dashboard geometriája nem változik.
+- A terápiás és O2Ring adatok számítása, backendje, időszakkezelése és navigációs logikája nem változik.
+- A PWA shell cache előtölti az új Dashboard stíluslapot, így a frissített felület a normál PWA frissítési mechanizmus része.
+- Regressziós ellenőrzés garantálja, hogy a redesign ne rejtsen el Dashboard adatot CSS `display:none`, `visibility:hidden` vagy hasonló megoldással.
+
+## Kiadási ellenőrzés
+
+A kiadás csak a hivatalos Windows release pipeline teljes build-, teszt-, MSI telepítési/runtime/eltávolítási és release-integritási ellenőrzése után publikálható.
+
+---
 # SleepMate 5.3.11
 
 Release build: **5.3.11**.
