@@ -39,6 +39,6 @@ jobs:
         run: |
           git config user.name "BenWyxell"
           git config user.email "201330618+BenWyxell@users.noreply.github.com"
-          git add build/windows/SleepMate.spec web/service-worker-v508-base.js web/service-worker.js tests/test_v5315_pwa_daily_delivery_and_o2.py
+          git add build/windows/SleepMate.spec web/service-worker-v508-base.js web/service-worker.js tests/test_pwa_dashboard_packaging.py tests/test_v5315_pwa_daily_delivery_and_o2.py
           git commit -m "Fix PWA daily Dashboard delivery and O2 hydration"
           git push origin HEAD:v5.3.14-fixes
