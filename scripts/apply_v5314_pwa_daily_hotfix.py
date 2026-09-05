@@ -63,6 +63,25 @@ for rel in ('web/service-worker-v508-base.js', 'web/service-worker.js'):
         raise SystemExit(f'{rel}: Dashboard PWA shell entry not found')
     path.write_text(text, encoding='utf-8')
 
+# Update the existing packaging contract: the previous test accidentally froze
+# the stylesheet URL at v=1, which is exactly what prevented the new daily CSS
+# from being delivered reliably to an already installed PWA.
+pack_path = Path('tests/test_pwa_dashboard_packaging.py')
+pack = pack_path.read_text(encoding='utf-8')
+pack = replace_once(
+    pack,
+    '    assert "dashboard_pwa_link = \'<link rel=\\"stylesheet\\" href=\\"/dashboard-pwa-v5312.css?v=1\\">\'" in spec',
+    '    assert "dashboard_pwa_link = f\'<link rel=\\"stylesheet\\" href=\\"/dashboard-pwa-v5312.css?v={FRONTEND_ID}\\">\'" in spec',
+    'packaging index expectation',
+)
+pack = replace_once(
+    pack,
+    '    assert "\'/dashboard-pwa-v5312.css?v=1\'" in base',
+    '    assert "\'/dashboard-pwa-v5312.css?v=2\'" in base',
+    'packaging worker expectation',
+)
+pack_path.write_text(pack, encoding='utf-8')
+
 # Focused regression contract.
 test_path = Path('tests/test_v5315_pwa_daily_delivery_and_o2.py')
 test_path.write_text('''from pathlib import Path\n\n\ndef text(path):\n    return Path(path).read_text(encoding="utf-8")\n\n\ndef test_packaged_dashboard_pwa_css_is_build_versioned():\n    spec = text("build/windows/SleepMate.spec")\n    assert "dashboard_pwa_link = f'<link rel=\\\"stylesheet\\\" href=\\\"/dashboard-pwa-v5312.css?v={FRONTEND_ID}\\\">'" in spec\n    assert "sw = sw.replace(\\\"'/dashboard-pwa-v5312.css?v=2'\\\", f\\\"'/dashboard-pwa-v5312.css?v={FRONTEND_ID}'\\\")" in spec\n    assert "/dashboard-pwa-v5312.css?v=2" in text("web/service-worker-v508-base.js")\n    assert "/dashboard-pwa-v5312.css?v=2" in text("web/service-worker.js")\n\n\ndef test_daily_o2_has_runtime_independent_api_fallback():\n    spec = text("build/windows/SleepMate.spec")\n    assert "window.SleepMateO2Ring?.getDailySummary" in spec\n    assert "/api/o2ring/day?day=${encodeURIComponent(code)}&max_points=1" in spec\n    assert "for(let attempt=0;attempt<3;attempt++)" in spec\n\n\ndef test_daily_bento_css_is_still_present_and_phone_scoped():\n    css = text("web/dashboard-pwa-v5312.css")\n    assert "/* Phone PWA daily detail bento extension */" in css\n    assert "html.sm-phone-pwa #page-dashboard #dashboardDailyView .daily-core-grid" in css\n    assert "grid-template-columns:repeat(2,minmax(0,1fr))!important" in css\n''', encoding='utf-8')
