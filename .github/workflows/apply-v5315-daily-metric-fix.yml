@@ -1,4 +1,4 @@
-name: Apply v5.3.15 daily metric hotfix
+name: Publish SleepMate 5.3.16
 
 on:
   push:
@@ -7,60 +7,198 @@ on:
 
 permissions:
   contents: write
+  actions: write
+
+concurrency:
+  group: sleepmate-v5.3.16-publication
+  cancel-in-progress: false
 
 jobs:
-  apply:
+  publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 100
+    env:
+      VERSION: 5.3.16
+      PREVIOUS_VERSION: 5.3.15
+      TAG: v5.3.16
+      SOURCE_BRANCH: release-v5.3.16-source
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
     steps:
-      - name: Checkout fixes branch
+      - name: Checkout current fixes branch
         uses: actions/checkout@v4
         with:
           ref: v5.3.15-fixes
           fetch-depth: 0
 
-      - name: Apply daily metric fixes
+      - name: Prepare exact 5.3.16 source
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # Remove accidental helper-only files from the product branch before release.
+          rm -f noop noop2 noop3 noop4 noop5 noop6 noop7
+          rm -f .github/workflows/publish-v5316-once.yml
+          if ! git diff --quiet || ! git diff --cached --quiet; then
+            git add -A
+            git commit -m "Clean release helper artifacts before 5.3.16"
+            git push origin HEAD:v5.3.15-fixes
+          fi
+
+          git checkout -B "$SOURCE_BRANCH"
+
           python - <<'PY'
           from pathlib import Path
 
-          app = Path('web/app-core.js')
-          text = app.read_text(encoding='utf-8')
-          replacements = {
-              "Number(spo2Value).toLocaleString('hu-HU',{maximumFractionDigits:1})": "Number(spo2Value).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})",
-              "Number(hrValue).toLocaleString('hu-HU',{maximumFractionDigits:1})": "Number(hrValue).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})",
-          }
-          for old, new in replacements.items():
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'app-core.js: expected exactly one {old!r}, got {count}')
-              text = text.replace(old, new, 1)
-          app.write_text(text, encoding='utf-8')
+          old = "5.3.15"
+          new = "5.3.16"
 
-          css = Path('web/dashboard-pwa-v5312.css')
-          text = css.read_text(encoding='utf-8')
-          old = "html.sm-phone-pwa #page-dashboard #dashboardDailyView .daily-primary-stat.ahi{--daily-accent:var(--dash-teal)}"
-          new = "html.sm-phone-pwa #page-dashboard #dashboardDailyView .daily-primary-stat.ahi{--daily-accent:var(--dash-teal);grid-column:1/-1!important}"
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f'dashboard CSS: expected one AHI rule, got {count}')
-          css.write_text(text.replace(old, new, 1), encoding='utf-8')
+          required = [
+              Path("cpap/version.py"),
+              Path("web/service-worker.js"),
+              Path("web/service-worker-v508-base.js"),
+          ]
+          for path in required:
+              text = path.read_text(encoding="utf-8")
+              if old not in text:
+                  raise SystemExit(f"Expected {old} marker missing from {path}")
+              path.write_text(text.replace(old, new), encoding="utf-8")
 
-          test = Path('tests/test_v5316_daily_o2_format_and_ahi_span.py')
-          test.write_text('''from pathlib import Path\n\nROOT = Path(__file__).resolve().parents[1]\n\ndef read(path: str) -> str:\n    return (ROOT / path).read_text(encoding="utf-8")\n\ndef test_daily_o2_cards_use_one_stable_decimal_format() -> None:\n    app = read("web/app-core.js")\n    assert "Number(spo2Value).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})" in app\n    assert "Number(hrValue).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})" in app\n    assert "Number(spo2Value).toLocaleString('hu-HU',{maximumFractionDigits:1})" not in app\n    assert "Number(hrValue).toLocaleString('hu-HU',{maximumFractionDigits:1})" not in app\n\n    o2 = read("web/o2ring.js")\n    assert "id('spo2').textContent=`${fmt(spo2,1)}%`" in o2\n    assert "id('hr').textContent=`${fmt(hr,1)}`" in o2\n\ndef test_phone_daily_ahi_spans_both_bento_columns() -> None:\n    css = read("web/dashboard-pwa-v5312.css")\n    assert ".daily-core-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important" in css\n    assert ".daily-primary-stat.ahi{--daily-accent:var(--dash-teal);grid-column:1/-1!important}" in css\n''', encoding='utf-8')
+          for path in Path("tests").rglob("*"):
+              if not path.is_file():
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              if old in text:
+                  path.write_text(text.replace(old, new), encoding="utf-8")
+
+          notes_path = Path("release-notes/v5.3.16.md")
+          if not notes_path.exists():
+              raise SystemExit("Missing release-notes/v5.3.16.md")
+          notes = notes_path.read_text(encoding="utf-8").rstrip() + "\n\n"
+          release_notes = Path("RELEASE_NOTES.md")
+          existing = release_notes.read_text(encoding="utf-8")
+          if not existing.startswith("# SleepMate 5.3.16"):
+              release_notes.write_text(notes + existing, encoding="utf-8")
           PY
 
           python -m pip install -q pytest
           python -m pytest -q \
             tests/test_v5316_daily_o2_format_and_ahi_span.py \
             tests/test_pwa_dashboard_daily_bento.py \
-            tests/test_v5315_pwa_daily_delivery_and_o2.py \
-            tests/test_v5312_pwa_dashboard_ui.py
+            tests/test_pwa_dashboard_packaging.py \
+            tests/test_v5315_pwa_daily_delivery_and_o2.py
 
-          git add web/app-core.js web/dashboard-pwa-v5312.css tests/test_v5316_daily_o2_format_and_ahi_span.py
-          git commit -m "Fix daily O2 value flicker and widen AHI card"
-          git push origin HEAD:v5.3.15-fixes
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Finalize SleepMate 5.3.16 daily Dashboard polish release"
+          fi
+          git push -u origin "$SOURCE_BRANCH" --force-with-lease
+
+          TARGET_SHA="$(git rev-parse HEAD)"
+          echo "TARGET_SHA=$TARGET_SHA" >> "$GITHUB_ENV"
+          [[ "$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')" == "$VERSION" ]]
+          grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-o2-hydration-1';" web/service-worker.js
+          grep -Fq "const CACHE='sleepmate-shell-v${VERSION}-o2-hydration-1';" web/service-worker-v508-base.js
+          grep -Fq "# SleepMate ${VERSION}" RELEASE_NOTES.md
+          grep -Fq "# SleepMate ${VERSION}" "release-notes/v${VERSION}.md"
+          echo "Release source: $TARGET_SHA"
+
+      - name: Build and fully verify exact release source
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL="$(gh api "repos/$GITHUB_REPOSITORY/branches/$SOURCE_BRANCH" --jq '.commit.sha')"
+          [[ "$ACTUAL" == "$TARGET_SHA" ]] || { echo "Release source moved: $ACTUAL" >&2; exit 1; }
+
+          gh workflow run windows-release.yml --ref "$SOURCE_BRANCH"
+          RUN_ID=''
+          for i in $(seq 1 90); do
+            RUN_ID="$(gh run list --workflow windows-release.yml --branch "$SOURCE_BRANCH" --event workflow_dispatch --limit 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$TARGET_SHA\") | .databaseId" | head -n1)"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 2
+          done
+          [[ -n "$RUN_ID" ]] || { echo 'Dispatched verification run was not found.' >&2; exit 1; }
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          gh run watch "$RUN_ID" --exit-status
+
+      - name: Download VERIFIED release artifact
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.verify.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          mkdir -p release-staging
+          gh run download "$RUN_ID" --name SleepMate-Windows-x64-VERIFIED-RELEASE --dir release-staging
+          cd release-staging
+          sha256sum -c SHA256SUMS.txt
+          test -s "SleepMate_Setup_v${VERSION}.msi"
+          test -s "SleepMate_Setup_v${VERSION}.msi.sha256"
+          test -s "SleepMate_v${VERSION}_windows_x64.zip"
+          test -s sleepmate-update.json
+          test -s release-metadata.json
+
+      - name: Create, verify and publish GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE="SleepMate ${VERSION} — Napi Dashboard finomhangolás"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,targetCommitish >/tmp/existing.json 2>/dev/null; then
+            DRAFT="$(jq -r '.isDraft' /tmp/existing.json)"
+            TARGET="$(jq -r '.targetCommitish' /tmp/existing.json)"
+            [[ "$TARGET" == "$TARGET_SHA" ]] || { echo "Existing $TAG targets $TARGET, expected $TARGET_SHA" >&2; exit 1; }
+            if [[ "$DRAFT" == 'false' ]]; then
+              echo "$TAG is already published from the expected commit."
+              exit 0
+            fi
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --notes-file "release-notes/v${VERSION}.md"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$TARGET_SHA" --title "$TITLE" --notes-file "release-notes/v${VERSION}.md" --draft
+          fi
+
+          gh release upload "$TAG" release-staging/* --repo "$GITHUB_REPOSITORY" --clobber
+
+          mapfile -t actual < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          expected=(
+            SHA256SUMS.txt
+            "SleepMate_Setup_v${VERSION}.msi"
+            "SleepMate_Setup_v${VERSION}.msi.sha256"
+            "SleepMate_v${VERSION}_windows_x64.zip"
+            build-msi-toolchain.txt
+            msi-inventory.txt
+            release-metadata.json
+            sleepmate-update.json
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          [[ "$(printf '%s\n' "${actual[@]}")" == "$(printf '%s\n' "${expected_sorted[@]}")" ]] || {
+            echo 'Release asset set mismatch.' >&2
+            printf 'actual: %s\n' "${actual[*]}" >&2
+            printf 'expected: %s\n' "${expected_sorted[*]}" >&2
+            exit 1
+          }
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,tagName,targetCommitish,url > /tmp/published.json
+          [[ "$(jq -r '.isDraft' /tmp/published.json)" == 'false' ]]
+          [[ "$(jq -r '.isPrerelease' /tmp/published.json)" == 'false' ]]
+          [[ "$(jq -r '.tagName' /tmp/published.json)" == "$TAG" ]]
+          [[ "$(jq -r '.targetCommitish' /tmp/published.json)" == "$TARGET_SHA" ]]
+          cat /tmp/published.json
+
+      - name: Advance stable and next fixes branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin
+          git push origin "$TARGET_SHA:refs/heads/v5.3.5-stable-base"
+          if gh api "repos/$GITHUB_REPOSITORY/branches/v5.3.16-fixes" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/v5.3.16-fixes" -f sha="$TARGET_SHA" -F force=false >/dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref='refs/heads/v5.3.16-fixes' -f sha="$TARGET_SHA" >/dev/null
+          fi
