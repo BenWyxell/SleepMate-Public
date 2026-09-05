@@ -27,11 +27,7 @@ jobs:
         run: python /tmp/apply_v5314_pwa_daily_hotfix.py
 
       - name: Validate spec syntax
-        run: python - <<'PY'
-          from pathlib import Path
-          compile(Path('build/windows/SleepMate.spec').read_text(encoding='utf-8'), 'SleepMate.spec', 'exec')
-          print('SleepMate.spec syntax OK')
-          PY
+        run: python -c "from pathlib import Path; compile(Path('build/windows/SleepMate.spec').read_text(encoding='utf-8'),'SleepMate.spec','exec'); print('SleepMate.spec syntax OK')"
 
       - name: Install test dependency
         run: python -m pip install pytest
