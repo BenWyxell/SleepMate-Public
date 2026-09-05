@@ -77,7 +77,7 @@ def test_late_o2ring_config_reconciles_all_feature_surfaces() -> None:
 def test_service_worker_never_mixes_generations_in_an_active_page() -> None:
     for relative in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         worker = read(relative)
-        assert "sleepmate-shell-v5.3.18-o2-recovery-1" in worker
+        assert "sleepmate-shell-v5.3.19-o2-updater-recovery-1" in worker
         assert "await self.skipWaiting()" in worker
         assert "await self.clients.claim()" in worker
         assert "navigationFallback" in worker
@@ -221,7 +221,10 @@ def test_official_build_uses_onedir_coordinator_and_msi_manifest() -> None:
     msi_path = inspect.getsource(__import__("update_worker").install_verified_msi)
 
     assert "exclude_binaries=True" in spec and "coll = COLLECT(" in spec
-    assert "updater-dist\\SleepMateUpdater\\SleepMateUpdater.exe" in release_build
+    assert "$StableUpdaterVersion = '5.3.17'" in release_build
+    assert "$StableUpdaterExeSha256" in release_build
+    assert "Invoke-WebRequest -Uri $StableUpdaterZipUrl" in release_build
+    assert "Pinned updater hash mismatch" in release_build
     assert "dist\\SleepMate\\Updater" in release_build
     assert "build_msi_update_manifest.py" in workflow
     assert "'package_type': manifest.get('package_type') == 'windows-msi-x64'" in workflow
