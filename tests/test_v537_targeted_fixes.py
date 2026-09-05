@@ -77,7 +77,7 @@ def test_late_o2ring_config_reconciles_all_feature_surfaces() -> None:
 def test_service_worker_never_mixes_generations_in_an_active_page() -> None:
     for relative in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         worker = read(relative)
-        assert "sleepmate-shell-v5.3.11-o2-hydration-1" in worker
+        assert "sleepmate-shell-v5.3.12-o2-hydration-1" in worker
         assert "await self.skipWaiting()" in worker
         assert "clients.claim()" not in worker
         assert "navigationFallback" in worker
