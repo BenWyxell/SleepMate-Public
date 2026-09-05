@@ -41,7 +41,7 @@ def fake_service(recordings: list[dict], start: datetime, end: datetime, *, auto
 
 def test_v534_release_identity_and_single_active_frontend_owner():
     shell = read("cpap/v530_features.py")
-    assert APP_VERSION == "5.3.13"
+    assert APP_VERSION == "5.3.14"
     assert API_VERSION == 19
     assert BUILD_CHANNEL == "stable"
     assert 'UI_VERSION = "5.3.4"' in shell
@@ -221,7 +221,7 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
 def test_v534_service_workers_only_activate_current_o2_frontend_generation():
     for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         sw = read(path)
-        assert "sleepmate-shell-v5.3.13-o2-hydration-1" in sw
+        assert "sleepmate-shell-v5.3.14-o2-hydration-1" in sw
         assert "/o2ring-v534.css?v=5.3.4" in sw
         assert "/frontend-v534.js?v=5.3.4" in sw
         assert "'/o2ring.js'" in sw

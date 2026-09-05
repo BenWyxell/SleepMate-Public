@@ -1,3 +1,24 @@
+# SleepMate 5.3.14
+
+Release build: **5.3.14**.
+
+Kiadási csatorna: **stable**.
+
+## PWA napi Dashboard redesign
+
+A 5.3.14 a telefonos telepített PWA **Részletes napi nézetét** igazítja a 5.3.13-ban megújított fő Dashboard vizuális rendszeréhez.
+
+### Újdonságok
+
+- A napi fő eredmények kompakt, kétoszlopos bento elrendezést kaptak.
+- A terápiás mutatók mobilon már nem hosszú, teljes szélességű kártyasorként jelennek meg.
+- Az OA / CA / H / RERA eseményjelzők tömör műszersorba kerültek.
+- Az éjszaka értékelése és a terápiás összevetés jobban kihasználja a mobil kijelző szélességét.
+- Az Áttekintés mini grafikonjai telefonos PWA-n két oszlopban jelennek meg.
+- A napi fejléc, napválasztás, megosztás és grafikonvezérlők kompaktabbak lettek.
+
+A redesign **nem rejt el adatot vagy funkciót**, kizárólag a telefonos telepített PWA napi Dashboard elrendezését és vizuális hierarchiáját módosítja.
+
 # SleepMate 5.3.13
 
 Release build: **5.3.13**.
