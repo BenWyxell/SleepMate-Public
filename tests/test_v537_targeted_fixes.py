@@ -79,7 +79,7 @@ def test_service_worker_never_mixes_generations_in_an_active_page() -> None:
         worker = read(relative)
         assert "sleepmate-shell-v5.3.16-o2-hydration-1" in worker
         assert "await self.skipWaiting()" in worker
-        assert "clients.claim()" not in worker
+        assert "await self.clients.claim()" in worker
         assert "navigationFallback" in worker
         assert "codeNetworkFirst" in worker
 

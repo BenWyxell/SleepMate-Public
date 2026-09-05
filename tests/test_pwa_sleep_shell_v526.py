@@ -68,14 +68,14 @@ def test_packaged_service_worker_base_precaches_same_sleep_feature():
         assert repr(asset) in sw
 
 
-def test_new_service_worker_claims_live_pwa_without_mid_boot_navigation():
+def test_new_service_worker_performs_safe_generation_handover():
     root = Path(__file__).resolve().parents[1]
     for filename in ("service-worker.js", "service-worker-v508-base.js"):
         sw = (root / "web" / filename).read_text(encoding="utf-8")
-        assert "const stale=keys.filter" in sw
+        assert "cleanupStaleSleepMateCaches" in sw
         assert "self.clients.matchAll({type:'window',includeUncontrolled:true})" in sw
         assert "SLEEPMATE_SHELL_READY" in sw
-        assert "await client.navigate(client.url)" not in sw
+        assert "await client.navigate(client.url)" in sw
         assert "event.respondWith(navigationFallback(req))" in sw
         assert "event.respondWith(codeNetworkFirst(req))" in sw
 

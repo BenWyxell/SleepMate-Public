@@ -113,10 +113,10 @@ function watchLatestSessionCard(){
   ob.observe(sessions,{childList:true,characterData:true,subtree:true});
 }
 async function enforceFrontendGeneration(){
-  const meta=q('meta[name="sleepmate-ui-version"]')?.content||'';let backend='';try{backend=String((await api('/api/version')).version||'')}catch{}const expected=backend||VERSION;if(expected!==VERSION)return;
-  try{const keys=await caches.keys();const stale=keys.filter(k=>k.startsWith('sleepmate-')&&!k.includes(`v${VERSION}`));if(stale.length)await Promise.all(stale.map(k=>caches.delete(k)))}catch{}
+  // VERSION is the long-lived UI generation, not the application release.
+  // Cache ownership and stale-generation cleanup belong exclusively to the
+  // Service Worker after a matching client confirms the new build is alive.
   if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
-  if(meta&&meta!==expected&&!sessionStorage.getItem('sm-v534-reloaded')){sessionStorage.setItem('sm-v534-reloaded','1');location.reload();return}sessionStorage.removeItem('sm-v534-reloaded');
 }
 function waitForDynamicSettings(){
   normalizeAll();const page=id('page-settings');if(!page)return;

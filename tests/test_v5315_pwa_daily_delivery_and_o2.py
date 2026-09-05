@@ -8,7 +8,8 @@ def text(path):
 def test_packaged_dashboard_pwa_css_is_build_versioned():
     spec = text("build/windows/SleepMate.spec")
     assert "dashboard_pwa_link = f'<link rel=\"stylesheet\" href=\"/dashboard-pwa-v5312.css?v={FRONTEND_ID}\">'" in spec
-    assert "sw = sw.replace(\"'/dashboard-pwa-v5312.css?v=2'\", f\"'/dashboard-pwa-v5312.css?v={FRONTEND_ID}'\")" in spec
+    assert "dashboard-pwa-v5312.css" in spec
+    assert "asset + f'?v={FRONTEND_ID}'" in spec
     assert "/dashboard-pwa-v5312.css?v=2" in text("web/service-worker-v508-base.js")
     assert "/dashboard-pwa-v5312.css?v=2" in text("web/service-worker.js")
 

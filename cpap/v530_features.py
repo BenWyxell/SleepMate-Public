@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import urllib.parse
+import re
+
+from .version import APP_VERSION
 
 
 _installed = False
@@ -14,51 +17,68 @@ def _replace_required(text: str, old: str, new: str, label: str) -> str:
 
 
 def _patch_frontend_v534(text: str) -> str:
-    """Keep PWA recovery from deleting release caches using the frozen UI marker."""
+    """Keep the frozen UI marker from owning release-cache cleanup."""
+    safe = """async function enforceFrontendGeneration(){
+  // VERSION is the long-lived UI generation, not the application release.
+  // Cache ownership and stale-generation cleanup belong exclusively to the
+  // Service Worker after a matching client confirms the new build is alive.
+  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
+}"""
+    if safe in text:
+        return text
     old = """async function enforceFrontendGeneration(){
   const meta=q('meta[name=\"sleepmate-ui-version\"]')?.content||'';let backend='';try{backend=String((await api('/api/version')).version||'')}catch{}const expected=backend||VERSION;if(expected!==VERSION)return;
   try{const keys=await caches.keys();const stale=keys.filter(k=>k.startsWith('sleepmate-')&&!k.includes(`v${VERSION}`));if(stale.length)await Promise.all(stale.map(k=>caches.delete(k)))}catch{}
   if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
   if(meta&&meta!==expected&&!sessionStorage.getItem('sm-v534-reloaded')){sessionStorage.setItem('sm-v534-reloaded','1');location.reload();return}sessionStorage.removeItem('sm-v534-reloaded');
 }"""
-    new = """async function enforceFrontendGeneration(){
-  // VERSION is the long-lived UI generation (5.3.4), not the application release.
-  // Never compare it to /api/version and never delete v5.3.x release caches from it.
-  // The service worker owns shell-generation cleanup; here we only ask it to update.
-  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
-}"""
-    return _replace_required(text, old, new, "frontend cache generation")
-
+    return _replace_required(text, old, safe, "frontend cache generation")
 
 def _patch_sleepmate_v530(text: str) -> str:
-    """Make O2 dynamic-module hydration self-healing after PWA wake/update races."""
+    """Use one build generation and self-heal the complete O2 runtime."""
+    version_marker = "const VERSION='5.3.4';"
+    asset_marker = "const ASSET_VERSION=(()=>{try{return new URL(document.currentScript?.src||location.href,location.href).searchParams.get('v')||document.querySelector('meta[name=\\\"sleepmate-build-id\\\"]')?.content||VERSION}catch{return VERSION}})();"
+    if asset_marker not in text:
+        text = _replace_required(text, version_marker, version_marker + "\\n" + asset_marker, "O2 build asset generation")
+
     old_loader = """function loadScript(src,id){return new Promise((resolve,reject)=>{if(document.getElementById(id))return resolve();const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}"""
-    new_loader = """function loadScript(src,id,ready){return new Promise((resolve,reject)=>{const existing=document.getElementById(id);if(existing){if(existing.dataset.smLoaded==='1'||ready?.())return resolve();existing.remove()}const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=()=>{s.dataset.smLoaded='1';resolve()};s.onerror=()=>{s.remove();reject(new Error(`Nem tölthető be: ${src}`))};document.head.appendChild(s)})}"""
-    text = _replace_required(text, old_loader, new_loader, "retryable O2 script loader")
+    new_loader = """function loadScript(src,id,ready){return new Promise((resolve,reject)=>{const wanted=new URL(src,location.href).href,existing=document.getElementById(id);if(existing){if(existing.src===wanted&&(existing.dataset.smLoaded==='1'||ready?.()))return resolve();existing.remove()}const s=document.createElement('script');s.id=id;s.src=src;s.async=false;s.onload=()=>{s.dataset.smLoaded='1';resolve()};s.onerror=()=>{s.remove();reject(new Error(`Nem tölthető be: ${src}`))};document.head.appendChild(s)})}"""
+    if new_loader not in text:
+        text = _replace_required(text, old_loader, new_loader, "retryable O2 script loader")
+
+    old_css = """function loadCss(href,id){if(document.getElementById(id))return;const l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;document.head.appendChild(l)}"""
+    new_css = """function loadCss(href,id){const wanted=new URL(href,location.href).href,existing=document.getElementById(id);if(existing?.href===wanted)return;if(existing)existing.remove();const l=document.createElement('link');l.id=id;l.rel='stylesheet';l.href=href;l.onerror=()=>l.remove();document.head.appendChild(l)}"""
+    if new_css not in text:
+        text = _replace_required(text, old_css, new_css, "generation-aware O2 CSS loader")
 
     old_modules = """async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;if(o2ScriptsLoaded){window.SleepMateO2Ring?.install?.();return}loadCss(`/o2ring.css?v=${VERSION}`,'smO2Css');await loadScript(`/o2ring.js?v=${VERSION}`,'smO2Js');await loadScript(`/o2ring-report-ui.js?v=${VERSION}`,'smO2ReportJs');o2ScriptsLoaded=true;window.SleepMateO2Ring?.install?.()}"""
-    new_modules = """function o2RuntimeMissing(){return activeO2()&&(!window.SleepMateO2Ring||!document.querySelector('#sidebar [data-page=\"oximetry\"]')||!document.getElementById('page-oximetry')||!document.getElementById('smO2Master'))}
-  async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;loadCss(`/o2ring.css?v=${VERSION}`,'smO2Css');if(!o2ScriptsLoaded||!window.SleepMateO2Ring){await loadScript(`/o2ring.js?v=${VERSION}`,'smO2Js',()=>!!window.SleepMateO2Ring);if(!window.SleepMateO2Ring){document.getElementById('smO2Js')?.remove();throw new Error('Az O2Ring runtime nem inicializálódott.')}await loadScript(`/o2ring-report-ui.js?v=${VERSION}`,'smO2ReportJs',()=>!!window.SleepMateO2RingReport);o2ScriptsLoaded=true}installO2MasterPanel();hydrateO2Master();await Promise.resolve(window.SleepMateO2Ring?.install?.());if(!document.querySelector('#sidebar [data-page=\"oximetry\"]')||!document.getElementById('page-oximetry')){window.SleepMateO2Ring?.uninstall?.();await Promise.resolve(window.SleepMateO2Ring?.install?.())}window.SleepMateO2RingReport?.install?.()}"""
-    text = _replace_required(text, old_modules, new_modules, "O2 module installation")
+    new_modules = """function o2RuntimeMissing(){return activeO2()&&(!window.SleepMateO2Ring||!document.querySelector('#sidebar [data-page=\\\"oximetry\\\"]')||!document.getElementById('page-oximetry')||!document.getElementById('smO2Master'))}
+  async function ensureO2Modules(){if(!activeO2())return;window.__sleepmateO2Bootstrap=o2;loadCss(`/o2ring.css?v=${ASSET_VERSION}`,'smO2Css');if(!o2ScriptsLoaded||!window.SleepMateO2Ring){await loadScript(`/o2ring.js?v=${ASSET_VERSION}`,'smO2Js',()=>!!window.SleepMateO2Ring);if(!window.SleepMateO2Ring){document.getElementById('smO2Js')?.remove();throw new Error('Az O2Ring runtime nem inicializálódott.')}await loadScript(`/o2ring-report-ui.js?v=${ASSET_VERSION}`,'smO2ReportJs',()=>!!window.SleepMateO2RingReport);o2ScriptsLoaded=true}installO2MasterPanel();hydrateO2Master();await Promise.resolve(window.SleepMateO2Ring?.install?.());if(!document.querySelector('#sidebar [data-page=\\\"oximetry\\\"]')||!document.getElementById('page-oximetry')){window.SleepMateO2Ring?.uninstall?.();await Promise.resolve(window.SleepMateO2Ring?.install?.())}window.SleepMateO2RingReport?.install?.()}"""
+    if new_modules not in text:
+        text = _replace_required(text, old_modules, new_modules, "O2 module installation")
 
     old_apply = """async function applyO2Status(next){const enabled=next?.settings?.o2ring_enabled;if(typeof enabled!=='boolean')throw new Error('Az O2Ring master beállítás nem érkezett meg.');o2=next;o2State=enabled?O2_STATE.ENABLED:O2_STATE.DISABLED;setO2FeatureState();hydrateO2Master();if(activeO2()){await ensureO2Modules();Promise.resolve(window.SleepMateO2Ring?.refresh?.()).catch(e=>o2Msg(`O2Ring UI frissítési hiba: ${e.message}`))}else disableO2Ui();renderBottomNav();renderPwaEditor();window.dispatchEvent(new CustomEvent('sleepmate-o2-config-ready',{detail:{enabled,state:o2State}}));return o2}"""
     new_apply = """function resetO2Recovery(){clearTimeout(scheduleO2Recovery.timer);scheduleO2Recovery.timer=null;scheduleO2Recovery.attempt=0}
-  function scheduleO2Recovery(){if(scheduleO2Recovery.timer)return;const delays=[600,1500,3500,7000,12000],i=Number(scheduleO2Recovery.attempt)||0;if(i>=delays.length)return;scheduleO2Recovery.attempt=i+1;scheduleO2Recovery.timer=setTimeout(()=>{scheduleO2Recovery.timer=null;refreshO2State().catch(()=>{})},delays[i])}
+  function scheduleO2Recovery(){if(scheduleO2Recovery.timer||o2State===O2_STATE.DISABLED)return;const delays=[600,1500,3500,7000,12000],i=Math.min(Number(scheduleO2Recovery.attempt)||0,delays.length-1);scheduleO2Recovery.attempt=Math.min(i+1,delays.length-1);scheduleO2Recovery.timer=setTimeout(()=>{scheduleO2Recovery.timer=null;refreshO2State().catch(()=>scheduleO2Recovery())},delays[i])}
   async function applyO2Status(next){const enabled=next?.settings?.o2ring_enabled;if(typeof enabled!=='boolean')throw new Error('Az O2Ring master beállítás nem érkezett meg.');o2=next;o2State=enabled?O2_STATE.ENABLED:O2_STATE.DISABLED;setO2FeatureState();installO2MasterPanel();hydrateO2Master();if(activeO2()){await ensureO2Modules();resetO2Recovery();Promise.resolve(window.SleepMateO2Ring?.refresh?.()).catch(e=>o2Msg(`O2Ring UI frissítési hiba: ${e.message}`))}else{resetO2Recovery();disableO2Ui()}renderBottomNav();renderPwaEditor();window.dispatchEvent(new CustomEvent('sleepmate-o2-config-ready',{detail:{enabled,state:o2State}}));return o2}"""
-    text = _replace_required(text, old_apply, new_apply, "O2 status apply/retry")
+    if new_apply not in text:
+        text = _replace_required(text, old_apply, new_apply, "O2 status apply/retry")
 
     old_refresh = """async function refreshO2State(){if(o2RefreshPromise)return o2RefreshPromise;o2RefreshPromise=api('/api/o2ring/status').then(applyO2Status).catch(e=>{if(!resolvedO2()){setO2FeatureState();hydrateO2Master();o2Msg('Az O2Ring beállítás betöltése folyamatban van.')}throw e}).finally(()=>{o2RefreshPromise=null});return o2RefreshPromise}"""
     new_refresh = """async function refreshO2State(){if(o2RefreshPromise)return o2RefreshPromise;o2RefreshPromise=api('/api/o2ring/status').then(applyO2Status).catch(e=>{if(!resolvedO2()){setO2FeatureState();hydrateO2Master();o2Msg('Az O2Ring beállítás betöltése folyamatban van.')}if(o2State!==O2_STATE.DISABLED)scheduleO2Recovery();throw e}).finally(()=>{o2RefreshPromise=null});return o2RefreshPromise}"""
-    text = _replace_required(text, old_refresh, new_refresh, "O2 refresh retry")
+    if new_refresh not in text:
+        text = _replace_required(text, old_refresh, new_refresh, "O2 refresh retry")
 
     old_recovery = """function bindO2HydrationRecovery(){const reconcile=()=>{if(!resolvedO2())refreshO2State().catch(()=>{})};window.addEventListener('online',reconcile);window.addEventListener('pageshow',reconcile);window.addEventListener('focus',reconcile);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});navigator.serviceWorker?.addEventListener?.('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_READY')reconcile()})}"""
-    new_recovery = """function bindO2HydrationRecovery(){const reconcile=()=>{installO2MasterPanel();if(!resolvedO2()||o2RuntimeMissing()){resetO2Recovery();refreshO2State().catch(()=>{})}else{hydrateO2Master();window.SleepMateFrontendV534?.normalize?.()}};window.addEventListener('online',reconcile);window.addEventListener('pageshow',reconcile);window.addEventListener('focus',reconcile);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});navigator.serviceWorker?.addEventListener?.('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_READY')reconcile()})}"""
-    text = _replace_required(text, old_recovery, new_recovery, "PWA O2 hydration recovery")
+    new_recovery = """function bindO2HydrationRecovery(){const reconcile=()=>{installO2MasterPanel();resetO2Recovery();if(!resolvedO2()||o2RuntimeMissing())refreshO2State().catch(()=>scheduleO2Recovery());else{hydrateO2Master();window.SleepMateFrontendV534?.normalize?.()}};window.addEventListener('online',reconcile);window.addEventListener('pageshow',reconcile);window.addEventListener('focus',reconcile);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});navigator.serviceWorker?.addEventListener?.('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_READY')reconcile()})}"""
+    if new_recovery not in text:
+        text = _replace_required(text, old_recovery, new_recovery, "PWA O2 hydration recovery")
 
     old_api = """window.SleepMateV530={ICONS,NAV,renderBottomNav,renderPwaEditor,preferences:()=>({...prefs}),o2State:()=>o2State,refreshO2:refreshO2State};"""
     new_api = """window.SleepMateV530={ICONS,NAV,renderBottomNav,renderPwaEditor,preferences:()=>({...prefs}),o2State:()=>o2State,refreshO2:refreshO2State,ensureO2:ensureO2Modules,installO2Master:installO2MasterPanel};"""
-    return _replace_required(text, old_api, new_api, "O2 recovery API")
-
+    if new_api not in text:
+        text = _replace_required(text, old_api, new_api, "O2 recovery API")
+    return text
 
 def _patch_o2ring(text: str) -> str:
     """Render Dashboard O2 history with the same day-trend contract as AHI."""
@@ -124,21 +144,27 @@ def install_v530_features(app_module) -> None:
                 source = (app_module.WEB / "sleepmate-v530.js").read_text(encoding="utf-8")
                 _send_javascript(self, _patch_sleepmate_v530(source))
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                self.send_error(500, f"SleepMate frontend bootstrap failed: {type(exc).__name__}")
+                return
 
         if parsed.path == "/o2ring.js":
             try:
                 source = (app_module.WEB / "o2ring.js").read_text(encoding="utf-8")
                 _send_javascript(self, _patch_o2ring(source))
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                self.send_error(500, f"SleepMate O2 frontend bootstrap failed: {type(exc).__name__}")
+                return
 
         if parsed.path in {"/", "/index.html"}:
             try:
                 index_path = app_module.WEB / "index.html"
                 text = index_path.read_text(encoding="utf-8")
+                release_match = re.search(r'<meta name="sleepmate-release-version" content="([^"]+)">', text)
+                build_match = re.search(r'<meta name="sleepmate-build-id" content="([^"]+)">', text)
+                release_version = release_match.group(1) if release_match else APP_VERSION
+                asset_version = build_match.group(1) if build_match else release_version
                 text = text.replace('/style.css?v=5.0.0', f'/style.css?v={UI_VERSION}')
                 text = text.replace('/app.js?v=5.0.0', f'/app.js?v={UI_VERSION}')
                 text = text.replace('<strong id="sidebarVersion">v2.7</strong>', f'<strong id="sidebarVersion">v{UI_VERSION}</strong>')
@@ -147,6 +173,10 @@ def install_v530_features(app_module) -> None:
                 head_assets: list[str] = []
                 if 'name="sleepmate-ui-version"' not in text:
                     head_assets.append(f'<meta name="sleepmate-ui-version" content="{UI_VERSION}">')
+                if 'name="sleepmate-release-version"' not in text:
+                    head_assets.append(f'<meta name="sleepmate-release-version" content="{release_version}">')
+                if 'name="sleepmate-build-id"' not in text:
+                    head_assets.append(f'<meta name="sleepmate-build-id" content="{asset_version}">')
                 if 'name="sleepmate-o2ring-enabled"' not in text:
                     # The HTML shell is cached by the PWA and may outlive the
                     # configuration value that existed when it was fetched.
@@ -154,11 +184,11 @@ def install_v530_features(app_module) -> None:
                     # no-store O2 status endpoint is the canonical state source.
                     head_assets.append('<meta name="sleepmate-o2ring-enabled" content="unknown">')
                 if "sleepmate-aurora.css" not in text:
-                    head_assets.append(f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={UI_VERSION}">')
+                    head_assets.append(f'<link rel="stylesheet" href="/sleepmate-aurora.css?v={asset_version}">')
                 if "sleepmate-v530.css" not in text:
-                    head_assets.append(f'<link rel="stylesheet" href="/sleepmate-v530.css?v={UI_VERSION}">')
+                    head_assets.append(f'<link rel="stylesheet" href="/sleepmate-v530.css?v={asset_version}">')
                 if "o2ring-v534.css" not in text:
-                    head_assets.append(f'<link rel="stylesheet" href="/o2ring-v534.css?v={UI_VERSION}">')
+                    head_assets.append(f'<link rel="stylesheet" href="/o2ring-v534.css?v={asset_version}">')
                 if "sm-o2-master-visibility" not in text:
                     head_assets.append(
                         '<style id="sm-o2-master-visibility">'
@@ -196,7 +226,7 @@ def install_v530_features(app_module) -> None:
                     scripts.append(f'<script id="sm-frontend-v534-inline">{feature_js}</script>')
 
                 if "sleepmate-v530.js" not in text:
-                    scripts.append(f'<script src="/sleepmate-v530.js?v={UI_VERSION}"></script>')
+                    scripts.append(f'<script src="/sleepmate-v530.js?v={asset_version}"></script>')
 
                 data_management_path = app_module.WEB / "o2ring-data-management.js"
                 if data_management_path.is_file() and "sm-o2-data-management-inline" not in text:
@@ -217,11 +247,14 @@ def install_v530_features(app_module) -> None:
                 self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
                 self.send_header("Pragma", "no-cache")
                 self.send_header("X-SleepMate-UI-Version", UI_VERSION)
+                self.send_header("X-SleepMate-Release-Version", release_version)
+                self.send_header("X-SleepMate-Build-ID", asset_version)
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            except Exception:
-                pass
+            except Exception as exc:
+                self.send_error(500, f"SleepMate shell generation failed: {type(exc).__name__}")
+                return
         return previous_get(self)
 
     handler_cls.do_GET = do_GET

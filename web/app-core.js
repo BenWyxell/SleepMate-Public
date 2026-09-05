@@ -564,14 +564,41 @@ function applyPwaPresentationMode(){
   document.documentElement.classList.toggle('pwa-standalone',yes);
   document.body.classList.toggle('pwa-standalone',yes);
 }
+function pwaMeta(name){return document.querySelector(`meta[name="${name}"]`)?.content||''}
+function pwaReleaseVersion(){return pwaMeta('sleepmate-release-version')}
+function pwaBuildId(){return pwaMeta('sleepmate-build-id')}
+function postPwaClientReady(reg=null){const buildId=pwaBuildId(),releaseVersion=pwaReleaseVersion(),target=navigator.serviceWorker?.controller||reg?.active;if(!buildId||!target)return;try{target.postMessage({type:'SLEEPMATE_CLIENT_READY',buildId,releaseVersion})}catch{}}
+async function reconcilePwaRelease(reason='resume'){
+  if(!('serviceWorker' in navigator))return;
+  let reg=null;try{reg=await navigator.serviceWorker.getRegistration()}catch{}
+  let backend='';try{const r=await fetch(`/api/version?_pwa=${Date.now()}`,{cache:'no-store'});if(r.ok){const x=await r.json();backend=String(x.version||'')}}catch{}
+  const page=pwaReleaseVersion();
+  if(backend&&page&&backend!==page){
+    try{await reg?.update?.()}catch{}
+    const key=`sleepmate-release-reload:${backend}`;
+    if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');location.reload();return}
+  }
+  if(backend&&page&&backend===page){for(const key of Object.keys(sessionStorage))if(key.startsWith('sleepmate-release-reload:')&&key!==`sleepmate-release-reload:${backend}`)sessionStorage.removeItem(key)}
+  postPwaClientReady(reg);
+}
+function bindPwaReleaseRecovery(){
+  if(document.documentElement.dataset.smPwaReleaseRecovery==='1')return;
+  document.documentElement.dataset.smPwaReleaseRecovery='1';
+  const reconcile=()=>reconcilePwaRelease().catch(()=>{});
+  window.addEventListener('pageshow',reconcile);
+  window.addEventListener('focus',reconcile);
+  window.addEventListener('online',reconcile);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reconcile()});
+  navigator.serviceWorker?.ready?.then(reg=>{postPwaClientReady(reg);reconcile()}).catch(()=>{});
+}
 function registerPwa(){
   if('serviceWorker' in navigator){
     const hadController=!!navigator.serviceWorker.controller;
-    navigator.serviceWorker.register('/service-worker.js',{updateViaCache:'none'}).then(reg=>reg.update().catch(()=>{})).catch(()=>{});
+    navigator.serviceWorker.register('/service-worker.js',{updateViaCache:'none'}).then(async reg=>{try{await reg.update()}catch{}postPwaClientReady(reg);reconcilePwaRelease('register').catch(()=>{})}).catch(()=>{});
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
-      // iOS standalone PWA already has a native launch screen. Do not force a
-      // second full page reload/splash when a new service worker takes control.
-      if(hadController&&!standalonePwa()&&!sessionStorage.getItem('sleepmate-sw-reloaded')){sessionStorage.setItem('sleepmate-sw-reloaded','1');location.reload()}
+      if(!hadController)return;
+      const build=pwaBuildId()||'unknown',key=`sleepmate-controller-reload:${build}`;
+      if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');setTimeout(()=>location.reload(),80)}
     });
   }
   window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();state.pwaPrompt=e;const b=$('#pwaInstallButton');if(b){b.disabled=false;$('#pwaInstallHint').textContent='A SleepMate telepíthető ezen az eszközön.'}});
@@ -579,6 +606,7 @@ function registerPwa(){
   const standalone=window.matchMedia?.('(display-mode: standalone)').matches||window.navigator.standalone===true;
   if(standalone&&$('#pwaInstallHint')){$('#pwaInstallHint').textContent='A SleepMate már alkalmazásnézetben fut.';$('#pwaInstallButton').disabled=true}
   else if(!state.pwaPrompt&&$('#pwaInstallHint')){const ios=/iPhone|iPad|iPod/.test(navigator.userAgent);$('#pwaInstallHint').textContent=ios?'iPhone/iPad: Safari → Megosztás → Főképernyőhöz adás.':'HTTPS-es Tailscale vagy Cloudflare címen a böngésző felajánlja a telepítést.'}
+  bindPwaReleaseRecovery();
 }
 async function installPwa(){if(!state.pwaPrompt){const hint=$('#pwaInstallHint');if(hint)hint.textContent='Ha nincs telepítési ablak: Chrome/Edge menü → Alkalmazás telepítése, iPhone-on Safari → Főképernyőhöz adás.';return}state.pwaPrompt.prompt();try{await state.pwaPrompt.userChoice}catch{}state.pwaPrompt=null}
 function standalonePwa(){return window.navigator.standalone===true||window.matchMedia?.('(display-mode: standalone)').matches}

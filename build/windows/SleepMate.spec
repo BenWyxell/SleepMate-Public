@@ -20,12 +20,8 @@ if WEB_GENERATED.exists():
     shutil.rmtree(WEB_GENERATED)
 shutil.copytree(WEB_SOURCE, WEB_GENERATED)
 
-# For integration test builds start from the exact PWA worker that shipped with
-# the known-good v5.0.8 frontend. Extra SleepSync/v5.3 assets are added below,
-# but the navigation/cache algorithm itself stays identical to that release.
-proven_sw = WEB_GENERATED / 'service-worker-v508-base.js'
-if proven_sw.exists():
-    shutil.copy2(proven_sw, WEB_GENERATED / 'service-worker.js')
+# service-worker.js is the canonical release worker. Historical worker files stay
+# in the tree only as references; packaging must never overwrite the current one.
 
 
 def replace_exact(relative_path, pattern, replacement, expected=1):
@@ -97,27 +93,7 @@ replace_exact(
     r'src="/app\.js\?v=\d+\.\d+\.\d+"',
     f'src="/app.js?v={APP_VERSION}"',
 )
-replace_exact(
-    'service-worker.js',
-    r'sleepmate-shell-v\d+\.\d+\.\d+',
-    f'sleepmate-shell-v{APP_VERSION}',
-    expected=2,
-)
-replace_exact(
-    'service-worker.js',
-    r'sleepmate-api-v\d+\.\d+\.\d+',
-    f'sleepmate-api-v{APP_VERSION}',
-)
-replace_exact(
-    'service-worker.js',
-    r'/style\.css\?v=\d+\.\d+\.\d+',
-    f'/style.css?v={APP_VERSION}',
-)
-replace_exact(
-    'service-worker.js',
-    r'/app\.js\?v=\d+\.\d+\.\d+',
-    f'/app.js?v={APP_VERSION}',
-)
+# Service-worker release/build identity is finalized atomically below.
 
 # ---------------------------------------------------------------------------
 # Mobile/PWA stability contract for SleepSync integration builds
@@ -149,12 +125,18 @@ if core_app.exists() and engine_app.exists():
   const ID='{FRONTEND_ID}';
   let started=false;
   let attempts=0;
-  function loadScript(src,onload){{
-    const s=document.createElement('script');
-    s.src=src;s.async=false;
-    if(onload)s.onload=onload;
-    s.onerror=()=>{{try{{fetch('/api/mobile-boot',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{stage:'script-error',build:ID,details:{{src}}}}),keepalive:true,cache:'no-store'}})}}catch{{}}}};
-    document.head.appendChild(s);
+  function loadScript(src,onload,retries=3){{
+    let attempt=0;
+    const run=()=>{{
+      const existing=[...document.scripts].find(x=>x.dataset.smBootSrc===src);
+      if(existing?.dataset.smLoaded==='1'){{onload?.();return}}
+      existing?.remove();
+      const s=document.createElement('script');s.src=src;s.async=false;s.dataset.smBootSrc=src;
+      s.onload=()=>{{s.dataset.smLoaded='1';onload?.()}};
+      s.onerror=()=>{{s.remove();attempt++;try{{fetch('/api/mobile-boot',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify({{stage:'script-error',build:ID,details:{{src,attempt}}}}),keepalive:true,cache:'no-store'}})}}catch{{}};if(attempt<retries)setTimeout(run,180*attempt);else{{started=false;setTimeout(start,900)}}}};
+      document.head.appendChild(s);
+    }};
+    run();
   }}
   function start(){{
     if(started)return;
@@ -171,6 +153,10 @@ if core_app.exists() and engine_app.exists():
     loadScript('/sleepsync-integration.js?v='+ID,()=>loadScript('/sleepsync-polish.js?v='+ID));
   }}
   setTimeout(start,0);
+  window.addEventListener('pageshow',()=>{{if(!started)setTimeout(start,0)}});
+  window.addEventListener('focus',()=>{{if(!started)setTimeout(start,0)}});
+  window.addEventListener('online',()=>{{if(!started)setTimeout(start,0)}});
+  document.addEventListener('visibilitychange',()=>{{if(document.visibilityState==='visible'&&!started)setTimeout(start,0)}});
 }})();
 """
     (WEB_GENERATED / 'sleepsync-bootstrap.js').write_text(bootstrap_text, encoding='utf-8')
@@ -206,6 +192,11 @@ if core_app.exists() and engine_app.exists():
     )
     if index_text.count(dashboard_pwa_link) != 1:
         raise RuntimeError('generated index does not contain exactly one PWA Dashboard stylesheet link')
+    release_meta = f'<meta name="sleepmate-release-version" content="{APP_VERSION}">'
+    build_meta = f'<meta name="sleepmate-build-id" content="{FRONTEND_ID}">'
+    for marker, meta in (('name="sleepmate-release-version"', release_meta),('name="sleepmate-build-id"', build_meta)):
+        if marker not in index_text:
+            index_text = index_text.replace('</head>', '  ' + meta + '\n</head>', 1)
     index_path.write_text(index_text, encoding='utf-8')
 
     # Give every portable workflow run its own PWA generation while preserving
@@ -213,20 +204,19 @@ if core_app.exists() and engine_app.exists():
     # the O2Ring controller only activates them when the user enables the feature.
     sw_path = WEB_GENERATED / 'service-worker.js'
     sw = sw_path.read_text(encoding='utf-8')
-    sw = sw.replace(f'sleepmate-shell-v{APP_VERSION}', f'sleepmate-shell-v{APP_VERSION}-b{BUILD_ID}')
-    sw = sw.replace(f'sleepmate-api-v{APP_VERSION}', f'sleepmate-api-v{APP_VERSION}-b{BUILD_ID}')
-    sw = sw.replace(f"'/style.css?v={APP_VERSION}'", f"'/style.css?v={FRONTEND_ID}'")
-    sw = sw.replace(f"'/app.js?v={APP_VERSION}'", f"'/app.js?v={FRONTEND_ID}'")
-    sw = sw.replace("'/dashboard-pwa-v5312.css?v=2'", f"'/dashboard-pwa-v5312.css?v={FRONTEND_ID}'")
+    sw, count = re.subn(r"const CACHE='[^']+';", f"const CACHE='sleepmate-shell-v{FRONTEND_ID}';", sw, count=1)
+    if count != 1: raise RuntimeError('canonical worker CACHE marker missing')
+    sw, count = re.subn(r"const API_CACHE='[^']+';", f"const API_CACHE='sleepmate-api-v{FRONTEND_ID}';", sw, count=1)
+    if count != 1: raise RuntimeError('canonical worker API_CACHE marker missing')
+    sw, count = re.subn(r"const RELEASE_VERSION='[^']+';", f"const RELEASE_VERSION='{APP_VERSION}';", sw, count=1)
+    if count != 1: raise RuntimeError('canonical worker RELEASE_VERSION marker missing')
+    sw, count = re.subn(r"const BUILD_ID='[^']+';", f"const BUILD_ID='{FRONTEND_ID}';", sw, count=1)
+    if count != 1: raise RuntimeError('canonical worker BUILD_ID marker missing')
+    for asset in ('/style.css','/app.js','/sleepmate-aurora.css','/sleepmate-v530.css','/dashboard-pwa-v5312.css','/sleepmate-v530.js','/o2ring.css','/o2ring.js','/o2ring-report-ui.js','/o2ring-v534.css','/frontend-v534.js'):
+        sw = re.sub(re.escape(asset) + r"\?v=[^'\"]+", asset + f'?v={FRONTEND_ID}', sw)
     app_entry = f"'/app.js?v={FRONTEND_ID}'"
     extra_shell = (
         app_entry
-        + f",'/sleepmate-aurora.css?v={FRONTEND_ID}'"
-        + f",'/sleepmate-v530.css?v={FRONTEND_ID}'"
-        + f",'/sleepmate-v530.js?v={FRONTEND_ID}'"
-        + f",'/o2ring.css?v={FRONTEND_ID}'"
-        + f",'/o2ring.js?v={FRONTEND_ID}'"
-        + f",'/o2ring-report-ui.js?v={FRONTEND_ID}'"
         + f",'/mobile-boot-diagnostics.js?v={FRONTEND_ID}'"
         + f",'/sleepsync-bootstrap.js?v={FRONTEND_ID}'"
         + f",'/sleepsync-integration.js?v={FRONTEND_ID}'"
@@ -239,52 +229,35 @@ if core_app.exists() and engine_app.exists():
         raise RuntimeError('proven service worker shell does not contain packaged app.js')
     sw = sw.replace(app_entry, extra_shell, 1)
 
-    # Keep the current proven worker's code-asset contract and append only the
-    # packaging-specific diagnostics/SleepSync assets. This deliberately avoids
-    # hard-coding the complete list, because v5.3.2 adds O2Ring assets to the
-    # same network-first rule and future stable assets may extend it again.
+    # Extend the canonical CODE_ASSETS set with generated integration assets.
     code_asset_match = re.search(
-        r"const codeAsset=\[(?P<items>[^\]]*)\]\.includes\(url\.pathname\);",
+        r"const CODE_ASSETS=new Set\(\[(?P<items>[^\]]*)\]\);",
         sw,
     )
     if not code_asset_match:
-        raise RuntimeError('proven service worker code-asset rule is missing')
+        raise RuntimeError('canonical service worker CODE_ASSETS rule is missing')
     code_items = code_asset_match.group('items')
     protected_base_assets = (
-        '/sleepmate-sleep.js',
-        '/sleepmate-sleep-v523.js',
-        '/sleepmate-chart-v523.js',
-        '/sleepmate-sleep-v524.js',
-        '/sleepmate-sleep-refresh-v5212.js',
-        '/sleepmate-aurora.css',
-        '/sleepmate-v530.css',
-        '/dashboard-pwa-v5312.css',
-        '/sleepmate-v530.js',
-        '/o2ring.css',
-        '/o2ring.js',
-        '/o2ring-report-ui.js',
-        '/o2ring-v534.css',
-        '/frontend-v534.js',
+        '/sleepmate-sleep.js','/sleepmate-sleep-v523.js','/sleepmate-chart-v523.js',
+        '/sleepmate-sleep-v524.js','/sleepmate-sleep-refresh-v5212.js',
+        '/sleepmate-aurora.css','/sleepmate-v530.css','/dashboard-pwa-v5312.css',
+        '/sleepmate-v530.js','/o2ring.css','/o2ring.js','/o2ring-report-ui.js',
+        '/o2ring-v534.css','/frontend-v534.js',
     )
     for asset in protected_base_assets:
         if repr(asset) not in code_items:
-            raise RuntimeError(f'proven service worker lost network-first asset: {asset}')
+            raise RuntimeError(f'canonical service worker lost network-first asset: {asset}')
     for obsolete in ('/o2ring-v532.css','/o2ring-v532.js','/frontend-v533.js'):
         if repr(obsolete) in code_items:
             raise RuntimeError(f'obsolete O2 frontend asset returned to active worker: {obsolete}')
     for asset in (
-        '/mobile-boot-diagnostics.js',
-        '/sleepsync-bootstrap.js',
-        '/sleepsync-integration.js',
-        '/sleepsync-polish.js',
-        '/sleepsync.css',
-        '/sleepsync-polish.css',
-        '/sleepsync-notice.css',
+        '/mobile-boot-diagnostics.js','/sleepsync-bootstrap.js','/sleepsync-integration.js',
+        '/sleepsync-polish.js','/sleepsync.css','/sleepsync-polish.css','/sleepsync-notice.css',
     ):
         token = repr(asset)
         if token not in code_items:
             code_items += (',' if code_items else '') + token
-    new_code = f"const codeAsset=[{code_items}].includes(url.pathname);"
+    new_code = f"const CODE_ASSETS=new Set([{code_items}]);"
     sw = sw[:code_asset_match.start()] + new_code + sw[code_asset_match.end():]
     sw_path.write_text(sw, encoding='utf-8')
 
