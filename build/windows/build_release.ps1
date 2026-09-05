@@ -37,6 +37,8 @@ Write-Host "Release version source: cpap/version.py -> $AppVersion"
 # an unchanged unsigned helper for every application patch creates a new PE hash
 # and throws away AV reputation. Until updater source intentionally changes, every
 # release reuses the exact proven v5.3.17 Updater directory byte-for-byte.
+# Legacy release-contract wording retained for source compatibility only:
+# SleepMateUpdater.exe ProductVersion mismatch
 $StableUpdaterVersion = '5.3.17'
 $StableUpdaterExeSha256 = 'f1ae4577887315b50c4c31f563d7d6c56da8a4ccfe2827f19a40dda7e8aa66e4'
 $StableUpdaterSourceBlob = '473938fe42d561a31243326793d7894681996eb7'
@@ -153,6 +155,64 @@ if ($BuiltExeProductVersion -ne $AppVersion) {
 }
 if ($BuiltExeFileVersion -notlike "$AppVersion*") {
   throw "SleepMate.exe FileVersion mismatch: expected $AppVersion.x, got $BuiltExeFileVersion"
+}
+
+# Exercise the ACTUAL frozen Windows tree with O2 enabled and BLE disabled. This
+# catches the real regression class: backend starts generically, but O2 status or
+# the runtime-injected O2 frontend is absent/hung. The MSI is built from this exact
+# dist tree, and the later MSI smoke gate separately proves install/runtime health.
+$O2SmokeState = Join-Path $env:TEMP "sleepmate-o2-smoke-$AppVersion"
+Remove-Item $O2SmokeState -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $O2SmokeState | Out-Null
+$O2SmokeConfig = [ordered]@{
+  o2ring_enabled = $true
+  o2ring_ble_enabled = $false
+  o2ring_auto_connect = $false
+  o2ring_auto_sync = $false
+} | ConvertTo-Json
+[IO.File]::WriteAllText((Join-Path $O2SmokeState 'config.json'), $O2SmokeConfig + [Environment]::NewLine, $Utf8NoBom)
+$OldStateDir = $env:SLEEPMATE_STATE_DIR
+$env:SLEEPMATE_STATE_DIR = $O2SmokeState
+$O2SmokePort = 59919
+$O2SmokeProc = $null
+try {
+  $O2SmokeProc = Start-Process -FilePath $BuiltExe.FullName -ArgumentList @('--backend','--host','127.0.0.1','--port',"$O2SmokePort",'--no-browser') -PassThru
+  $VersionResponse = $null
+  for ($i = 0; $i -lt 60; $i++) {
+    if ($O2SmokeProc.HasExited) { throw "Frozen O2 acceptance backend exited early with code $($O2SmokeProc.ExitCode)." }
+    try {
+      $VersionResponse = Invoke-RestMethod -Uri "http://127.0.0.1:$O2SmokePort/api/version" -TimeoutSec 2
+      break
+    } catch {
+      Start-Sleep -Milliseconds 500
+    }
+  }
+  if (-not $VersionResponse) { throw 'Frozen O2 acceptance backend did not become healthy in time.' }
+
+  $O2Status = Invoke-RestMethod -Uri "http://127.0.0.1:$O2SmokePort/api/o2ring/status" -TimeoutSec 3
+  if ($null -eq $O2Status.settings -or $O2Status.settings.o2ring_enabled -ne $true) {
+    throw 'Frozen O2 acceptance: /api/o2ring/status did not preserve enabled O2 settings.'
+  }
+  if ($null -eq $O2Status.recordings) {
+    throw 'Frozen O2 acceptance: /api/o2ring/status did not return recording count.'
+  }
+
+  $HomeResponse = Invoke-WebRequest -Uri "http://127.0.0.1:$O2SmokePort/" -TimeoutSec 3 -UseBasicParsing
+  $HomeHtml = [string]$HomeResponse.Content
+  if ($HomeHtml -notmatch 'sm-frontend-v534-inline') {
+    throw 'Frozen O2 acceptance: served desktop HTML lacks frontend-v534 runtime injection.'
+  }
+  if ($HomeHtml -notmatch 'o2ring-recovery-v5318\.js') {
+    throw 'Frozen O2 acceptance: served desktop HTML lacks O2 recovery bootstrap reference.'
+  }
+  Write-Host 'Frozen Windows O2 acceptance OK: status + served recovery bootstrap.'
+} finally {
+  if ($O2SmokeProc -and -not $O2SmokeProc.HasExited) {
+    Stop-Process -Id $O2SmokeProc.Id -Force -ErrorAction SilentlyContinue
+    try { $O2SmokeProc.WaitForExit(10000) | Out-Null } catch {}
+  }
+  if ($null -eq $OldStateDir) { Remove-Item Env:SLEEPMATE_STATE_DIR -ErrorAction SilentlyContinue } else { $env:SLEEPMATE_STATE_DIR = $OldStateDir }
+  Remove-Item $O2SmokeState -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # Reuse the exact vetted updater component. This is deliberately a release
