@@ -1,3 +1,24 @@
+# SleepMate 5.3.18
+
+Release build: **5.3.18**.
+
+Kiadási csatorna: **stable**.
+
+## Oximetria globális betöltési és helyreállítási javítás
+
+A 5.3.18 a PC-s, böngészős és telepített PWA Oximetria/O2Ring felület közös betöltési láncát javítja.
+
+- Az O2Ring állapot-, felvétellista- és trendlekérdezések többé nem olvassák be minden induláskor az összes korábbi mérés teljes mintatömbjét; a részletes SpO₂/pulzus minták csak akkor töltődnek be, amikor valóban szükségesek.
+- Nagy vagy sok O2Ring felvétel mellett sem blokkolhatja a teljes mintadekódolás az Oximetria modul indulását.
+- Külön, platformfüggetlen recovery bootstrap ellenőrzi, hogy engedélyezett O2Ring mellett ténylegesen létrejött-e az Oximetria oldal és a bal oldali desktop menüpont.
+- Ha a dinamikus O2 runtime félbehagyott vagy hibás állapotban marad, a recovery eltávolítja a hibás példányt, újratölti a modult és újratelepíti a menüt, az oldalt és a diagramokat.
+- A recovery a Windows/PyInstaller csomagolt frontendben is garantáltan elindul akkor is, ha a build a forrás `app.js` fájlt a stabil `app-core.js` példányra cseréli.
+- Új regressziós tesztek fedik a hiányzó desktop Oximetria menüt/oldalt, a csomagolási útvonalat és a nagy, 20 000 mintás O2Ring állomány metaadat-lusta betöltését.
+
+A terápiás adatok számítása és értelmezése nem változott ebben a kiadásban.
+
+---
+
 # SleepMate 5.3.17
 
 Release build: **5.3.17**.

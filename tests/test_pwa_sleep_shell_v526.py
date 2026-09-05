@@ -28,7 +28,7 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
     # rotated to the v5.3.9 release-cache generation.
     assert "sleepmate-shell-v5.2.14-ss131" in sw
     assert "sleepmate-api-v5.2.14-ss131" in sw
-    assert "sleepmate-shell-v5.3.17-o2-hydration-1" in sw
+    assert "sleepmate-shell-v5.3.18-o2-recovery-1" in sw
     assert "sleepmate-api-v5.3.9-refactor" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
