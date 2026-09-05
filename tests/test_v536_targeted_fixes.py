@@ -52,7 +52,14 @@ def test_cold_pwa_boot_loads_one_coherent_shell_and_authoritative_o2_master():
         worker = read(worker_name)
         assert "event.respondWith(navigationFallback(req))" in worker
         assert "event.respondWith(codeNetworkFirst(req))" in worker
-        assert "await client.navigate(client.url)" not in worker
+        assert "precacheShellAtomic" in worker
+        assert "await self.clients.claim()" in worker
+        assert "hadPreviousShell" in worker
+        assert "await client.navigate(client.url)" in worker
+        assert "SLEEPMATE_CLIENT_READY" in worker
+        assert "cleanupStaleSleepMateCaches" in worker
+        activate = worker.split("self.addEventListener('activate'", 1)[1].split("function backendUnavailable", 1)[0]
+        assert "caches.delete" not in activate
 
 
 def test_oximetry_touch_zoom_and_dynamic_axis_contract():
