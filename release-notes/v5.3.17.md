@@ -1,5 +1,7 @@
 # SleepMate 5.3.17
 
+Release build: **5.3.17**.
+
 Kiadási csatorna: **stable**.
 
 ## PWA és webes betöltési stabilitás
