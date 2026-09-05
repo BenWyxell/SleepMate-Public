@@ -26,6 +26,9 @@ jobs:
       - name: Apply daily Dashboard redesign
         run: python /tmp/apply_daily_dashboard_pwa_bento.py
 
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
       - name: Run focused regressions
         run: python -m pytest -q tests/test_pwa_dashboard_packaging.py tests/test_pwa_dashboard_daily_bento.py
 
