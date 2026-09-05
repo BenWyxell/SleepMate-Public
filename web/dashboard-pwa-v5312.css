@@ -1,0 +1,455 @@
+/* SleepMate 5.3.12 – premium PWA Dashboard bento layout.
+ * Scope is intentionally limited to phone-class installed PWAs and Dashboard.
+ * No data, card, trend or control is hidden by this layer.
+ */
+
+html.sm-phone-pwa #page-dashboard{
+  --dash-gap:10px;
+  --dash-radius:20px;
+  --dash-edge:rgba(91,204,239,.34);
+  --dash-edge-soft:rgba(91,174,216,.22);
+  --dash-panel:rgba(11,24,38,.88);
+  --dash-cyan:#55dcff;
+  --dash-teal:#53e0b3;
+  --dash-violet:#a98cff;
+  --dash-amber:#ffad55;
+  --dash-rose:#ff7f91;
+}
+
+/* Keep the content dense and intentional instead of a stack of full-width tiles. */
+html.sm-phone-pwa #page-dashboard{
+  padding-left:8px!important;
+  padding-right:8px!important;
+}
+html.sm-phone-pwa #page-dashboard #dashboardOverviewView{
+  display:block;
+  min-width:0;
+}
+
+/* Latest night hero: title and action share one compact glass surface. */
+html.sm-phone-pwa #page-dashboard .dashboard-heading{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:10px!important;
+  margin:0 0 10px!important;
+  padding:13px 14px!important;
+  border-radius:var(--dash-radius)!important;
+  border-color:var(--dash-edge-soft)!important;
+  background:
+    radial-gradient(ellipse at 0 0,rgba(85,220,255,.10),transparent 48%),
+    radial-gradient(ellipse at 100% 100%,rgba(169,140,255,.09),transparent 48%),
+    linear-gradient(145deg,rgba(13,29,45,.90),rgba(8,18,31,.94))!important;
+  box-shadow:0 16px 38px rgba(0,5,14,.18),inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+html.sm-phone-pwa #page-dashboard .dashboard-heading h2{
+  font-size:18px!important;
+  line-height:1.1!important;
+  letter-spacing:-.015em;
+}
+html.sm-phone-pwa #page-dashboard .dashboard-heading p{
+  margin-top:5px!important;
+  font-size:11px!important;
+  line-height:1.25;
+}
+html.sm-phone-pwa #page-dashboard .dashboard-heading #openLatestSleep{
+  width:auto!important;
+  min-width:146px;
+  min-height:42px;
+  padding:9px 12px!important;
+  border-radius:14px!important;
+  white-space:normal;
+  line-height:1.15;
+  font-size:11px!important;
+  color:#edfaff!important;
+  border-color:rgba(85,220,255,.32)!important;
+  background:
+    linear-gradient(135deg,rgba(85,220,255,.13),rgba(35,62,90,.84) 55%,rgba(169,140,255,.13))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,7,17,.18)!important;
+}
+
+/* Six latest-night metrics become a real 2-column bento grid. */
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:var(--dash-gap)!important;
+  margin:0 0 8px!important;
+}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric{
+  --tile-accent:var(--dash-cyan);
+  position:relative;
+  min-width:0!important;
+  min-height:104px!important;
+  padding:13px 12px 12px 14px!important;
+  border-radius:18px!important;
+  border:1px solid color-mix(in srgb,var(--tile-accent) 28%,rgba(86,150,190,.20))!important;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 105% -10%,color-mix(in srgb,var(--tile-accent) 13%,transparent),transparent 48%),
+    linear-gradient(145deg,rgba(23,39,56,.96),rgba(11,22,35,.97))!important;
+  box-shadow:0 13px 30px rgba(0,5,14,.19),inset 0 1px 0 rgba(255,255,255,.034)!important;
+}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric::before{
+  width:3px!important;
+  left:0!important;
+  top:14px!important;
+  bottom:14px!important;
+  height:auto!important;
+  border-radius:0 99px 99px 0;
+  background:var(--tile-accent)!important;
+  box-shadow:0 0 15px color-mix(in srgb,var(--tile-accent) 42%,transparent);
+}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric::after{
+  content:"";
+  position:absolute;
+  width:66px;
+  height:66px;
+  right:-28px;
+  bottom:-36px;
+  border-radius:50%;
+  pointer-events:none;
+  background:radial-gradient(circle,color-mix(in srgb,var(--tile-accent) 14%,transparent),transparent 68%);
+}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric.ahi{--tile-accent:var(--dash-teal)}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric.usage{--tile-accent:#61b8ff}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric.leak{--tile-accent:var(--dash-amber)}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric.events{--tile-accent:#5ee39b}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric.pressure{--tile-accent:var(--dash-violet)}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric.session-status{--tile-accent:#94b7cf}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric label{
+  margin:0 0 7px!important;
+  color:#9eb4c8!important;
+  font-size:10px!important;
+  line-height:1.15;
+  letter-spacing:.01em;
+}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric strong{
+  display:block!important;
+  margin:0!important;
+  color:#f2f8ff!important;
+  font-size:25px!important;
+  line-height:1.02!important;
+  letter-spacing:-.035em;
+  font-variant-numeric:tabular-nums;
+}
+html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric small{
+  display:block!important;
+  margin:7px 0 0!important;
+  color:#91a7bb!important;
+  font-size:9px!important;
+  line-height:1.2;
+  overflow-wrap:anywhere;
+}
+
+/* Event counters stay visible, but become one compact instrument row. */
+html.sm-phone-pwa #page-dashboard .dashboard-badges{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  gap:6px!important;
+  margin:7px 0 13px!important;
+}
+html.sm-phone-pwa #page-dashboard .dashboard-badges span{
+  min-width:0;
+  padding:7px 4px!important;
+  border:1px solid rgba(111,179,214,.20);
+  border-radius:12px!important;
+  text-align:center;
+  font-size:9px!important;
+  line-height:1!important;
+  white-space:nowrap;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 7px 18px rgba(0,4,12,.13);
+}
+
+/* Previous-night deltas are a 2x2 comparison board instead of four tall rows. */
+html.sm-phone-pwa #page-dashboard .previous-night-delta{
+  margin:0 0 13px!important;
+  padding:13px!important;
+  border-radius:var(--dash-radius)!important;
+  border-color:var(--dash-edge-soft)!important;
+  background:
+    radial-gradient(ellipse at 0 0,rgba(83,224,179,.07),transparent 45%),
+    radial-gradient(ellipse at 100% 100%,rgba(169,140,255,.07),transparent 45%),
+    linear-gradient(180deg,rgba(15,29,43,.94),rgba(9,20,33,.96))!important;
+}
+html.sm-phone-pwa #page-dashboard .previous-night-delta .panel-head{
+  margin-bottom:9px!important;
+}
+html.sm-phone-pwa #page-dashboard .previous-night-delta .panel-head h3{
+  font-size:14px!important;
+  line-height:1.2;
+}
+html.sm-phone-pwa #page-dashboard .previous-night-delta .panel-head span{
+  font-size:9px!important;
+}
+html.sm-phone-pwa #page-dashboard .delta-grid{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:8px!important;
+}
+html.sm-phone-pwa #page-dashboard .delta-item{
+  min-width:0;
+  min-height:92px;
+  padding:11px!important;
+  border-radius:15px!important;
+  border-color:rgba(95,174,214,.22)!important;
+  background:linear-gradient(145deg,rgba(18,34,49,.91),rgba(9,20,32,.95))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 8px 20px rgba(0,5,14,.13)!important;
+}
+html.sm-phone-pwa #page-dashboard .delta-item label{
+  font-size:9px!important;
+  line-height:1.2;
+}
+html.sm-phone-pwa #page-dashboard .delta-item strong{
+  margin:6px 0 5px!important;
+  font-size:17px!important;
+  line-height:1.08;
+  letter-spacing:-.02em;
+  overflow-wrap:anywhere;
+}
+html.sm-phone-pwa #page-dashboard .delta-item small{
+  font-size:8.5px!important;
+}
+html.sm-phone-pwa #page-dashboard .delta-item.good{border-color:rgba(83,224,179,.28)!important}
+html.sm-phone-pwa #page-dashboard .delta-item.bad{border-color:rgba(255,127,145,.28)!important}
+html.sm-phone-pwa #page-dashboard .delta-item.neutral{border-color:rgba(85,220,255,.28)!important}
+
+/* Therapy period controls become a compact command deck. */
+html.sm-phone-pwa #page-dashboard .trends-heading{
+  display:block!important;
+  margin:0 0 10px!important;
+  padding:13px!important;
+  border-radius:var(--dash-radius)!important;
+  border-color:var(--dash-edge-soft)!important;
+  background:
+    radial-gradient(ellipse at 90% 0,rgba(169,140,255,.08),transparent 46%),
+    linear-gradient(145deg,rgba(12,26,41,.91),rgba(8,18,30,.95))!important;
+}
+html.sm-phone-pwa #page-dashboard .trends-heading>div:first-child h2{
+  font-size:18px!important;
+  line-height:1.1;
+}
+html.sm-phone-pwa #page-dashboard .trends-heading>div:first-child p{
+  margin:5px 0 10px!important;
+  font-size:10px!important;
+}
+html.sm-phone-pwa #page-dashboard .dashboard-trend-actions{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:8px!important;
+  width:100%;
+}
+html.sm-phone-pwa #page-dashboard .period-switch{
+  grid-column:1/-1;
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  width:100%!important;
+  gap:3px!important;
+  padding:3px!important;
+  border-radius:14px!important;
+  overflow:hidden!important;
+}
+html.sm-phone-pwa #page-dashboard .period-switch button{
+  min-width:0!important;
+  min-height:38px;
+  padding:7px 4px!important;
+  border-radius:10px!important;
+  font-size:10px!important;
+  line-height:1.05;
+  white-space:normal!important;
+}
+html.sm-phone-pwa #page-dashboard #openComparison{
+  grid-column:1/-1;
+  justify-self:start;
+  width:auto!important;
+  min-height:38px;
+  padding:8px 11px!important;
+  border-radius:12px!important;
+  font-size:10px!important;
+}
+
+/* Four aggregate values use the same 2x2 bento rhythm. */
+html.sm-phone-pwa #page-dashboard .aggregate-cards{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:8px!important;
+  margin:0 0 12px!important;
+}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric{
+  --agg-accent:var(--dash-cyan);
+  min-width:0!important;
+  min-height:96px!important;
+  padding:12px 12px 11px 14px!important;
+  border-radius:17px!important;
+  border-color:color-mix(in srgb,var(--agg-accent) 24%,rgba(92,159,199,.20))!important;
+  background:
+    radial-gradient(circle at 100% 0,color-mix(in srgb,var(--agg-accent) 10%,transparent),transparent 50%),
+    linear-gradient(145deg,rgba(21,36,52,.95),rgba(10,21,34,.97))!important;
+  box-shadow:0 11px 26px rgba(0,5,14,.16),inset 0 1px 0 rgba(255,255,255,.03)!important;
+}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric:nth-child(1){--agg-accent:var(--dash-teal)}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric:nth-child(2){--agg-accent:#61b8ff}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric:nth-child(3){--agg-accent:var(--dash-violet)}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric:nth-child(4){--agg-accent:var(--dash-cyan)}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric::before{
+  background:var(--agg-accent)!important;
+  box-shadow:0 0 14px color-mix(in srgb,var(--agg-accent) 36%,transparent);
+}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric label{
+  margin-bottom:6px!important;
+  font-size:9px!important;
+}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric strong{
+  display:block!important;
+  font-size:24px!important;
+  line-height:1.02!important;
+  letter-spacing:-.03em;
+}
+html.sm-phone-pwa #page-dashboard .aggregate-cards .metric small{
+  display:block!important;
+  margin:6px 0 0!important;
+  font-size:8.5px!important;
+  line-height:1.2;
+  overflow-wrap:anywhere;
+}
+
+/* O2 summary remains fully visible but is visually integrated into the same bento language. */
+html.sm-phone-pwa #page-dashboard #smDashboardO2V534{
+  margin:0 0 11px!important;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-summary{
+  margin:0 0 10px!important;
+  padding:13px!important;
+  border-radius:var(--dash-radius)!important;
+  border-color:rgba(85,220,255,.28)!important;
+  background:
+    radial-gradient(ellipse at 0 0,rgba(85,220,255,.09),transparent 45%),
+    radial-gradient(ellipse at 100% 100%,rgba(169,140,255,.08),transparent 45%),
+    linear-gradient(145deg,rgba(12,27,42,.94),rgba(8,18,30,.97))!important;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-summary .panel-head{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:8px!important;
+  margin-bottom:9px!important;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-summary .panel-head h3{
+  font-size:15px!important;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-summary .panel-head span{
+  display:block;
+  margin-top:3px;
+  font-size:9px!important;
+}
+html.sm-phone-pwa #page-dashboard #smDashO2Open{
+  min-height:38px;
+  padding:8px 10px!important;
+  border-radius:12px!important;
+  font-size:10px!important;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-cards{
+  display:grid!important;
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:8px!important;
+  margin:0!important;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-cards>div{
+  min-width:0;
+  min-height:76px;
+  padding:10px 11px!important;
+  border-radius:15px!important;
+  border-color:rgba(85,220,255,.16)!important;
+  background:linear-gradient(145deg,rgba(9,23,36,.92),rgba(6,16,27,.95))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.022),0 7px 18px rgba(0,5,14,.11)!important;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-cards span{
+  font-size:9px!important;
+  line-height:1.15;
+}
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-cards b{
+  margin-top:7px!important;
+  font-size:21px!important;
+  line-height:1!important;
+  letter-spacing:-.025em;
+}
+html.sm-phone-pwa #page-dashboard #smDashO2Empty{
+  grid-column:1/-1;
+  margin-top:2px;
+  padding:8px!important;
+  font-size:9px!important;
+}
+
+/* Trend cards stay full-width for legibility, but lose unnecessary vertical bulk. */
+html.sm-phone-pwa #page-dashboard #dashboardOverviewView>.trend-grid,
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-trends{
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:10px!important;
+}
+html.sm-phone-pwa #page-dashboard #dashboardOverviewView>.trend-grid .trend-card,
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-trends .trend-card{
+  margin:0!important;
+  padding:11px!important;
+  border-radius:18px!important;
+  border-color:var(--dash-edge-soft)!important;
+  overflow:hidden;
+  background:
+    radial-gradient(ellipse at 100% 0,rgba(85,220,255,.055),transparent 42%),
+    linear-gradient(180deg,rgba(15,28,42,.95),rgba(8,18,30,.97))!important;
+  box-shadow:0 13px 30px rgba(0,5,14,.17),inset 0 1px 0 rgba(255,255,255,.028)!important;
+}
+html.sm-phone-pwa #page-dashboard #dashboardOverviewView>.trend-grid .trend-card .panel-head,
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-trends .trend-card .panel-head{
+  margin-bottom:7px!important;
+}
+html.sm-phone-pwa #page-dashboard #dashboardOverviewView>.trend-grid .trend-card .panel-head h3,
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-trends .trend-card .panel-head h3{
+  font-size:13px!important;
+}
+html.sm-phone-pwa #page-dashboard #dashboardOverviewView>.trend-grid .trend-card canvas,
+html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-trends .trend-card canvas{
+  height:168px!important;
+  min-height:168px!important;
+  max-height:168px!important;
+  border-radius:12px!important;
+  background:linear-gradient(180deg,rgba(5,16,27,.95),rgba(6,18,29,.98))!important;
+}
+
+/* Comparison result follows the denser Dashboard rhythm too. */
+html.sm-phone-pwa #page-dashboard .comparison-summary-panel{
+  margin:0 0 11px!important;
+  padding:12px!important;
+  border-radius:18px!important;
+}
+html.sm-phone-pwa #page-dashboard .comparison-summary-panel .comparison-metrics{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  gap:7px!important;
+}
+
+/* Slightly tighter spacing between the major Dashboard blocks. */
+html.sm-phone-pwa #page-dashboard #dashboardOverviewView>*{
+  scroll-margin-top:72px;
+}
+
+@media(max-width:370px){
+  html.sm-phone-pwa #page-dashboard .dashboard-heading{
+    grid-template-columns:1fr!important;
+  }
+  html.sm-phone-pwa #page-dashboard .dashboard-heading #openLatestSleep{
+    width:100%!important;
+  }
+  html.sm-phone-pwa #page-dashboard .latest-sleep-cards,
+  html.sm-phone-pwa #page-dashboard .aggregate-cards,
+  html.sm-phone-pwa #page-dashboard .delta-grid,
+  html.sm-phone-pwa #page-dashboard .sm-dashboard-o2-cards{
+    gap:7px!important;
+  }
+  html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric{
+    min-height:98px!important;
+    padding:11px 10px 10px 12px!important;
+  }
+  html.sm-phone-pwa #page-dashboard .latest-sleep-cards .metric strong{
+    font-size:22px!important;
+  }
+}
