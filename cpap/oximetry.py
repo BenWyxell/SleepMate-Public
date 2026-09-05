@@ -54,6 +54,55 @@ class SessionMatch:
     clock_offset_seconds: float = 0.0
 
 
+class _LazyRecording(dict):
+    """Recording metadata that reads the large sample array only on demand.
+
+    O2Ring JSON files contain metadata and summary first, followed by a potentially
+    very large ``samples`` array. Most application paths (startup status, sidebar,
+    recordings list, trends, known-file detection and CPAP candidate matching) do
+    not need those samples. Keeping them lazy prevents one harmless status request
+    from decoding every historical night before the Oximetria UI can even mount.
+    """
+
+    def __init__(self, metadata: dict, path: Path):
+        super().__init__(metadata)
+        self._path = path
+        self._samples_loaded = False
+
+    def _ensure_samples(self) -> None:
+        if self._samples_loaded:
+            return
+        self._samples_loaded = True
+        samples = []
+        try:
+            payload = json.loads(self._path.read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                samples = payload.get("samples") or []
+                # Refresh scalar metadata as well in case an older/hand-edited
+                # file changed after the lightweight prefix was read.
+                for key, value in payload.items():
+                    if key != "samples":
+                        dict.__setitem__(self, key, value)
+        except Exception:
+            samples = []
+        dict.__setitem__(self, "samples", samples)
+
+    def get(self, key, default=None):
+        if key == "samples":
+            self._ensure_samples()
+        return dict.get(self, key, default)
+
+    def __getitem__(self, key):
+        if key == "samples":
+            self._ensure_samples()
+        return dict.__getitem__(self, key)
+
+    def __contains__(self, key):
+        if key == "samples":
+            return True
+        return dict.__contains__(self, key)
+
+
 class OximetryStore:
     """Simple file-backed store kept separate from the external CPAP source."""
 
@@ -91,13 +140,41 @@ class OximetryStore:
             (self.raw_dir / f"{rid}.vld").write_bytes(raw_bytes)
         return payload
 
+    @staticmethod
+    def _recording_metadata(path: Path) -> dict:
+        """Read only the JSON prefix before the large ``samples`` array.
+
+        SleepMate writes ``samples`` as the final top-level field, so metadata can
+        be decoded from a tiny prefix. A conservative full-file fallback keeps
+        compatibility with legacy or manually modified recording files.
+        """
+        try:
+            buffer = ""
+            with path.open("r", encoding="utf-8") as handle:
+                while len(buffer) < 262_144:
+                    chunk = handle.read(32_768)
+                    if not chunk:
+                        break
+                    buffer += chunk
+                    marker = buffer.find(',"samples":')
+                    if marker >= 0:
+                        payload = json.loads(buffer[:marker] + "}")
+                        return payload if isinstance(payload, dict) else {}
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                return {}
+            payload.pop("samples", None)
+            return payload
+        except Exception:
+            return {}
+
     def list_recordings(self) -> list[dict]:
         result: list[dict] = []
         for path in sorted(self.recordings_dir.glob("*.json"), reverse=True):
-            try:
-                result.append(json.loads(path.read_text(encoding="utf-8")))
-            except Exception:
+            metadata = self._recording_metadata(path)
+            if not metadata:
                 continue
+            result.append(_LazyRecording(metadata, path))
         return sorted(result, key=lambda item: float(item.get("start_ts") or 0), reverse=True)
 
     def get_recording(self, recording_id: str) -> dict | None:
