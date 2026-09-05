@@ -16,14 +16,14 @@ def test_acceptance_p0_single_frontend_owner_and_stale_pwa_recovery():
     shell = read("cpap/v530_features.py")
     sw = read("web/service-worker.js")
     base = read("web/service-worker-v508-base.js")
-    assert APP_VERSION == "5.3.16"
+    assert APP_VERSION == "5.3.17"
     assert 'UI_VERSION = "5.3.4"' in shell
     assert "o2ring-v532.js" not in shell
     assert "frontend-v533.js" not in shell
     assert "frontend-v534.js" in shell
     assert "o2ring-v534.css" in shell
     for worker in (sw, base):
-        assert "sleepmate-shell-v5.3.16-o2-hydration-1" in worker
+        assert "sleepmate-shell-v5.3.17-o2-hydration-1" in worker
         assert "sleepmate-api-v5.3.9-refactor" in worker
         assert "/o2ring.js" in worker
         assert "/frontend-v534.js?v=5.3.4" in worker
