@@ -714,8 +714,8 @@ function applyOximetryVisibility(summary=state.summary){
   $$('.col-spo2').forEach(x=>x.classList.toggle('hidden',!showSpo2));
   $$('.col-hr').forEach(x=>x.classList.toggle('hidden',!showHr));
   const daily=state.o2Daily?.summary||{},spo2Value=daily.spo2_median??daily.spo2_average??summary?.oximetry?.spo2_median,hrValue=daily.heart_rate_median??daily.heart_rate_average??summary?.oximetry?.pulse_median,loading=state.o2DailyLoading===true;
-  if($('#spo2')){$('#spo2').textContent=spo2Value!=null?`${Number(spo2Value).toLocaleString('hu-HU',{maximumFractionDigits:1})}%`:loading?'Betöltés…':'Nincs adat';$('#spo2').classList.toggle('no-data',spo2Value==null&&!loading)}
-  if($('#hr')){$('#hr').textContent=hrValue!=null?`${Number(hrValue).toLocaleString('hu-HU',{maximumFractionDigits:1})}`:loading?'Betöltés…':'Nincs adat';$('#hr').classList.toggle('no-data',hrValue==null&&!loading)}
+  if($('#spo2')){$('#spo2').textContent=spo2Value!=null?`${Number(spo2Value).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})}%`:loading?'Betöltés…':'Nincs adat';$('#spo2').classList.toggle('no-data',spo2Value==null&&!loading)}
+  if($('#hr')){$('#hr').textContent=hrValue!=null?`${Number(hrValue).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})}`:loading?'Betöltés…':'Nincs adat';$('#hr').classList.toggle('no-data',hrValue==null&&!loading)}
 }
 
 
