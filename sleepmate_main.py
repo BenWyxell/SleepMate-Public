@@ -173,6 +173,7 @@ def main() -> int:
         from cpap.sleep_analysis_v522 import install_sleep_analysis_v522
         from cpap.sleepsync_integration import install_sleepsync_integration
         from cpap.google_drive_integration import install_google_drive_integration
+        from cpap.o2ring_stability_v5319 import install_o2ring_stability_v5319
         from cpap.o2ring_integration import install_o2ring_integration
         from cpap.o2ring_device_config import install_o2ring_device_config
         from cpap.o2ring_stream import install_o2ring_stream
@@ -189,6 +190,10 @@ def main() -> int:
         install_sleepsync_integration(app)
         install_google_drive_integration(app)
         install_onboarding(app)
+
+        # The O2 control plane is hardened before the service instance is made:
+        # HTTP/UI startup must never wait on historical O2 recording parsing.
+        install_o2ring_stability_v5319()
 
         # v5.3 additions are layered only after the full v5.2.20 runtime is
         # installed, so the public release remains the exact behavioral base.
