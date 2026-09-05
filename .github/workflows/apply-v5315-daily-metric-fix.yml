@@ -1,0 +1,66 @@
+name: Apply v5.3.15 daily metric hotfix
+
+on:
+  push:
+    branches:
+      - v5315-daily-metric-fix-helper
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fixes branch
+        uses: actions/checkout@v4
+        with:
+          ref: v5.3.15-fixes
+          fetch-depth: 0
+
+      - name: Apply daily metric fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          app = Path('web/app-core.js')
+          text = app.read_text(encoding='utf-8')
+          replacements = {
+              "Number(spo2Value).toLocaleString('hu-HU',{maximumFractionDigits:1})": "Number(spo2Value).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})",
+              "Number(hrValue).toLocaleString('hu-HU',{maximumFractionDigits:1})": "Number(hrValue).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})",
+          }
+          for old, new in replacements.items():
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'app-core.js: expected exactly one {old!r}, got {count}')
+              text = text.replace(old, new, 1)
+          app.write_text(text, encoding='utf-8')
+
+          css = Path('web/dashboard-pwa-v5312.css')
+          text = css.read_text(encoding='utf-8')
+          old = "html.sm-phone-pwa #page-dashboard #dashboardDailyView .daily-primary-stat.ahi{--daily-accent:var(--dash-teal)}"
+          new = "html.sm-phone-pwa #page-dashboard #dashboardDailyView .daily-primary-stat.ahi{--daily-accent:var(--dash-teal);grid-column:1/-1!important}"
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'dashboard CSS: expected one AHI rule, got {count}')
+          css.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          test = Path('tests/test_v5316_daily_o2_format_and_ahi_span.py')
+          test.write_text('''from pathlib import Path\n\nROOT = Path(__file__).resolve().parents[1]\n\ndef read(path: str) -> str:\n    return (ROOT / path).read_text(encoding="utf-8")\n\ndef test_daily_o2_cards_use_one_stable_decimal_format() -> None:\n    app = read("web/app-core.js")\n    assert "Number(spo2Value).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})" in app\n    assert "Number(hrValue).toLocaleString('hu-HU',{minimumFractionDigits:1,maximumFractionDigits:1})" in app\n    assert "Number(spo2Value).toLocaleString('hu-HU',{maximumFractionDigits:1})" not in app\n    assert "Number(hrValue).toLocaleString('hu-HU',{maximumFractionDigits:1})" not in app\n\n    o2 = read("web/o2ring.js")\n    assert "id('spo2').textContent=`${fmt(spo2,1)}%`" in o2\n    assert "id('hr').textContent=`${fmt(hr,1)}`" in o2\n\ndef test_phone_daily_ahi_spans_both_bento_columns() -> None:\n    css = read("web/dashboard-pwa-v5312.css")\n    assert ".daily-core-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important" in css\n    assert ".daily-primary-stat.ahi{--daily-accent:var(--dash-teal);grid-column:1/-1!important}" in css\n''', encoding='utf-8')
+          PY
+
+          python -m pip install -q pytest
+          python -m pytest -q \
+            tests/test_v5316_daily_o2_format_and_ahi_span.py \
+            tests/test_pwa_dashboard_daily_bento.py \
+            tests/test_v5315_pwa_daily_delivery_and_o2.py \
+            tests/test_v5312_pwa_dashboard_ui.py
+
+          git add web/app-core.js web/dashboard-pwa-v5312.css tests/test_v5316_daily_o2_format_and_ahi_span.py
+          git commit -m "Fix daily O2 value flicker and widen AHI card"
+          git push origin HEAD:v5.3.15-fixes
