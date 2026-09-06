@@ -1,20 +1,20 @@
 const UI_VERSION='5.3.4';
-const RELEASE_VERSION='5.3.21';
-const BUILD_ID='5.3.21';
-const SHELL_CACHE='sleepmate-shell-v5.3.21';
-const API_CACHE='sleepmate-api-v5.3.21';
+const RELEASE_VERSION='5.3.22';
+const BUILD_ID='5.3.22';
+const SHELL_CACHE='sleepmate-shell-v5.3.22';
+const API_CACHE='sleepmate-api-v5.3.22';
 const SHELL=[
-  '/','/index.html','/style.css?v=5.3.21',
-  '/app-core.js?v=5.3.21','/app-engine119.js?v=5.3.21','/first-run.js?v=4','/first-run.css?v=4',
-  '/sleepsync.css?v=5.3.21','/sleepsync-base.css?v=5.3.21','/sleepsync-override.css?v=5.3.21',
-  '/sleepsync-stability.css?v=5.3.21','/sleepsync-polish.css?v=5.3.21','/sleepsync-notice.css?v=5.3.21',
-  '/sleepsync-polish.js?v=5.3.21','/sleepsync-hydration-v529.js?v=5.3.21','/sleepsync-mobile-v5213.css?v=5.3.21',
+  '/','/index.html','/style.css?v=5.3.22',
+  '/app-core.js?v=5.3.22','/app-engine119.js?v=5.3.22','/first-run.js?v=4','/first-run.css?v=4',
+  '/sleepsync.css?v=5.3.22','/sleepsync-base.css?v=5.3.22','/sleepsync-override.css?v=5.3.22',
+  '/sleepsync-stability.css?v=5.3.22','/sleepsync-polish.css?v=5.3.22','/sleepsync-notice.css?v=5.3.22',
+  '/sleepsync-polish.js?v=5.3.22','/sleepsync-hydration-v529.js?v=5.3.22','/sleepsync-mobile-v5213.css?v=5.3.22',
   '/sleepmate-sleep.js?v=5.2.6','/sleepmate-sleep-v523.js?v=5.2.6','/sleepmate-chart-v523.js?v=5.2.14',
   '/sleepmate-sleep-v524.js?v=5.2.6','/sleepmate-sleep-refresh-v5212.js?v=5.2.12',
-  '/sleepmate-aurora.css?v=5.3.21','/sleepmate-v530.css?v=5.3.21','/dashboard-pwa-v5312.css?v=5.3.21',
-  '/sleepmate-v530.js?v=5.3.21','/o2ring.css?v=5.3.21','/o2ring.js?v=5.3.21',
-  '/o2ring-report-ui.js?v=5.3.21','/o2ring-v534.css?v=5.3.21','/frontend-v534.js?v=5.3.21',
-  '/o2ring-data-management.js?v=5.3.21','/manifest.webmanifest',
+  '/sleepmate-aurora.css?v=5.3.22','/sleepmate-v530.css?v=5.3.22','/dashboard-pwa-v5312.css?v=5.3.22',
+  '/sleepmate-v530.js?v=5.3.22','/o2ring.css?v=5.3.22','/o2ring.js?v=5.3.22',
+  '/o2ring-report-ui.js?v=5.3.22','/o2ring-v534.css?v=5.3.22','/frontend-v534.js?v=5.3.22',
+  '/o2ring-data-management.js?v=5.3.22','/manifest.webmanifest',
   '/assets/pwa-192.png','/assets/pwa-512.png','/assets/sleepmate-icon-v410.webp','/assets/sleepmate-splash-v410.webp',
   '/assets/sleepsync-aurora.svg','/assets/sleepsync-mark.svg','/assets/sleepsync-logo.webp','/assets/sidebar-aurora-line.svg?v=122'
 ];

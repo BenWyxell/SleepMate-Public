@@ -28,7 +28,7 @@ def test_source_and_packaged_entrypoints_load_the_same_static_o2_assets():
     index = (WEB / "index.html").read_text(encoding="utf-8")
     spec = (ROOT / "build/windows/SleepMate.spec").read_text(encoding="utf-8")
     for asset in ("frontend-v534.js", "sleepmate-v530.js", "o2ring-data-management.js"):
-        assert index.count(f'src="/{asset}?v=5.3.21"') == 1
+        assert index.count(f'src="/{asset}?v=5.3.22"') == 1
         assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
     assert "sm-frontend-v534-inline" not in index
     assert "_patch_index" not in (ROOT / "cpap/v530_features.py").read_text(encoding="utf-8")

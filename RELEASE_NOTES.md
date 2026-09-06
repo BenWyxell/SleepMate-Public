@@ -1,3 +1,15 @@
+# SleepMate 5.3.22
+
+Automatikus MSI-frissítés tesztkiadás a v5.3.21 → v5.3.22 frissítési út ellenőrzésére.
+
+- verified unsigned Windows MSI
+- Windows Installer / `msiexec.exe` alapú frissítés
+- nincs `SleepMateUpdater.exe`
+- nincs új alkalmazásfunkció vagy működésbeli változtatás
+- a kiadás célja annak ellenőrzése, hogy a telepített v5.3.21 az alkalmazáson belül felismeri, letölti és telepíti a v5.3.22 frissítést
+
+---
+
 # SleepMate 5.3.21
 
 Release build: **5.3.21**.
