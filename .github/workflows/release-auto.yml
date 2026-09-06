@@ -292,6 +292,7 @@ jobs:
             exit 1
           }
 
-          TARGET="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')"
-          [[ "$TARGET" == "$RELEASE_SHA" || "$TARGET" == "$TAG" ]] || { echo "Unexpected release target: $TARGET" >&2; exit 1; }
-          echo "Automatic release $TAG published successfully from $RELEASE_SHA."
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          TAG_COMMIT="$(git rev-list -n 1 "$TAG")"
+          [[ "$TAG_COMMIT" == "$RELEASE_SHA" ]] || { echo "Published tag $TAG resolves to $TAG_COMMIT instead of $RELEASE_SHA" >&2; exit 1; }
+          echo "Automatic release $TAG published successfully from verified tag commit $TAG_COMMIT."
