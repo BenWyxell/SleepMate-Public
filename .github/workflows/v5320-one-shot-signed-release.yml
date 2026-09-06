@@ -1,0 +1,264 @@
+name: SleepMate 5.3.20 one-shot signed publisher
+
+on:
+  push:
+    branches:
+      - fix-v5.3.20-critical-regressions
+    paths:
+      - '.github/workflows/v5320-one-shot-signed-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sleepmate-v5.3.20-one-shot-signed
+  cancel-in-progress: false
+
+jobs:
+  publish-after-canonical-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout exact release source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate v5.3.20 release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
+          test "$VERSION" = '5.3.20'
+          test -f release-notes/v5.3.20.md
+          grep -F '# SleepMate 5.3.20' release-notes/v5.3.20.md
+          test "$GITHUB_REF_NAME" = 'fix-v5.3.20-critical-regressions'
+          echo "Exact source SHA: $GITHUB_SHA"
+
+      - name: Refuse to overwrite existing v5.3.20
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view v5.3.20 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'v5.3.20 release already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v5.3.20" >/dev/null 2>&1; then
+            echo 'v5.3.20 tag already exists; refusing to move or reuse it.' >&2
+            exit 1
+          fi
+
+      - name: Dispatch canonical Windows release gate for exact SHA
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/windows-release.yml/dispatches" \
+            -f ref="$GITHUB_REF_NAME"
+
+          RUN_ID=''
+          for _ in $(seq 1 60); do
+            RUN_ID="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/windows-release.yml/runs?branch=$GITHUB_REF_NAME&event=workflow_dispatch&per_page=30" \
+              --jq ".workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\") | .id" | head -n1)"
+            if [[ -n "$RUN_ID" ]]; then break; fi
+            sleep 3
+          done
+          if [[ -z "$RUN_ID" ]]; then
+            echo 'Canonical Windows run for exact source SHA was not found.' >&2
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Canonical Windows run: $RUN_ID"
+
+      - name: Wait for complete canonical Windows verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 300); do
+            STATUS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.status')"
+            CONCLUSION="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.conclusion // ""')"
+            SHA="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '.head_sha')"
+            test "$SHA" = "$GITHUB_SHA"
+            echo "canonical status=$STATUS conclusion=$CONCLUSION"
+            if [[ "$STATUS" == 'completed' ]]; then
+              if [[ "$CONCLUSION" != 'success' ]]; then
+                gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" || true
+                exit 1
+              fi
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Canonical Windows workflow timed out.' >&2
+          exit 1
+
+      - name: Download canonical VERIFIED unsigned release set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf signpath-input
+          mkdir signpath-input
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name SleepMate-Windows-x64-VERIFIED-RELEASE \
+            --dir signpath-input
+          test -f signpath-input/SleepMate_Setup_v5.3.20.msi
+          test -f signpath-input/SleepMate_v5.3.20_windows_x64.zip
+          test -f signpath-input/release-metadata.json
+          test "$(jq -r '.version' signpath-input/release-metadata.json)" = '5.3.20'
+          test "$(jq -r '.git_commit' signpath-input/release-metadata.json)" = "$GITHUB_SHA"
+          (
+            cd signpath-input
+            sha256sum -c SHA256SUMS.txt
+          )
+
+      - name: Require configured SignPath trusted signing
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in SIGNPATH_API_TOKEN SIGNPATH_ORGANIZATION_ID SIGNPATH_PROJECT_SLUG SIGNPATH_POLICY_SLUG SIGNPATH_ARTIFACT_CONFIGURATION_SLUG; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Stable release blocked: $name is not configured. Unsigned artifacts will NOT be published." >&2
+              exit 1
+            fi
+          done
+
+      - name: Upload exact SignPath input
+        id: signpath-input-artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SleepMate-Windows-x64-SIGNPATH-INPUT-v5.3.20
+          path: signpath-input/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign MSI and portable package through SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+          github-artifact-id: ${{ steps.signpath-input-artifact.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signpath-output
+
+      - name: Verify signed Windows payload and rebuild final integrity set
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '5.3.20'
+          $msi = Get-ChildItem signpath-output -File -Recurse -Filter "SleepMate_Setup_v${version}.msi" | Select-Object -First 1
+          $zip = Get-ChildItem signpath-output -File -Recurse -Filter "SleepMate_v${version}_windows_x64.zip" | Select-Object -First 1
+          if (-not $msi -or -not $zip) { throw 'SignPath output is missing the MSI or portable ZIP.' }
+          if ((Get-AuthenticodeSignature $msi.FullName).Status -ne 'Valid') { throw 'Final MSI Authenticode signature is not valid.' }
+
+          $msiExtract = Join-Path $env:RUNNER_TEMP 'SleepMate-v5320-Signed-MSI'
+          $zipExtract = Join-Path $env:RUNNER_TEMP 'SleepMate-v5320-Signed-ZIP'
+          Remove-Item $msiExtract,$zipExtract,'signed-release' -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $msiExtract,$zipExtract,'signed-release' | Out-Null
+
+          $extract = Start-Process -FilePath "$env:WINDIR\System32\msiexec.exe" -ArgumentList @('/a',"`"$($msi.FullName)`"",'/qn','/norestart',"TARGETDIR=`"$msiExtract`"") -Wait -PassThru
+          if ($extract.ExitCode -notin @(0,3010)) { throw "Signed MSI extraction failed: $($extract.ExitCode)" }
+          Expand-Archive -Path $zip.FullName -DestinationPath $zipExtract -Force
+
+          $msiExe = Get-ChildItem $msiExtract -File -Recurse -Filter 'SleepMate.exe' | Select-Object -First 1
+          $zipExe = Get-ChildItem $zipExtract -File -Recurse -Filter 'SleepMate.exe' | Select-Object -First 1
+          foreach ($exe in @($msiExe,$zipExe)) {
+            if (-not $exe) { throw 'A signed release container is missing SleepMate.exe.' }
+            if ((Get-AuthenticodeSignature $exe.FullName).Status -ne 'Valid') { throw "Invalid SleepMate.exe signature in $($exe.FullName)" }
+          }
+          if (Get-ChildItem $msiExtract,$zipExtract -File -Recurse -Filter 'SleepMateUpdater.exe' | Select-Object -First 1) {
+            throw 'Retired SleepMateUpdater.exe is present in signed output.'
+          }
+
+          Get-ChildItem signpath-output -File -Recurse | Where-Object Name -notin @('SHA256SUMS.txt','release-metadata.json','sleepmate-update.json') | Copy-Item -Destination signed-release -Force
+          Copy-Item signpath-input\msi-inventory.txt,signpath-input\build-msi-toolchain.txt -Destination signed-release -Force
+          python .\tools\build_msi_update_manifest.py --msi $msi.FullName --output signed-release\sleepmate-update.json --min-version 4.2.2
+          if ($LASTEXITCODE -ne 0) { throw 'Final signed update manifest generation failed.' }
+
+          $hash = (Get-FileHash $msi.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($msi.Name)" | Set-Content "signed-release\$($msi.Name).sha256" -Encoding ascii
+
+          $metadata = Get-Content signpath-input\release-metadata.json -Raw | ConvertFrom-Json
+          $metadata.signed = $true
+          $metadata.signing_status = 'SignPath trusted-build Authenticode signatures verified before publication.'
+          $metadata.release_validation += 'SignPath trusted-build signing'
+          $metadata.release_validation += 'MSI Authenticode signature verification'
+          $metadata.release_validation += 'SleepMate.exe signature verification in MSI and portable ZIP'
+          $metadata | ConvertTo-Json -Depth 8 | Set-Content signed-release\release-metadata.json -Encoding utf8
+
+          Push-Location signed-release
+          Get-ChildItem -File | Where-Object Name -ne 'SHA256SUMS.txt' | Sort-Object Name | ForEach-Object {
+            $digest = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$digest  $($_.Name)"
+          } | Set-Content SHA256SUMS.txt -Encoding ascii
+          Pop-Location
+
+      - name: Re-verify exact final publication set
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f signed-release/SleepMate_Setup_v5.3.20.msi
+          test -f signed-release/SleepMate_Setup_v5.3.20.msi.sha256
+          test -f signed-release/SleepMate_v5.3.20_windows_x64.zip
+          test -f signed-release/sleepmate-update.json
+          test -f signed-release/release-metadata.json
+          test -f signed-release/SHA256SUMS.txt
+          (
+            cd signed-release
+            sha256sum -c SHA256SUMS.txt
+          )
+          test "$(jq -r '.version' signed-release/sleepmate-update.json)" = '5.3.20'
+          test "$(jq -r '.asset' signed-release/sleepmate-update.json)" = 'SleepMate_Setup_v5.3.20.msi'
+          test "$(jq -r '.signed' signed-release/release-metadata.json)" = 'true'
+          test "$(jq -r '.git_commit' signed-release/release-metadata.json)" = "$GITHUB_SHA"
+
+      - name: Create draft v5.3.20 from signed verified artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v5.3.20 \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title 'SleepMate 5.3.20 — kritikus stabilitási javítások' \
+            --notes-file release-notes/v5.3.20.md \
+            --draft
+          gh release upload v5.3.20 signed-release/* --repo "$GITHUB_REPOSITORY"
+
+      - name: Verify exact GitHub asset set and publish stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE="$(gh release view v5.3.20 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)"
+          LOCAL="$(find signed-release -maxdepth 1 -type f -printf '%f\n' | sort)"
+          if [[ "$REMOTE" != "$LOCAL" ]]; then
+            echo 'GitHub Release assets differ from the signed verified publication set.' >&2
+            diff -u <(printf '%s\n' "$LOCAL") <(printf '%s\n' "$REMOTE") || true
+            exit 1
+          fi
+          gh release edit v5.3.20 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false
+          gh release view v5.3.20 --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,targetCommitish,url
