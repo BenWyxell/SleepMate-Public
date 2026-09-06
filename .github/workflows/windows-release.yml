@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout complete source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -93,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout canonical source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -227,7 +227,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download portable release inputs
         uses: actions/download-artifact@v4
@@ -371,7 +371,7 @@ jobs:
 
     steps:
       - name: Checkout exact tested source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -638,7 +638,7 @@ jobs:
 
     steps:
       - name: Checkout exact verified source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -746,7 +746,7 @@ jobs:
 
     steps:
       - name: Checkout exact verified source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
