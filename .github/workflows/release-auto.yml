@@ -1,0 +1,297 @@
+name: Automatic verified release orchestrator
+
+on:
+  push:
+    branches:
+      - release-auto
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sleepmate-automatic-release
+  cancel-in-progress: false
+
+jobs:
+  orchestrate-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout automatic release branch
+        uses: actions/checkout@v4
+        with:
+          ref: release-auto
+          fetch-depth: 0
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Resolve release plan and safety mode
+        id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          set -euo pipefail
+
+          VERSION="$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')"
+          TAG="v${VERSION}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid APP_VERSION: $VERSION" >&2; exit 1; }
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to do."
+            echo 'already_released=true' >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LATEST_TAG="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          PREVIOUS="${LATEST_TAG#v}"
+          [[ "$PREVIOUS" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid latest release tag: $LATEST_TAG" >&2; exit 1; }
+
+          python - "$PREVIOUS" "$VERSION" <<'PY'
+          import sys
+          old = tuple(map(int, sys.argv[1].split('.')))
+          new = tuple(map(int, sys.argv[2].split('.')))
+          if new <= old:
+              raise SystemExit(f'APP_VERSION must be newer than latest release: {sys.argv[2]} <= {sys.argv[1]}')
+          PY
+
+          values=(
+            "$SIGNPATH_API_TOKEN"
+            "$SIGNPATH_ORGANIZATION_ID"
+            "$SIGNPATH_PROJECT_SLUG"
+            "$SIGNPATH_POLICY_SLUG"
+            "$SIGNPATH_ARTIFACT_CONFIGURATION_SLUG"
+          )
+          configured=0
+          for value in "${values[@]}"; do
+            [[ -n "$value" ]] && configured=$((configured + 1))
+          done
+          if [[ "$configured" -ne 0 ]]; then
+            echo 'Automatic release orchestration is intentionally blocked once SignPath is configured; signed workflow-dispatch support must be enabled first.' >&2
+            exit 1
+          fi
+
+          POLICY="$(python -c 'from cpap.version import UPDATE_SIGNATURE_POLICY; print(UPDATE_SIGNATURE_POLICY)')"
+          [[ "$POLICY" == 'verified-unsigned' ]] || { echo "Automatic unsigned release requires UPDATE_SIGNATURE_POLICY=verified-unsigned, found $POLICY" >&2; exit 1; }
+
+          test -s "release-notes/v${VERSION}.md" || { echo "Missing release-notes/v${VERSION}.md" >&2; exit 1; }
+
+          echo 'already_released=false' >> "$GITHUB_OUTPUT"
+          echo "previous=$PREVIOUS" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Synchronize current release identity
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        env:
+          PREVIOUS: ${{ steps.plan.outputs.previous }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          python tools/prepare_release_identity.py --previous "$PREVIOUS" --current "$VERSION"
+
+      - name: Validate prepared release source
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install pytest
+          python scripts/verify_sleepsync_integration.py
+          python -m pytest -q \
+            tests/test_release_signing_modes.py \
+            tests/test_release_version_contract.py \
+            tests/test_v5320_critical_regressions.py \
+            tests/test_windows_packaging_v500.py
+          git diff --check
+          cmp web/service-worker.js web/service-worker-v508-base.js
+
+      - name: Commit prepared release source
+        if: steps.plan.outputs.already_released != 'true'
+        id: source
+        shell: bash
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add RELEASE_NOTES.md web scripts tests
+          if git diff --cached --quiet; then
+            echo 'No release identity changes were required.'
+          else
+            git commit -m "release: prepare v${VERSION} automatically"
+            git push origin HEAD:release-auto
+          fi
+
+          RELEASE_SHA="$(git rev-parse HEAD)"
+          echo "release_sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
+          echo "Prepared release commit: $RELEASE_SHA"
+
+      - name: Create exact release tag
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        env:
+          TAG: ${{ steps.plan.outputs.tag }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/tmp/tag-ref 2>/dev/null; then
+            REMOTE_TAG="$(awk '{print $1}' /tmp/tag-ref)"
+            RESOLVED="$(git rev-list -n 1 "$TAG" 2>/dev/null || true)"
+            if [[ -z "$RESOLVED" ]]; then
+              git fetch origin "refs/tags/$TAG:refs/tags/$TAG"
+              RESOLVED="$(git rev-list -n 1 "$TAG")"
+            fi
+            [[ "$RESOLVED" == "$RELEASE_SHA" ]] || { echo "Existing tag $TAG does not point to $RELEASE_SHA" >&2; exit 1; }
+            echo "Tag $TAG already points to the prepared commit."
+          else
+            git tag -a "$TAG" "$RELEASE_SHA" -m "SleepMate $TAG automatic verified release"
+            git push origin "$TAG"
+          fi
+
+      - name: Dispatch canonical verified Windows pipeline
+        if: steps.plan.outputs.already_released != 'true'
+        id: canonical
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/windows-release.yml/dispatches" \
+            -f ref="$TAG"
+
+          RUN_ID=''
+          for _ in $(seq 1 60); do
+            RUN_ID="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow windows-release.yml \
+              --event workflow_dispatch \
+              --limit 30 \
+              --json databaseId,headSha \
+              --jq ".[] | select(.headSha == \"$RELEASE_SHA\") | .databaseId" | head -n 1)"
+            [[ -n "$RUN_ID" ]] && break
+            sleep 2
+          done
+          [[ -n "$RUN_ID" ]] || { echo 'Could not resolve dispatched canonical workflow run.' >&2; exit 1; }
+
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Canonical workflow run: $RUN_ID"
+          gh run watch "$RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status
+
+      - name: Download canonical verified publication set
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ steps.canonical.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name SleepMate-Windows-x64-VERIFIED-RELEASE \
+            --dir release-staging
+
+      - name: Re-verify exact canonical artifacts
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          cd release-staging
+          sha256sum -c SHA256SUMS.txt
+          test -s "SleepMate_Setup_v${VERSION}.msi"
+          test -s "SleepMate_Setup_v${VERSION}.msi.sha256"
+          test -s "SleepMate_v${VERSION}_windows_x64.zip"
+          test -s sleepmate-update.json
+          test -s release-metadata.json
+          test "$(jq -r '.version' sleepmate-update.json)" = "$VERSION"
+          test "$(jq -r '.git_commit' sleepmate-update.json)" = "$RELEASE_SHA"
+          test "$(jq -r '.signature_mode' sleepmate-update.json)" = 'verified-unsigned'
+          test "$(jq -r '.signed' release-metadata.json)" = 'false'
+          test "$(jq -r '.signature_mode' release-metadata.json)" = 'verified-unsigned'
+
+      - name: Build automatic GitHub Release notes
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        env:
+          VERSION: ${{ steps.plan.outputs.version }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          export VERSION RELEASE_SHA
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          version = os.environ['VERSION']
+          body = Path(f'release-notes/v{version}.md').read_text(encoding='utf-8').strip()
+          notes = f'''{body}\n\n---\n\n## Kiadás ellenőrzése és aláírás\n\nEz egy VERIFIED UNSIGNED átmeneti kiadás. A kanonikus Windows build, a teljes tesztcsomag, az MSI telepítési/eltávolítási smoke teszt és a SHA-256 integritási ellenőrzés sikeresen lefutott. Authenticode-aláírás még nincs, mert a SignPath tanúsítvány nincs konfigurálva.\n\nA digitális aláírás hiánya Windows SmartScreen vagy vírusvédelmi reputációs figyelmeztetést okozhat.\n\nVerified commit: `{os.environ['RELEASE_SHA']}`\n'''
+          Path('release-notes.auto.generated.md').write_text(notes, encoding='utf-8')
+          PY
+
+      - name: Publish verified GitHub Release automatically
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: ${{ steps.plan.outputs.tag }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG appeared before publication step; refusing to overwrite it." >&2
+            exit 1
+          fi
+
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "SleepMate ${VERSION} — automatikus verified Windows release" \
+            --notes-file release-notes.auto.generated.md \
+            release-staging/*
+
+          mapfile -t actual < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | sort)
+          expected=(
+            SHA256SUMS.txt
+            "SleepMate_Setup_v${VERSION}.msi"
+            "SleepMate_Setup_v${VERSION}.msi.sha256"
+            "SleepMate_v${VERSION}_windows_x64.zip"
+            build-msi-toolchain.txt
+            msi-inventory.txt
+            release-metadata.json
+            sleepmate-update.json
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          [[ "$(printf '%s\n' "${actual[@]}")" == "$(printf '%s\n' "${expected_sorted[@]}")" ]] || {
+            echo 'Published asset set does not match canonical verified artifact set.' >&2
+            exit 1
+          }
+
+          TARGET="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')"
+          [[ "$TARGET" == "$RELEASE_SHA" || "$TARGET" == "$TAG" ]] || { echo "Unexpected release target: $TARGET" >&2; exit 1; }
+          echo "Automatic release $TAG published successfully from $RELEASE_SHA."
