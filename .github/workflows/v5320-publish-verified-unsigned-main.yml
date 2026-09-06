@@ -1,0 +1,107 @@
+name: SleepMate 5.3.20 verified unsigned publisher
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/v5320-publish-verified-unsigned-main.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+env:
+  VERSION: '5.3.20'
+  SOURCE_SHA: '0661f5b742962f66237a6d3312a69bd446eaa72a'
+  CANONICAL_RUN_ID: '34026337128'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify canonical run identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(python -c 'from cpap.version import APP_VERSION; print(APP_VERSION)')" = "$VERSION"
+          STATUS="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANONICAL_RUN_ID" --jq '.status')"
+          CONCLUSION="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANONICAL_RUN_ID" --jq '.conclusion // ""')"
+          SHA="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANONICAL_RUN_ID" --jq '.head_sha')"
+          test "$STATUS" = 'completed'
+          test "$CONCLUSION" = 'success'
+          test "$SHA" = "$SOURCE_SHA"
+
+      - name: Download verified release set
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf release-staging
+          mkdir release-staging
+          gh run download "$CANONICAL_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+            --name SleepMate-Windows-x64-VERIFIED-RELEASE \
+            --dir release-staging
+          (
+            cd release-staging
+            sha256sum -c SHA256SUMS.txt
+          )
+          test "$(jq -r '.version' release-staging/release-metadata.json)" = "$VERSION"
+          test "$(jq -r '.git_commit' release-staging/release-metadata.json)" = "$SOURCE_SHA"
+          test "$(jq -r '.signed' release-staging/release-metadata.json)" = 'false'
+          test "$(jq -r '.version' release-staging/sleepmate-update.json)" = "$VERSION"
+          test "$(jq -r '.asset' release-staging/sleepmate-update.json)" = "SleepMate_Setup_v${VERSION}.msi"
+          ! grep -Fq 'SleepMateUpdater.exe' release-staging/msi-inventory.txt
+
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          cat > release-notes-approved.md <<'EOF'
+          # SleepMate 5.3.20
+
+          Célzott stabilitási kiadás a kritikus O2Ring/Oximetria, PWA-frissítési és Windows frissítési regressziók javításával. A saját `SleepMateUpdater.exe` komponens eltávolításra került; a frissítési folyamat MSI/Windows Installer alapú.
+
+          A felület megjelenése és a terápiás számítások változatlanok.
+
+          **Kiadási megjegyzés:** ez a kiadás a felhasználó kifejezett jóváhagyásával jelenleg SignPath/Authenticode aláírás nélkül kerül publikálásra. A publikált fájlok a teljes canonical Windows build, MSI telepítési/eltávolítási smoke teszt és release-integritás ellenőrzésen átment, ellenőrzött unsigned artifactok.
+          EOF
+
+      - name: Create and publish v5.3.20
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists." >&2
+            exit 1
+          fi
+          gh release create "v$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$SOURCE_SHA" \
+            --title 'SleepMate 5.3.20 — kritikus stabilitási javítások' \
+            --notes-file release-notes-approved.md \
+            release-staging/*
+
+      - name: Verify published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')" = 'false'
+          test "$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease')" = 'false'
+          test "$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')" = "$SOURCE_SHA"
+          gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json tagName,isDraft,isPrerelease,targetCommitish,url
