@@ -77,7 +77,7 @@ jobs:
           .\build\windows\build_release.ps1
 
       - name: Upload program tree for MSI job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-Windows-x64-PROGRAM-TREE
           path: |
@@ -203,7 +203,7 @@ jobs:
           if (-not (Get-ChildItem $extract -File -Recurse -Filter 'THIRD_PARTY_NOTICES.md' | Select-Object -First 1)) { throw 'THIRD_PARTY_NOTICES.md missing from MSI payload.' }
 
       - name: Upload unsigned MSI
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-MSI-UNSIGNED-CI
           path: |
@@ -347,7 +347,7 @@ jobs:
           Write-Host 'MSI uninstall contract OK: program removed, user state preserved.'
 
       - name: Upload complete unsigned CI release set
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-Windows-x64-UNSIGNED-CI
           path: |
@@ -617,7 +617,7 @@ jobs:
           cat release-staging/SHA256SUMS.txt
 
       - name: Upload verified release set
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-Windows-x64-VERIFIED-RELEASE
           path: release-staging/*
@@ -650,7 +650,7 @@ jobs:
 
       - name: Upload exact SignPath input
         id: signpath-input
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-Windows-x64-SIGNPATH-INPUT
           path: signpath-input/*
@@ -718,7 +718,7 @@ jobs:
           Pop-Location
 
       - name: Upload signed publication set
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: SleepMate-Windows-x64-SIGNED-RELEASE
           path: signed-release/*
