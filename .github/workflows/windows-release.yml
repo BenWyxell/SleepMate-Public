@@ -15,10 +15,6 @@ on:
   push:
     branches:
       - main
-      - msi-migration
-      - installer-wizard
-      - sleepsync-integration
-      - v5.1.1-development
     tags:
       - 'v*'
 
