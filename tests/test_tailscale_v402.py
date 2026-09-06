@@ -8,6 +8,7 @@ html = (root / 'web' / 'index.html').read_text(encoding='utf-8')
 # compatibility with branches that still use a monolithic source app.js.
 core_js = root / 'web' / 'app-core.js'
 js = (core_js if core_js.exists() else root / 'web' / 'app.js').read_text(encoding='utf-8')
+js_compact = ''.join(js.split())
 req = (root / 'requirements.txt').read_text(encoding='utf-8').lower()
 
 assert '"tailscale_auto_serve": False' in app
@@ -19,6 +20,6 @@ assert 'import qrcode' in app
 assert 'id="tailscaleQr"' in html
 assert 'id="tailscaleQrModal"' in html
 assert 'openTailscaleQr' in js
-assert "$('#tailscaleQr').disabled=!(t.serve_active&&t.url)" in js
+assert "$('#tailscaleQr').disabled=!(t.serve_active&&t.url)" in js_compact
 assert 'qrcode>=' in req
 print('PASS: v4.0.2 Tailscale auto-restore + local QR')

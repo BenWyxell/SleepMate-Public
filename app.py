@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import gzip
 import hashlib
 import io
 import json
@@ -190,7 +191,19 @@ def save_config(update: dict) -> dict:
     return cfg
 
 
+class SleepMateHTTPServer(ThreadingHTTPServer):
+    """A restartable local server with no request threads left behind at exit."""
+
+    allow_reuse_address = True
+    daemon_threads = True
+    block_on_close = False
+
+
 class Handler(BaseHTTPRequestHandler):
+    # SleepMate is a restartable localhost process. HTTP/1.0 plus an explicit
+    # close prevents a browser or service worker from reusing a socket that
+    # belonged to the previous executable during an in-place upgrade.
+    protocol_version = "HTTP/1.0"
     dataset: ResMedDataset
     patient_store: PatientStore
     ai_store: AIStore
@@ -200,7 +213,11 @@ class Handler(BaseHTTPRequestHandler):
     backup_scheduler: AutoBackupScheduler | None = None
     remote_manager: RemoteAccessManager | None = None
     push_service: PushService | None = None
-    server_instance: ThreadingHTTPServer | None = None
+    server_instance: SleepMateHTTPServer | None = None
+
+    def end_headers(self) -> None:
+        self.send_header("Connection", "close")
+        super().end_headers()
     backup_files: dict[str, Path] = {}
     support_files: dict[str, Path] = {}
     update_manager: GitHubUpdateManager | None = None
@@ -363,18 +380,6 @@ class Handler(BaseHTTPRequestHandler):
         def cb(p, ph, msg): self._progress(jid, p, ph, msg)
         result = self.update_manager.prepare_install(cfg, self.dataset.root, int(self.server.server_address[1]), cb)
         self._progress(jid, 100, "Újraindítás", f"SleepMate {result.get('target_version')} ellenőrzött, csendes Windows Installer telepítése indul.")
-        self.update_manager.launch_worker(str(result["plan"]))
-        srv = self.server_instance
-        if srv:
-            threading.Timer(1.0, srv.shutdown).start()
-        return {**result, "restarting": True}
-
-    def _update_rollback_job(self, jid: str):
-        if not self.update_manager:
-            raise RuntimeError("A frissítési modul nem érhető el.")
-        self._progress(jid, 20, "Rollback előkészítése", "Az előző működő programverzió előkészítése…")
-        result = self.update_manager.prepare_rollback(int(self.server.server_address[1]))
-        self._progress(jid, 90, "Újraindítás", f"Visszaállás a(z) {result.get('target_version')} verzióra…")
         self.update_manager.launch_worker(str(result["plan"]))
         srv = self.server_instance
         if srv:
@@ -1382,9 +1387,6 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/update/install":
                 jid = self._start_job("update", "SleepMate frissítés telepítése", self._update_install_job)
                 return self._json({"ok": True, "job": jid})
-            if path == "/api/update/rollback":
-                jid = self._start_job("rollback", "SleepMate előző verzió visszaállítása", self._update_rollback_job)
-                return self._json({"ok": True, "job": jid})
             if path == "/api/self-check/run":
                 return self._json(self._self_check_payload())
             if path == "/api/support/create":
@@ -1693,12 +1695,25 @@ class Handler(BaseHTTPRequestHandler):
             target = WEB / "index.html"
         data = target.read_bytes()
         mime = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+        accepts_gzip = "gzip" in str(self.headers.get("Accept-Encoding") or "").lower()
+        compressible = target.suffix.lower() in {".js", ".css", ".html", ".json", ".svg", ".webmanifest"}
+        encoded = gzip.compress(data, compresslevel=6, mtime=0) if accepts_gzip and compressible and len(data) >= 1024 else data
         self.send_response(200)
         self.send_header("Content-Type", mime + ("; charset=utf-8" if mime.startswith("text/") else ""))
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Content-Length", str(len(encoded)))
         self.send_header("Cache-Control", "no-store")
+        if compressible:
+            self.send_header("Vary", "Accept-Encoding")
+        if encoded is not data:
+            self.send_header("Content-Encoding", "gzip")
+        self.send_header("X-SleepMate-Release-Version", APP_VERSION)
         self.end_headers()
-        self.wfile.write(data)
+        # Some Windows localhost filter stacks can stall one large sendall at
+        # their 64/256 KiB buffer boundary. Small flushed writes preserve the
+        # exact HTTP body while keeping first-load JS delivery deterministic.
+        for offset in range(0, len(encoded), 32 * 1024):
+            self.wfile.write(encoded[offset:offset + 32 * 1024])
+            self.wfile.flush()
 
 
 def main():
@@ -1822,10 +1837,9 @@ def main():
             time.sleep(12 * 60 * 60)
     threading.Thread(target=_background_update_check, name="sleepmate-update-check", daemon=True).start()
     try:
-        server = ThreadingHTTPServer((args.host, args.port), Handler)
+        server = SleepMateHTTPServer((args.host, args.port), Handler)
         Handler.server_instance = server
-        # This marker is consumed by update_worker.py. Reaching this point proves
-        # the new build completed initialization and successfully bound the HTTP port.
+        # Record that this build completed initialization and bound the HTTP port.
         if Handler.update_manager:
             Handler.update_manager.mark_boot_ok()
     except OSError as e:

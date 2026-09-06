@@ -18,7 +18,6 @@ signing-input.zip
 └── SleepMate_vX.Y.Z_windows_x64.zip
     └── SleepMate_vX.Y.Z/
         ├── SleepMate.exe
-        ├── SleepMateUpdater.exe
         └── ... upstream/runtime files ...
 ```
 
@@ -38,13 +37,13 @@ A SignPath artifact configuration should be generated/reviewed from a real MSI s
 GitHub source commit
   -> GitHub-hosted Actions build
   -> tests + public-source/secret gate
+  -> MSI install/runtime/uninstall smoke test
   -> unsigned signing-input artifact uploaded to GitHub Actions
   -> SignPath trusted-build signing request
   -> manual approval
   -> signed artifact returned
   -> Authenticode verification gate
-  -> SHA-256 + sleepmate-update.json generated from final signed portable ZIP
-  -> smoke install / uninstall test
+  -> SHA-256 + MSI sleepmate-update.json generated from final signed MSI
   -> GitHub Release publication
 ```
 
@@ -54,9 +53,9 @@ With MSI, uninstall is performed by Windows Installer (`msiexec.exe`). SleepMate
 
 ## Self-update
 
-The existing in-app updater consumes the portable ZIP named by `sleepmate-update.json`. The future workflow should generate the manifest after signing so the recorded SHA-256 matches the signed ZIP.
+The in-app updater accepts only an exact-version MSI named by `sleepmate-update.json`. SleepMate downloads and verifies that MSI, requests graceful shutdown, and hands installation to the signed Windows system `msiexec.exe`. The MSI itself restarts the installed `SleepMate.exe` when the update transaction completes. There is no project-owned updater process, executable, unpacker or rollback coordinator in the release payload.
 
-When an update replaces `SleepMate.exe` or `SleepMateUpdater.exe`, those files must already carry valid Authenticode signatures in the signed ZIP.
+The workflow generates the update manifest after signing, so its SHA-256 always identifies the final signed MSI bytes. The final MSI and the `SleepMate.exe` contained in both release containers must pass Authenticode validation before publication.
 
 ## Avast / antivirus hygiene
 

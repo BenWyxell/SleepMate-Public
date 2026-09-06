@@ -75,7 +75,7 @@ def test_custom_sleep_date_range_is_inclusive():
 def test_frontend_backend_api_contract_matches_again():
     core = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
     assert API_VERSION == 19
-    assert "ver.api!==19" in core
+    assert "ver.api !== 19" in core
     # Later product releases may add backward-compatible endpoints without
     # changing the proven v5.2.20 frontend protocol number.
     assert tuple(int(x) for x in APP_VERSION.split(".")[:3]) >= (5, 2, 20)
@@ -97,8 +97,8 @@ def test_v521_sleep_ui_has_required_filters_order_and_editing():
     assert header in ui
 
 
-def test_shell_loader_serves_original_sleep_ui_then_v521_patch():
+def test_canonical_index_loads_current_sleep_ui_without_http_rewrite():
+    index = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     patch = (ROOT / "cpap" / "sleep_analysis_v521.py").read_text(encoding="utf-8")
-    assert 'sleepmate-sleep.js?v=5.2.1' in patch
-    assert 'sleepmate-sleep-v521.js?v=5.2.1' in patch
-    assert 'parsed.path in {"/", "/index.html"}' in patch
+    assert 'sleepmate-sleep.js?v=5.2.6' in index
+    assert 'do_GET' not in patch

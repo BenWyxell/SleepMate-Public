@@ -31,4 +31,5 @@ def test_sleep_refresh_bridge_is_installed_before_runtime_sleepsync_service_crea
 
     assert "from .sleep_refresh_v5212 import install_sleep_refresh_v5212" in installer
     assert "install_sleep_refresh_v5212(app_module)" in installer
-    assert "sleepmate-sleep-refresh-v5212.js?v=5.2.12" in installer
+    index = (root / "web" / "index.html").read_text(encoding="utf-8")
+    assert "sleepmate-sleep-refresh-v5212.js?v=5.2.12" in index

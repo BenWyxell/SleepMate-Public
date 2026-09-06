@@ -33,7 +33,7 @@ try:
     # Cross-platform regression: generation must not depend on a hard-coded Linux font path.
     assert b'/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf' not in raw
     html=(BASE/'web'/'index.html').read_text(encoding='utf-8')
-    js=(BASE/'web'/'app.js').read_text(encoding='utf-8')
+    js=(BASE/'web'/'app-core.js').read_text(encoding='utf-8')
     assert 'reportPdfModal' in html and 'PDF jelentés készítése' in html
     assert "'/api/report/pdf'" in js or '"/api/report/pdf"' in js
     

@@ -7,18 +7,17 @@ def text(path):
 
 def test_packaged_dashboard_pwa_css_is_build_versioned():
     spec = text("build/windows/SleepMate.spec")
-    assert "dashboard_pwa_link = f'<link rel=\"stylesheet\" href=\"/dashboard-pwa-v5312.css?v={FRONTEND_ID}\">'" in spec
-    assert "dashboard-pwa-v5312.css" in spec
-    assert "asset + f'?v={FRONTEND_ID}'" in spec
-    assert "/dashboard-pwa-v5312.css?v=2" in text("web/service-worker-v508-base.js")
-    assert "/dashboard-pwa-v5312.css?v=2" in text("web/service-worker.js")
+    assert "/dashboard-pwa-v5312.css?v=5.3.20" in text("web/index.html")
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
+    assert "/dashboard-pwa-v5312.css?v=5.3.20" in text("web/service-worker-v508-base.js")
+    assert "/dashboard-pwa-v5312.css?v=5.3.20" in text("web/service-worker.js")
 
 
 def test_daily_o2_has_runtime_independent_api_fallback():
-    spec = text("build/windows/SleepMate.spec")
-    assert "window.SleepMateO2Ring?.getDailySummary" in spec
-    assert "/api/o2ring/day?day=${encodeURIComponent(code)}&max_points=1" in spec
-    assert "for(let attempt=0;attempt<3;attempt++)" in spec
+    core = text("web/app-core.js")
+    assert "window.SleepMateO2Ring?.getDailySummary?.(day)" in core
+    assert "o2Promise || Promise.resolve(null)" in core
+    assert "for(let attempt=0;attempt<3;attempt++)" not in text("build/windows/SleepMate.spec")
 
 
 def test_daily_bento_css_is_still_present_and_phone_scoped():

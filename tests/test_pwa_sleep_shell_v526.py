@@ -24,12 +24,8 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
     root = Path(__file__).resolve().parents[1]
     sw = (root / "web" / "service-worker.js").read_text(encoding="utf-8")
 
-    # Frozen compatibility markers remain visible, while active caches must be
-    # rotated to the v5.3.9 release-cache generation.
-    assert "sleepmate-shell-v5.2.14-ss131" in sw
-    assert "sleepmate-api-v5.2.14-ss131" in sw
-    assert "sleepmate-shell-v5.3.19-o2-updater-recovery-1" in sw
-    assert "sleepmate-api-v5.3.9-refactor" in sw
+    assert "sleepmate-shell-v5.3.20" in sw
+    assert "sleepmate-api-v5.3.20" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw
@@ -47,17 +43,16 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
 def test_packaged_service_worker_base_precaches_same_sleep_feature():
     root = Path(__file__).resolve().parents[1]
     sw = (root / "web" / "service-worker-v508-base.js").read_text(encoding="utf-8")
-    assert "sleepmate-shell-v5.2.14" in sw
-    assert "sleepmate-shell-v5.3.19" in sw
-    assert "sleepmate-api-v5.3.9" in sw
+    assert "sleepmate-shell-v5.3.20" in sw
+    assert "sleepmate-api-v5.3.20" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw
     assert "sleep-analysis" in sw
-    assert "const codeAsset=[" in sw and ".includes(url.pathname);" in sw
+    assert "const CODE_ASSETS=new Set" in sw and "CODE_ASSETS.has(url.pathname)" in sw
     for asset in (
         "/style.css",
-        "/app.js",
+        "/app-core.js",
         "/sleepmate-sleep.js",
         "/sleepmate-sleep-v523.js",
         "/sleepmate-chart-v523.js",
@@ -75,9 +70,10 @@ def test_new_service_worker_performs_safe_generation_handover():
         assert "cleanupStaleSleepMateCaches" in sw
         assert "self.clients.matchAll({type:'window',includeUncontrolled:true})" in sw
         assert "SLEEPMATE_SHELL_READY" in sw
-        assert "await client.navigate(client.url)" in sw
-        assert "event.respondWith(navigationFallback(req))" in sw
-        assert "event.respondWith(codeNetworkFirst(req))" in sw
+        assert "await client.navigate(client.url)" not in sw
+        assert "SLEEPMATE_CLIENT_READY" not in sw
+        assert "event.respondWith(navigationFallback(request))" in sw
+        assert "event.respondWith(currentCodeAsset(url.pathname))" in sw
 
 
 def test_server_and_packager_shell_contract_matches_current_sleep_release():
@@ -96,4 +92,5 @@ def test_server_and_packager_shell_contract_matches_current_sleep_release():
         "'/sleepmate-sleep-v524.js'",
         "'/sleepmate-sleep-refresh-v5212.js'",
     ):
-        assert name in spec
+        assert name in live and name in base
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec

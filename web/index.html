@@ -7,6 +7,15 @@
     /* Mark phone-class renderers before CSS is parsed, so expensive animated
        effects never get a first frame on mobile web or installed PWA. */
     (()=>{try{const standalone=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;const coarse=matchMedia('(pointer: coarse)').matches;const mobileUa=navigator.userAgentData?.mobile===true||/iPhone|iPod|Android.+Mobile/i.test(navigator.userAgent||'');const shortSide=Math.min(screen.width||innerWidth,screen.height||innerHeight);const phone=mobileUa||(coarse&&shortSide<=600);document.documentElement.classList.toggle('sm-phone-ui',phone);document.documentElement.classList.toggle('sm-phone-pwa',phone&&standalone)}catch{}})();
+
+    /* A newly activated worker can claim an old page while its external boot
+       scripts are still loading. Register the single handover reload before
+       any such request so that takeover cannot strand the startup splash. */
+    (()=>{if(!('serviceWorker' in navigator)||window.__sleepmatePwaHandover)return;const handover=window.__sleepmatePwaHandover={hadController:!!navigator.serviceWorker.controller,reloading:false};navigator.serviceWorker.addEventListener('message',event=>{if(event.data?.type==='SLEEPMATE_SHELL_ERROR')window.__sleepmatePwaInstallError=event.data});navigator.serviceWorker.addEventListener('controllerchange',()=>{if(handover.reloading||!handover.hadController)return;handover.reloading=true;location.reload()})})();
+
+    /* Start the one canonical worker registration before feature modules begin
+       their API/status requests, so slow device discovery cannot starve it. */
+    (()=>{if(!('serviceWorker' in navigator)||window.__sleepmatePwaRegistrationStarted)return;window.__sleepmatePwaRegistrationStarted=true;window.__sleepmatePwaRegistrationPromise=navigator.serviceWorker.register('/service-worker.js',{scope:'/',updateViaCache:'none'}).catch(error=>{window.__sleepmatePwaRegistrationStarted=false;console.error('SleepMate service worker registration failed',error)});let lastCheck=Date.now();const update=()=>{const now=Date.now();if(now-lastCheck<60000)return;lastCheck=now;window.__sleepmatePwaRegistrationPromise.then(reg=>reg?.update()).catch(error=>console.error('SleepMate service worker update check failed',error))};window.addEventListener('pageshow',event=>{if(event.persisted)update()});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')update()})})();
   </script>
   <title>SleepMate</title>
   <link rel="icon" type="image/png" href="/assets/pwa-192.png">
@@ -17,10 +26,20 @@
   <meta name="theme-color" content="#0b1730">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="preload" as="script" href="/app-engine119.js?v=130">
-  <link rel="preload" as="script" href="/app-core.js?v=5.0.8">
-  <link rel="preload" as="style" href="/sleepsync.css?v=engine-2">
-  <link rel="stylesheet" href="/style.css?v=5.0.0">
+  <meta name="sleepmate-ui-version" content="5.3.4">
+  <meta name="sleepmate-release-version" content="5.3.20">
+  <meta name="sleepmate-build-id" content="5.3.20">
+  <meta name="sleepmate-o2ring-enabled" content="unknown">
+  <link rel="stylesheet" href="/style.css?v=5.3.20">
+  <link rel="stylesheet" href="/sleepsync.css?v=5.3.20">
+  <link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.20">
+  <link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.20">
+  <link rel="stylesheet" href="/dashboard-pwa-v5312.css?v=5.3.20">
+  <link rel="stylesheet" href="/o2ring.css?v=5.3.20">
+  <link rel="stylesheet" href="/o2ring-v534.css?v=5.3.20">
+  <style id="sm-o2-master-visibility">body:has(#smO2Enabled:not(:checked)) .o2ring-report-option{display:none!important}[data-settings-tab="pwa"]{display:none!important}</style>
+  <script src="/o2ring.js?v=5.3.20"></script>
+  <script src="/o2ring-report-ui.js?v=5.3.20"></script>
 </head>
 <body>
 <div id="startupSplash" class="startup-splash">
@@ -509,7 +528,7 @@
           <p class="muted page-intro">Az SD-kártyáról felismert készülék csak észlelt eszköz. A kezelt személy nyilvántartásába külön hozzárendeléssel kerül; a maszkok és kiegészítők külön rekordok. Rögzítéskor a beépített kompatibilitási adatbázisból választhatsz, de minden mező kézzel is kitölthető.</p>
           <section class="equipment-overview-grid">
             <section id="detectedEquipmentPanel" class="panel equipment-panel">
-              <div class="equipment-image-wrap"><img id="equipmentImage" src="/equipment-image" alt="ResMed AirSense 11 AutoSet"></div>
+              <div class="equipment-image-wrap"><img id="equipmentImage" src="/equipment-image" alt="ResMed AirSense 11 AutoSet" loading="lazy" decoding="async"></div>
               <div class="equipment-content">
                 <div class="equipment-kicker">SD-kártyáról felismert készülék <span id="detectedDeviceState" class="status-pill past">Észlelt</span></div>
                 <h3 id="equipmentName">Készülék beolvasása…</h3>
@@ -724,8 +743,8 @@
 
         <section class="settings-tab-panel system-maintenance-panel" data-settings-panel="system">
           <section class="panel maintenance-hero">
-            <div class="panel-head"><div><h3>SleepMate rendszerkarbantartás</h3><span>Verziózott frissítés • automatikus rollback • önellenőrzés • szervizcsomag</span></div><span id="maintenanceVersionBadge" class="security-pill">v5.0.0</span></div>
-            <p>A frissítő a programfájlokat és a személyes/terápiás adatokat külön kezeli. Telepítés előtt teljes backup és az aktuális programverzióból rollback-pont készül. Ha az új build nem indul el rendesen, a külső frissítő automatikusan visszaáll az előző verzióra.</p>
+            <div class="panel-head"><div><h3>SleepMate rendszerkarbantartás</h3><span>Verziózott frissítés • MSI tranzakció • önellenőrzés • szervizcsomag</span></div><span id="maintenanceVersionBadge" class="security-pill">v5.0.0</span></div>
+            <p>A frissítés a programfájlokat és a személyes/terápiás adatokat külön kezeli. Telepítés előtt teljes backup készül, a programfrissítés tranzakcióját és az esetleges sikertelen telepítés visszaállítását pedig a Windows Installer kezeli.</p>
           </section>
           <div class="maintenance-grid">
             <article class="panel maintenance-card update-card">
@@ -736,7 +755,7 @@
               <div class="settings-actions wrap"><button id="saveUpdateSettings" type="button">Beállítás mentése</button><button id="checkForUpdates" type="button">Frissítés keresése</button><button id="installUpdate" class="primary" type="button" disabled>Frissítés telepítése</button></div>
               <p id="updateStatusText" class="muted"></p>
               <div class="job-progress hidden" data-progress-card="update"><div class="progress-track"><i></i></div><strong>Frissítés előkészítése…</strong><span></span></div>
-              <div class="rollback-line"><span>Előző programverzió</span><button id="rollbackUpdate" type="button" disabled>Rollback</button></div>
+              <div class="rollback-line"><span>Sikertelen MSI visszaállítása</span><button id="rollbackUpdate" type="button" disabled>Automatikus</button></div>
             </article>
             <article class="panel maintenance-card self-check-card">
               <div class="panel-head"><div><h3>SleepMate önellenőrzés</h3><span>Adatforrás, EDF, adatbázis, backup, automatika, push, lemez és updater.</span></div><span id="selfCheckBadge" class="remote-status neutral">Még nem futott</span></div>
@@ -941,6 +960,21 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=5.0.0"></script>
+<script>
+const PATIENT_SCHEMAS={profile:{title:'Személyes adatok szerkesztése',fields:[['name','Név','text'],['birth_date','Születési idő','date'],['taj','TAJ-szám','text'],['taj_validate','TAJ ellenőrzőszám ellenőrzése','checkbox'],['diagnosis_date','Diagnózis felállításának dátuma','date'],['therapy_start_date','PAP-terápia megkezdésének dátuma','date'],['doctor_name','Kezelőorvos neve','text'],['institution','Kezelőintézmény','text'],['next_control_date','Következő kontroll','date'],['notes','Saját megjegyzések','textarea'],['profile_photo','Profilkép','file']]},diagnosis:{title:'Diagnózis / vizsgálat',fields:[['date','Diagnózis / vizsgálat dátuma','date'],['diagnosis_type','Diagnózis típusa','select:OSA|CSA|Kevert|Egyéb'],['ahi','Diagnosztikai AHI (/óra)','number'],['odi','ODI (/óra)','number'],['spo2_min','Legalacsonyabb SpO₂ (%)','number'],['spo2_avg','Átlagos SpO₂ (%)','number'],['diagnosis','Diagnózis / megjegyzés','textarea']]},titration:{title:'Titrálás',fields:[['date','Titrálás dátuma','date'],['type','Titrálás típusa','select:Alváslaboros|Otthoni|Automata PAP|Manuális|Egyéb'],['pressure_type','Javasolt nyomás típusa','select:Fix CPAP|APAP'],['fixed_pressure','Fix nyomás (cmH₂O)','number'],['min_pressure','APAP minimum (cmH₂O)','number'],['max_pressure','APAP maximum (cmH₂O)','number'],['ahi','AHI a titrálás során (/óra)','number'],['central_ahi','Centrális AHI (/óra)','number'],['spo2_min','SpO₂ minimum (%)','number'],['note','Megjegyzés','textarea']]},prescription:{title:'Terápiás előírás',fields:[['effective_from','Érvényes ettől','date'],['effective_to','Érvényes eddig (opcionális)','date'],['mode','Terápiás mód','select:Fix CPAP|APAP / AutoCPAP'],['fixed_pressure','Előírt fix nyomás (cmH₂O)','number'],['min_pressure','Előírt minimum (cmH₂O)','number'],['max_pressure','Előírt maximum (cmH₂O)','number'],['note','Megjegyzés','textarea']]},medication:{title:'Gyógyszer',fields:[['name','Gyógyszer neve','text'],['strength','Hatáserősség','text'],['dosage','Adagolás','text'],['time','Szedés időpontja','text'],['start_date','Kezdés dátuma','date'],['end_date','Befejezés dátuma','date'],['active','Aktív','checkbox'],['note','Megjegyzés','textarea']]},device:{title:'PAP-készülék',fields:[['manufacturer','Gyártó','catalog-device-manufacturer'],['model','Típus / modell','catalog-device-model'],['product_code','Termékkód','text'],['serial_number','Sorozatszám (opcionális)','text'],['start_date','Használat kezdete','date'],['replacement_interval','Csere / felülvizsgálat gyakorisága','select:Nincs szükség időzítésre|2 hét|1 hónap|3 hónap|6 hónap|1 év'],['end_date','Használat vége','date'],['active','Aktív készülék','checkbox'],['note','Megjegyzés','textarea']]},mask:{title:'CPAP maszk',fields:[['manufacturer','Gyártó','catalog-mask-manufacturer'],['model','Maszk típusa / modell','catalog-mask-model'],['mask_type','Kialakítás','catalog-mask-category'],['size','Méret','catalog-mask-size'],['start_date','Használat kezdete','date'],['replacement_interval','Csere gyakorisága','select:Nincs szükség időzítésre|2 hét|1 hónap|3 hónap|6 hónap|1 év'],['end_date','Használat vége','date'],['active','Aktív maszk','checkbox'],['note','Megjegyzés','textarea']]},accessory:{title:'CPAP kiegészítő',fields:[['category','Kiegészítő típusa','catalog-accessory-category'],['manufacturer','Gyártó','catalog-accessory-manufacturer'],['model','Típus / modell','catalog-accessory-model'],['device_id','Kapcsolódó készülék (opcionális)','select-device'],['start_date','Használat kezdete','date'],['replacement_interval','Csere gyakorisága','select:Nincs szükség időzítésre|2 hét|1 hónap|3 hónap|6 hónap|1 év'],['end_date','Használat vége','date'],['active','Aktív kiegészítő','checkbox'],['note','Megjegyzés','textarea']]},setup:{title:'Használati konfiguráció',fields:[['device_id','Készülék','select-device'],['mask_id','Maszk','select-mask'],['accessory_ids','Kiegészítők','select-accessories'],['start_date','Konfiguráció kezdete','date'],['end_date','Konfiguráció vége','date'],['active','Aktív konfiguráció','checkbox'],['note','Megjegyzés','textarea']]},timeline_event:{title:'Saját terápiás esemény',fields:[['date','Dátum','date'],['event_type','Típus','select:Egyéb|Maszkváltás|Készülékváltás|Beállításváltozás|Kontroll|Életmódbeli változás'],['title','Esemény rövid neve','text'],['note','Megjegyzés','textarea']]}};
+</script>
+<script src="/app-core.js?v=5.3.20"></script>
+<script src="/app-engine119.js?v=5.3.20"></script>
+<script src="/first-run.js?v=4"></script>
+<script src="/sleepsync-hydration-v529.js?v=5.3.20"></script>
+<script src="/sleepsync-polish.js?v=5.3.20"></script>
+<script src="/sleepmate-sleep.js?v=5.2.6"></script>
+<script src="/sleepmate-sleep-v523.js?v=5.2.6"></script>
+<script src="/sleepmate-chart-v523.js?v=5.2.14"></script>
+<script src="/sleepmate-sleep-v524.js?v=5.2.6"></script>
+<script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>
+<script src="/frontend-v534.js?v=5.3.20"></script>
+<script src="/sleepmate-v530.js?v=5.3.20"></script>
+<script src="/o2ring-data-management.js?v=5.3.20"></script>
 </body>
 </html>

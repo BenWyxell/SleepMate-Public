@@ -41,12 +41,13 @@ def fake_service(recordings: list[dict], start: datetime, end: datetime, *, auto
 
 def test_v534_release_identity_and_single_active_frontend_owner():
     shell = read("cpap/v530_features.py")
-    assert APP_VERSION == "5.3.19"
+    index = read("web/index.html")
+    assert APP_VERSION == "5.3.20"
     assert API_VERSION == 19
     assert BUILD_CHANNEL == "stable"
     assert 'UI_VERSION = "5.3.4"' in shell
-    assert 'frontend-v534.js' in shell
-    assert 'o2ring-v534.css' in shell
+    assert 'frontend-v534.js' in index
+    assert 'o2ring-v534.css' in index
     assert 'o2ring-v532.js' not in shell
     assert 'frontend-v533.js' not in shell
     assert 'install_o2ring_runtime_v534' in shell
@@ -221,13 +222,13 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
 def test_v534_service_workers_only_activate_current_o2_frontend_generation():
     for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         sw = read(path)
-        assert "sleepmate-shell-v5.3.19-o2-updater-recovery-1" in sw
-        assert "/o2ring-v534.css?v=5.3.4" in sw
-        assert "/frontend-v534.js?v=5.3.4" in sw
+        assert "sleepmate-shell-v5.3.20" in sw
+        assert "/o2ring-v534.css?v=5.3.20" in sw
+        assert "/frontend-v534.js?v=5.3.20" in sw
         assert "'/o2ring.js'" in sw
         assert "o2ring-v532.js?v=5.3.3" not in sw
         assert "frontend-v533.js?v=5.3.3" not in sw
-        assert "X-SleepMate-UI-Version" in sw
+        assert "RELEASE_VERSION='5.3.20'" in sw
 
 
 def test_v534_extracts_affected_sleepsync_days_without_full_rescan_contract():
@@ -320,7 +321,7 @@ def test_v534_overlay_focus_selector_persists_the_current_signal_not_flow_only()
 
 def test_v534_all_o2_charts_have_touch_pinch_pan_and_synchronized_trend_zoom():
     js=read("web/o2ring.js")
-    for marker in ("function clampChartRange", "ctl.pinch", "ctl.pointers", "mode:e.pointerType==='touch'||e.shiftKey?'pan':'zoom'", "R.trendZoom", "syncGroup:'trends'", "R.dashboardTrendZoom", "syncGroup:'dash-o2'"):
+    for marker in ("function clampChartRange", "ctl.pinch", "ctl.pointers", "mode:e.pointerType==='touch'||e.shiftKey?'pan':'zoom'", "R.trendZoom", "syncGroup:'trends'", "drawTrendLine"):
         assert marker in js
 
 

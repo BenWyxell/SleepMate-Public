@@ -6,7 +6,7 @@ This policy defines how official SleepMate Windows releases are built and approv
 
 **Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).**
 
-The SignPath Foundation subscription is currently being prepared. Until the Foundation application is accepted and the trusted-build integration is configured, no SleepMate binary is represented as SignPath-signed.
+The canonical workflow blocks stable publication unless the SignPath Foundation trusted-build integration is configured and returns verifiably signed artifacts.
 
 ## Project and repository
 
@@ -36,7 +36,6 @@ Only SleepMate-owned binaries that are reproducibly built from source and build 
 The intended signing set includes at least:
 
 - `SleepMate.exe`
-- `SleepMateUpdater.exe`
 - any future SleepMate-owned `.exe` or `.dll` shipped as part of the product
 - `SleepMate_Setup_vX.Y.Z.msi`
 
@@ -48,11 +47,13 @@ The production signing target is an **MSI-based per-user installer**.
 
 The canonical unsigned MSI is built in GitHub Actions from the exact Windows program tree produced by the preceding GitHub-hosted Windows build job.
 
-The active MSI authoring tool is **GNOME msitools / `wixl`** on a GitHub-hosted Ubuntu runner. `msitools` is a build-time dependency and is not distributed as part of SleepMate. The repository must pin or record the effective build-tool version for production releases.
+The active MSI authoring tool is the pinned **WiX Toolset 3.14.1** on a GitHub-hosted Windows runner. WiX is a build-time dependency and is not distributed as part of SleepMate.
 
 The existing Inno Setup installer is **legacy-only** infrastructure and must not be used for a production SignPath release.
 
 Windows uninstall uses the Microsoft Windows Installer (`msiexec.exe`). No project-generated `unins*.exe` is part of the MSI release architecture.
+
+Windows self-update also delegates installation to the signed system `msiexec.exe`. The application downloads and SHA-256-verifies an exact-version MSI, requests graceful tray/backend shutdown, then launches Windows Installer. No SleepMate-owned updater executable is built or distributed.
 
 ## Trusted build and origin verification
 
@@ -68,11 +69,12 @@ Repository PFX files, developer workstation certificates and ad-hoc PFX GitHub s
 
 The unsigned production candidate is assembled in explicit stages:
 
-1. GitHub-hosted Windows runner builds `SleepMate.exe`, `SleepMateUpdater.exe`, the application tree and portable update ZIP.
+1. GitHub-hosted Windows runner builds `SleepMate.exe`, the application tree and portable ZIP.
 2. The exact application tree is uploaded as a GitHub Actions artifact.
-3. A GitHub-hosted Ubuntu runner generates the deterministic MSI authoring source and builds `SleepMate_Setup_vX.Y.Z.msi`.
+3. A GitHub-hosted Windows runner generates the deterministic MSI authoring source and builds `SleepMate_Setup_vX.Y.Z.msi` with pinned WiX.
 4. A GitHub-hosted Windows runner installs the MSI with `msiexec`, starts the installed application, verifies required runtime APIs, uninstalls with `msiexec`, and verifies that program files are removed while user state is preserved.
-5. Only artifacts that passed these gates may be supplied to the SignPath signing stage.
+5. Only artifacts that passed these gates are supplied to the SignPath trusted-build signing stage.
+6. The workflow verifies the final MSI signature and the `SleepMate.exe` signature inside both final containers, then regenerates the update manifest and hashes from those signed bytes.
 
 ## Release branches and approval
 
@@ -122,7 +124,7 @@ Signed binaries must never be modified after signing.
 For production releases:
 
 1. signing occurs before final release hash generation;
-2. the final update ZIP must contain the final signed SleepMate-owned executables;
+2. the final portable ZIP must contain the final signed SleepMate-owned executables;
 3. the final MSI must contain the final signed SleepMate-owned executables and must itself be signed;
 4. the release manifest and SHA-256 files are generated only from the final signed outputs.
 

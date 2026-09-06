@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_windows_release_pipeline_uses_localized_msi_and_verified_publish_contract():
     assert (ROOT / "sleepmate_main.py").is_file()
     assert (ROOT / "build/windows/SleepMate.spec").is_file()
-    assert (ROOT / "build/windows/SleepMateUpdater.spec").is_file()
+    assert not (ROOT / "build/windows/SleepMateUpdater.spec").exists()
     assert (ROOT / "scripts/generate_msi_wxs.py").is_file()
     assert (ROOT / "build/windows/msi/SleepMate.hu-HU.wxl").is_file()
     assert (ROOT / ".github/workflows/windows-release.yml").is_file()
@@ -34,7 +34,9 @@ def test_windows_release_pipeline_uses_localized_msi_and_verified_publish_contra
     assert "SleepMate-Windows-x64-VERIFIED-RELEASE" in workflow
     assert "sha256sum -c SHA256SUMS.txt" in workflow
     assert "publish-github-release:" in workflow
-    assert "needs: verify-release-set" in workflow
+    assert "- verify-release-set" in workflow and "- sign-release-set" in workflow
+    assert "signpath/github-action-submit-signing-request@v1" in workflow
+    assert "SleepMate-Windows-x64-SIGNED-RELEASE" in workflow
     assert "gh release create" in workflow
     assert "--draft" in workflow
     assert "gh release upload" in workflow
@@ -106,7 +108,8 @@ def test_msi_generator_contract():
     assert "SleepMateDesktopShortcut" in text
     assert "SleepMateStartup" in text
     assert "LEGACY_INNO_UNINSTALL" in text
-    assert "SleepMateUpdater.exe" in text
+    assert 'for required in ("SleepMate.exe", "SleepMate.ico")' in text
+    assert "SLEEPMATE_AUTOLAUNCH" in text
     assert "SleepMate.ico" in text
     assert "WixUI_FeatureTree" in text
     assert "WixUI_ErrorProgressText" in text
@@ -206,9 +209,10 @@ def test_first_run_onboarding_contract():
 
     spec_text = spec.read_text(encoding="utf-8")
     assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec_text
-    # first-run.js/css therefore enter the exact packaged MSI/PWA web tree even
-    # though the release builder restores app-core.js as the primary app.js.
-    assert "shutil.copy2(core_app, WEB_GENERATED / 'app.js')" in spec_text
+    # first-run.js/css and the canonical app-core.js enter the exact same web
+    # tree that the source-mode browser acceptance exercises.
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec_text
+    assert "shutil.copy2(core_app, WEB_GENERATED / 'app.js')" not in spec_text
 
 
 def test_first_run_frontend_javascript_syntax():
@@ -217,7 +221,7 @@ def test_first_run_frontend_javascript_syntax():
         return
     for path in (
         ROOT / "web/first-run.js",
-        ROOT / "web/app.js",
+        ROOT / "web/app-core.js",
         ROOT / "web/sleepsync-hydration-v529.js",
     ):
         result = subprocess.run(
@@ -231,8 +235,9 @@ def test_first_run_frontend_javascript_syntax():
 
 def test_binary_release_builder_contract():
     text = (ROOT / "tools/build_binary_release.py").read_text(encoding="utf-8")
-    assert "package_type': 'windows-x64-program-tree'" in text
     assert "--min-version', default='4.2.2'" in text
+    assert "sleepmate-update.json" not in text
     maintenance = (ROOT / "cpap/maintenance.py").read_text(encoding="utf-8")
-    assert "SleepMateUpdater.exe" in maintenance
-    assert "_prepare_binary_state_transition" in maintenance
+    assert "SleepMateUpdater.exe" not in maintenance
+    assert "_prepare_binary_state_transition" not in maintenance
+    assert 'system_root / "System32" / "msiexec.exe"' in maintenance

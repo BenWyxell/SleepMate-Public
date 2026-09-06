@@ -12,7 +12,8 @@ WIFI_PATH = ROOT / "cpap" / "sleepsync_wifi_v5215.py"
 AUTOGRACE_PATH = ROOT / "cpap" / "sleepsync_wifi_autograce_v5215.py"
 PRESENCE_PATH = ROOT / "cpap" / "sleepsync_wifi_presence_v5216.py"
 VERSION_PATH = ROOT / "cpap" / "version.py"
-UI_PATH = ROOT / "web" / "app.js"
+UI_PATH = ROOT / "web" / "index.html"
+CORE_UI_PATH = ROOT / "web" / "app-core.js"
 ARCHIVE_UI_PATH = ROOT / "web" / "app-engine119.js"
 UI_POLISH_PATH = ROOT / "web" / "sleepsync-polish.js"
 HYDRATION_PATH = ROOT / "web" / "sleepsync-hydration-v529.js"
@@ -26,7 +27,6 @@ BASE_WORKER_PATH = ROOT / "web" / "service-worker-v508-base.js"
 AURORA_PATH = ROOT / "web" / "sleepmate-aurora.css"
 CHART_PATH = ROOT / "web" / "sleepmate-chart-v523.js"
 TRAY_PATH = ROOT / "sleepmate_tray.pyw"
-UPDATER_PATH = ROOT / "update_worker.py"
 SPEC_PATH = ROOT / "build" / "windows" / "SleepMate.spec"
 
 FACADE = FACADE_PATH.read_text(encoding="utf-8")
@@ -37,6 +37,7 @@ AUTOGRACE = AUTOGRACE_PATH.read_text(encoding="utf-8")
 PRESENCE = PRESENCE_PATH.read_text(encoding="utf-8")
 VERSION = VERSION_PATH.read_text(encoding="utf-8")
 UI = UI_PATH.read_text(encoding="utf-8")
+CORE_UI = CORE_UI_PATH.read_text(encoding="utf-8")
 ARCHIVE_UI = ARCHIVE_UI_PATH.read_text(encoding="utf-8")
 UI_POLISH = UI_POLISH_PATH.read_text(encoding="utf-8")
 HYDRATION = HYDRATION_PATH.read_text(encoding="utf-8")
@@ -50,7 +51,6 @@ BASE_WORKER = BASE_WORKER_PATH.read_text(encoding="utf-8")
 AURORA = AURORA_PATH.read_text(encoding="utf-8")
 CHART = CHART_PATH.read_text(encoding="utf-8")
 TRAY = TRAY_PATH.read_text(encoding="utf-8")
-UPDATER = UPDATER_PATH.read_text(encoding="utf-8")
 SPEC = SPEC_PATH.read_text(encoding="utf-8")
 
 
@@ -67,7 +67,6 @@ for path, source in (
     (AUTOGRACE_PATH, AUTOGRACE),
     (PRESENCE_PATH, PRESENCE),
     (TRAY_PATH, TRAY),
-    (UPDATER_PATH, UPDATER),
 ):
     compile(source, str(path), "exec")
 
@@ -130,25 +129,30 @@ require("def _scheduler_loop" in ENGINE and "wifi_network_visible" not in ENGINE
 require("def _repair_stale_tailscale_serve" in ENGINE, "portable Tailscale stale-port repair is missing")
 require("tailscale_auto_serve" in ENGINE and "tailscale_enable()" in ENGINE, "Tailscale repair does not rebind Serve to the active port")
 
-require("document.readyState==='loading'" in UI and "document.write" in UI, "parser-ordered integration boot is missing")
-require("/app-engine119.js?v=130" in UI, "stable integration engine generation is not active")
-require("/sleepsync-polish.js?v=130" in UI and "/sleepsync-hydration-v529.js?v=131" in UI, "source frontend does not load current SleepSync add-ons")
+script_order = [
+    "/app-core.js?v=5.3.20",
+    "/app-engine119.js?v=5.3.20",
+    "/sleepsync-hydration-v529.js?v=5.3.20",
+    "/sleepsync-polish.js?v=5.3.20",
+]
+positions = [UI.find(asset) for asset in script_order]
+require(all(position >= 0 for position in positions) and positions == sorted(positions), "canonical parser-ordered SleepSync script order is missing")
+require('/app.js?' not in UI, "legacy loader is still active in index.html")
 require("hardRescue" not in UI and "bootHealthy" not in UI, "old mobile boot rescue leaked back in")
-require("getRegistrations" not in UI and "unregister" not in UI, "page startup must never unregister the PWA service worker")
-require("const core=document.createElement('script')" in ARCHIVE_UI and "core.src='/app-core.js?v=5.0.8'" in ARCHIVE_UI, "frozen #119 engine no longer boots the unchanged core directly")
+require("getRegistrations" not in CORE_UI and "unregister" not in CORE_UI, "page startup must never unregister the PWA service worker")
+require("if(!window.__sleepmateCoreLoaded)throw new Error" in ARCHIVE_UI and "createElement('script')" not in ARCHIVE_UI, "SleepSync engine does not require the canonical preloaded core")
 require("integrationRoute();" in ARCHIVE_UI and "ensureSleepSyncUi();" in ARCHIVE_UI, "frozen #119 route integration is incomplete")
 require("statusRequest" in ARCHIVE_UI and "renderJobProgress" in ARCHIVE_UI, "SleepSync status/progress engine is incomplete")
 require("ssSettingsSaveStatus" in ARCHIVE_UI and "settingsSaving" in ARCHIVE_UI, "settings save feedback/guard is missing")
 
-require("def replace_literal" in SPEC, "packager has no deterministic core hotfix mechanism")
-require("state.latestDay||state.currentDay||state.days[0]" in SPEC and "location.hash===next" in SPEC, "latest-night detailed dashboard routing fix is missing")
-require("d.average_usage_seconds==null?null:d.average_usage_seconds/60" in SPEC, "zero usage delta is still treated as missing data")
-require("setTimeout(()=>{if(state.pullRefreshing)resetPullRefreshUi()},1100)" in SPEC, "mobile pull-refresh indicator is not transient")
-require("sleepsync-bootstrap.js" in SPEC and "sleepsync-integration.js" in SPEC, "packaged SleepSync bootstrap/bridge is missing")
-require("'/sleepmate-chart-v523.js'" in SPEC, "packaged PWA does not treat chart overlay as network-first code")
-require("'/sleepmate-sleep-v523.js'" in SPEC and "'/sleepmate-sleep-refresh-v5212.js'" in SPEC, "packaged PWA lost sleep module code-asset protection")
+require("shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in SPEC, "packager does not copy the canonical tested web tree")
+require("def replace_literal" not in SPEC and "sleepsync-bootstrap.js" not in SPEC, "packager still rewrites application behaviour")
+require("sleepmate-build-id" in SPEC and "const {name}=" in SPEC, "packager does not limit generation to release identity metadata")
+require("state.latestDay || state.currentDay || state.days[0]" in CORE_UI and "location.hash === next" in CORE_UI, "latest-night detailed dashboard routing fix is missing")
+require("d.average_usage_seconds == null ? null : d.average_usage_seconds / 60" in CORE_UI, "zero usage delta is still treated as missing data")
+require("if (state.pullRefreshing) resetPullRefreshUi()" in CORE_UI, "mobile pull-refresh indicator is not transient")
 
-require("sleepmate-aurora.css" in SPEC, "core Aurora stylesheet is not packaged")
+require("sleepmate-aurora.css?v=5.3.20" in UI, "core Aurora stylesheet is not packaged")
 require(".page:not(#page-sleepsync)" in AURORA, "Aurora visual system is not isolated from SleepSync")
 for page in ("#page-dashboard", "#page-patient", "#page-sessions", "#page-events", "#page-reports", "#page-ai", "#page-faq", "#page-equipment", "#page-upload", "#page-logs", "#page-settings"):
     require(page in AURORA, f"Aurora page pass is missing {page}")
@@ -180,22 +184,13 @@ require("cy+gap" not in CHART and "y+gap" not in CHART, "tooltip may still fall 
 
 require('QUIT_REQUEST_FILE = STATE_BASE / "private" / "quit_tray.request"' in TRAY, "graceful tray quit request path is missing")
 require("if QUIT_REQUEST_FILE.is_file():" in TRAY and "self.quit()" in TRAY and "self.icon.stop()" in TRAY, "tray cannot gracefully remove its notification icon")
-require("def request_graceful_tray_exit" in UPDATER, "updater has no graceful tray shutdown")
-require("graceful = request_graceful_tray_exit(tray_pid, state_dir, log_path)" in UPDATER, "update flow does not request graceful tray exit")
-gr = UPDATER.index("graceful = request_graceful_tray_exit")
-force = UPDATER.index("stop_process_tree(tray_pid", gr)
-image_fallback = UPDATER.index("stop_sleepmate_image_processes(launcher_exe", gr)
-require(gr < force < image_fallback, "force-kill can run before graceful tray icon cleanup")
 
-# Release/PWA shell. The long-lived SleepSync compatibility markers stay pinned,
-# but the active v5.3.17 worker now uses an atomic generation handover: critical
-# shell assets must precache before takeover; an older open client is then
-# navigated to the new generation; stale SleepMate caches are deleted only after
-# that new client acknowledges the matching BUILD_ID.
-require('APP_VERSION = "5.3.0"' in VERSION, "release compatibility marker is missing")
+# Release/PWA shell. SleepSync asset generations remain pinned, while the release
+# worker uses one atomic shell generation and one page-owned controller reload.
+require('APP_VERSION = "5.3.20"' in VERSION, "release version is not 5.3.20")
 require('BUILD_CHANNEL = "stable"' in VERSION, "release channel is not stable")
-require("sleepmate-shell-v5.2.14-ss131" in SERVICE_WORKER, "SleepSync shell compatibility marker is missing")
-require("sleepmate-api-v5.2.14-ss131" in SERVICE_WORKER, "SleepSync API compatibility marker is missing")
+require("const SHELL_CACHE='sleepmate-shell-v5.3.20'" in SERVICE_WORKER, "current shell cache generation is missing")
+require("const API_CACHE='sleepmate-api-v5.3.20'" in SERVICE_WORKER, "current API cache generation is missing")
 for asset in (
     "/sleepsync-hydration-v529.js",
     "/sleepsync-mobile-v5213.css",
@@ -213,23 +208,25 @@ for worker_name, worker in (
     ("release PWA base", BASE_WORKER),
 ):
     require("precacheShellAtomic" in worker, f"{worker_name} does not atomically precache the new shell")
-    require("if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error" in worker, f"{worker_name} can activate with missing critical shell assets")
+    require("await caches.delete(SHELL_CACHE);throw error" in worker, f"{worker_name} can activate with a partial shell cache")
+    require("for(const url of SHELL){const response=await fetchShellAsset(url);await cache.put(url,response)}" in worker, f"{worker_name} does not consume each response before opening the next request")
     require("await self.skipWaiting()" in worker and "await self.clients.claim()" in worker, f"{worker_name} does not take over the installed PWA after a complete precache")
-    require("hadPreviousShell" in worker and "SLEEPMATE_SHELL_READY" in worker, f"{worker_name} does not announce generation handover to open clients")
-    require("if(hadPreviousShell)" in worker and "await client.navigate(client.url)" in worker, f"{worker_name} does not refresh open clients when handing over from an older shell")
-    require("SLEEPMATE_CLIENT_READY" in worker and "data.buildId!==BUILD_ID" in worker, f"{worker_name} does not require a matching new-generation client acknowledgement")
+    require("SLEEPMATE_SHELL_READY" in worker, f"{worker_name} does not announce generation handover to open clients")
+    require("client.navigate(client.url)" not in worker, f"{worker_name} still performs a competing client navigation")
+    require("SLEEPMATE_CLIENT_READY" not in worker, f"{worker_name} still waits for a stale-client generation acknowledgement")
     require("cleanupStaleSleepMateCaches" in worker, f"{worker_name} has no deferred stale-cache cleanup")
     require("key.startsWith('sleepmate-shell-')||key.startsWith('sleepmate-api-')" in worker, f"{worker_name} stale-cache cleanup is not scoped to SleepMate caches")
     activate = worker.split("self.addEventListener('activate'", 1)[1].split("function backendUnavailable", 1)[0]
-    require("caches.delete" not in activate, f"{worker_name} deletes old caches before the new client is ready")
+    require("await cleanupStaleSleepMateCaches()" in activate, f"{worker_name} does not retire old generations during activation")
+    require("SHELL_BY_PATH.get(pathname)" in worker, f"{worker_name} can cache an old query-string code generation")
 
 require("getRegistrations" not in SERVICE_WORKER and "unregister" not in SERVICE_WORKER, "service worker must not unregister itself")
 require("'/sleepmate-chart-v523.js'" in SERVICE_WORKER, "live PWA chart overlay is not network-first")
 require("'/sleepmate-chart-v523.js'" in BASE_WORKER, "release base chart overlay is not network-first")
 
-require(len(re.findall(r"sleepmate-shell-v\d+\.\d+\.\d+", BASE_WORKER)) == 2, "release packager expects exactly two shell-cache semver markers in base worker")
+require(len(re.findall(r"sleepmate-shell-v\d+\.\d+\.\d+", BASE_WORKER)) == 1, "release packager expects exactly one shell-cache semver marker in base worker")
 require(len(re.findall(r"sleepmate-api-v\d+\.\d+\.\d+", BASE_WORKER)) == 1, "release packager expects exactly one API-cache semver marker in base worker")
 require(len(re.findall(r"/style\.css\?v=\d+\.\d+\.\d+", BASE_WORKER)) == 1, "release packager expects exactly one versioned style.css literal")
-require(len(re.findall(r"/app\.js\?v=\d+\.\d+\.\d+", BASE_WORKER)) == 1, "release packager expects exactly one versioned app.js literal")
+require(len(re.findall(r"/app-core\.js\?v=\d+\.\d+\.\d+", BASE_WORKER)) == 1, "release packager expects exactly one versioned app-core.js literal")
 
 print("SleepSync integration safety contract OK")

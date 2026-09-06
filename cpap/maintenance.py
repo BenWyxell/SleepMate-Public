@@ -6,6 +6,7 @@ import os
 import platform
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -21,7 +22,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .patient_store import LocalProtector
-from .services import create_full_backup, restore_full_backup, safe_extract_zip
+from .services import create_full_backup
 from .version import APP_NAME, APP_VERSION, API_VERSION, BUILD_CHANNEL, UPDATE_MANIFEST_FORMAT, SUPPORT_BUNDLE_FORMAT
 
 OFFICIAL_GITHUB_REPO = "BenWyxell/SleepMate-Public"
@@ -217,16 +218,6 @@ class GitHubUpdateManager:
         cfg = config or {}
         repo = OFFICIAL_GITHUB_REPO
         state = self._load_state()
-        rollback_root = self.runtime / "rollback"
-        rollbacks = []
-        if rollback_root.exists():
-            for p in sorted((x for x in rollback_root.iterdir() if x.is_dir()), key=lambda x: x.stat().st_mtime, reverse=True):
-                meta = {}
-                try:
-                    meta = json.loads((p / "rollback.json").read_text(encoding="utf-8"))
-                except Exception:
-                    pass
-                rollbacks.append({"path": str(p), "version": meta.get("version") or p.name, "created_at": meta.get("created_at")})
         try:
             build = json.loads((self.base / "build_info.json").read_text(encoding="utf-8"))
             if not isinstance(build, dict): build = {}
@@ -247,8 +238,8 @@ class GitHubUpdateManager:
             "last_error": state.get("last_error"),
             "last_install": state.get("last_install"),
             "last_result": state.get("last_result"),
-            "rollback_available": bool(rollbacks),
-            "rollbacks": rollbacks[:3],
+            "rollback_available": False,
+            "rollbacks": [],
             "release": state.get("release") if isinstance(state.get("release"), dict) else None,
         }
 
@@ -297,40 +288,6 @@ class GitHubUpdateManager:
         os.replace(tmp, destination)
 
     @staticmethod
-    def _locate_package_root(extract_root: Path) -> Path:
-        def valid(root: Path) -> bool:
-            source_tree = (root / "app.py").is_file() and (root / "SleepMate.vbs").is_file()
-            frozen_tree = (root / "SleepMate.exe").is_file() and (root / "build_info.json").is_file()
-            return source_tree or frozen_tree
-        if valid(extract_root):
-            return extract_root
-        candidates = [p for p in extract_root.iterdir() if p.is_dir() and valid(p)]
-        if len(candidates) == 1:
-            return candidates[0]
-        raise RuntimeError("A frissítési ZIP nem tartalmaz egyértelmű SleepMate programgyökeret.")
-
-    @staticmethod
-    def _read_package_version(package_root: Path) -> str:
-        build = package_root / "build_info.json"
-        if build.is_file():
-            try:
-                obj = json.loads(build.read_text(encoding="utf-8"))
-                value = str(obj.get("version") or "").strip()
-                if value:
-                    return value
-            except Exception:
-                pass
-        vp = package_root / "cpap" / "version.py"
-        if not vp.exists():
-            raise RuntimeError("A frissítési csomag verziója nem olvasható (build_info.json / cpap/version.py hiányzik).")
-        text = vp.read_text(encoding="utf-8", errors="replace")
-        import re
-        m = re.search(r'^APP_VERSION\s*=\s*["\']([^"\']+)["\']', text, re.M)
-        if not m:
-            raise RuntimeError("A frissítési csomag verziója nem olvasható.")
-        return m.group(1).strip()
-
-    @staticmethod
     def _validate_msi_package(path: Path, target_version: str, manifest: dict[str, Any]) -> None:
         expected_name = f"SleepMate_Setup_v{target_version}.msi"
         if path.name != expected_name:
@@ -345,33 +302,66 @@ class GitHubUpdateManager:
         with path.open("rb") as source:
             if source.read(8) != bytes.fromhex("D0CF11E0A1B11AE1"):
                 raise RuntimeError("A letöltött csomag nem érvényes MSI konténer.")
+        if os.name == "nt" and getattr(sys, "frozen", False):
+            GitHubUpdateManager._verify_windows_authenticode(path)
 
-    def _snapshot_program(self, target: Path, version: str) -> dict[str, Any]:
-        target.mkdir(parents=True, exist_ok=True)
-        excluded = {"private", "__pycache__", ".git", ".pytest_cache"}
-        files = 0
-        for src in self.base.rglob("*"):
-            rel = src.relative_to(self.base)
-            if rel.parts and rel.parts[0] in excluded:
-                continue
-            if src.is_dir():
-                (target / rel).mkdir(parents=True, exist_ok=True)
-            elif src.is_file():
-                dst = target / rel
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                files += 1
-        meta = {"version": version, "created_at": _now(), "files": files}
-        (target / "rollback.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
-        return meta
+    @staticmethod
+    def _verify_windows_authenticode(path: Path) -> None:
+        """Validate a release signature with WinVerifyTrust, without a helper process."""
+        import ctypes
+        from ctypes import wintypes
 
-    def _cleanup_dirs(self, root: Path, keep: int) -> None:
-        try:
-            rows = sorted((p for p in root.iterdir() if p.is_dir()), key=lambda p: p.stat().st_mtime, reverse=True) if root.exists() else []
-            for old in rows[max(1, keep):]:
-                shutil.rmtree(old, ignore_errors=True)
-        except Exception:
-            pass
+        class GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD), ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD), ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        class WINTRUST_FILE_INFO(ctypes.Structure):
+            _fields_ = [
+                ("cbStruct", wintypes.DWORD),
+                ("pcwszFilePath", wintypes.LPCWSTR),
+                ("hFile", wintypes.HANDLE),
+                ("pgKnownSubject", ctypes.c_void_p),
+            ]
+
+        class WINTRUST_DATA(ctypes.Structure):
+            _fields_ = [
+                ("cbStruct", wintypes.DWORD),
+                ("pPolicyCallbackData", ctypes.c_void_p),
+                ("pSIPClientData", ctypes.c_void_p),
+                ("dwUIChoice", wintypes.DWORD),
+                ("fdwRevocationChecks", wintypes.DWORD),
+                ("dwUnionChoice", wintypes.DWORD),
+                ("pFile", ctypes.POINTER(WINTRUST_FILE_INFO)),
+                ("dwStateAction", wintypes.DWORD),
+                ("hWVTStateData", wintypes.HANDLE),
+                ("pwszURLReference", wintypes.LPCWSTR),
+                ("dwProvFlags", wintypes.DWORD),
+                ("dwUIContext", wintypes.DWORD),
+            ]
+
+        action = GUID(
+            0x00AAC56B, 0xCD44, 0x11D0,
+            (ctypes.c_ubyte * 8)(0x8C, 0xC2, 0x00, 0xC0, 0x4F, 0xC2, 0x95, 0xEE),
+        )
+        file_info = WINTRUST_FILE_INFO(
+            ctypes.sizeof(WINTRUST_FILE_INFO), str(path), None, None,
+        )
+        trust_data = WINTRUST_DATA(
+            ctypes.sizeof(WINTRUST_DATA), None, None,
+            2,  # WTD_UI_NONE
+            0,  # WTD_REVOKE_NONE; release CI performs the online trust check
+            1,  # WTD_CHOICE_FILE
+            ctypes.pointer(file_info),
+            0, None, None, 0, 0,
+        )
+        win_verify_trust = ctypes.windll.wintrust.WinVerifyTrust
+        win_verify_trust.argtypes = [wintypes.HWND, ctypes.POINTER(GUID), ctypes.POINTER(WINTRUST_DATA)]
+        win_verify_trust.restype = wintypes.LONG
+        status = int(win_verify_trust(None, ctypes.byref(action), ctypes.byref(trust_data)))
+        if status != 0:
+            raise RuntimeError(f"Az MSI Authenticode aláírása hiányzik vagy nem érvényes (WinVerifyTrust: 0x{status & 0xFFFFFFFF:08X}).")
 
     def _cleanup_files(self, root: Path, pattern: str, keep: int) -> None:
         try:
@@ -381,30 +371,6 @@ class GitHubUpdateManager:
                 except OSError: pass
         except Exception:
             pass
-
-    def _prepare_binary_state_transition(self, package_root: Path, backup_path: Path, config: dict[str, Any]) -> Path:
-        """Move a legacy portable/source install to per-user state before 5.x binary boot.
-
-        The transition is copy/restore based; the old in-folder private state is
-        never deleted. This allows a 4.2.x bridge release to install a frozen
-        SleepMate program tree without losing patient, push or therapy state.
-        """
-        frozen_package = (package_root / "SleepMate.exe").is_file()
-        if not frozen_package or os.name != "nt" or self.state_base != self.base:
-            return self.state_base
-        local = str(os.environ.get("LOCALAPPDATA") or "").strip()
-        if not local:
-            return self.state_base
-        target_state = (Path(local) / "SleepMate").resolve()
-        if target_state == self.state_base:
-            return self.state_base
-        target_state.mkdir(parents=True, exist_ok=True)
-        target_measurement = target_state / "private" / "measurement"
-        restore_full_backup(target_state, backup_path, target_measurement)
-        (target_state / "config.json").write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-        (target_state / "private" / "update_runtime").mkdir(parents=True, exist_ok=True)
-        self._log("INFO", "5.x bináris állapotátmenet előkészítve.", {"from": str(self.state_base), "to": str(target_state), "source_preserved": True})
-        return target_state
 
     def prepare_install(self, config: dict[str, Any], data_dir: Path, port: int, progress: Callable[[int, str, str], None] | None = None) -> dict[str, Any]:
         with self._lock:
@@ -431,7 +397,7 @@ class GitHubUpdateManager:
             min_version = str(manifest.get("min_version") or "0.0.0")
             if _version_tuple(APP_VERSION) < _version_tuple(min_version):
                 raise RuntimeError(f"Ez a frissítés legalább SleepMate {min_version} verziót igényel.")
-            asset_name = str(manifest.get("asset") or f"SleepMate_v{target_version}.zip")
+            asset_name = str(manifest.get("asset") or f"SleepMate_Setup_v{target_version}.msi")
             if Path(asset_name).name != asset_name:
                 raise RuntimeError("A frissítési manifest érvénytelen asset nevet tartalmaz.")
             expected_hash = str(manifest.get("sha256") or "").lower().strip()
@@ -482,7 +448,6 @@ class GitHubUpdateManager:
                     "launch_vbs": str(self.base / "SleepMate.vbs"),
                     "launcher_exe": str(self.base / "SleepMate.exe"),
                     "state_dir": str(self.state_base),
-                    "worker_log": str(self.runtime / "update_worker.log"),
                     "installer_log": str(installer_log),
                     "timeout_seconds": 90,
                 }
@@ -493,97 +458,58 @@ class GitHubUpdateManager:
                 self._log("INFO", "MSI frissítés biztonságosan előkészítve.", {"from": APP_VERSION, "to": target_version, "asset": asset_name, "sha256": expected_hash, "backup": str(backup_path)})
                 return {"ok": True, "target_version": target_version, "plan": str(plan_path), "backup": str(backup_path), "install_method": "windows-installer"}
 
-            # Compatibility for historical portable/source update manifests.
-            # New official releases are generated as windows-msi-x64 above.
-            if str(manifest.get("package_type") or "") not in {"", "windows-x64-program-tree"}:
-                raise RuntimeError("A frissítési manifest ismeretlen csomagtípust tartalmaz.")
-            zip_path = package_path
-            if progress: progress(30, "Csomag ellenőrzése", "Frissítési ZIP biztonságos kibontása…")
-            extract_root = work / "package"
-            extract_root.mkdir(parents=True, exist_ok=True)
-            safe_extract_zip(zip_path, extract_root)
-            package_root = self._locate_package_root(extract_root)
-            package_version = self._read_package_version(package_root)
-            if package_version != target_version:
-                raise RuntimeError(f"A csomag belső verziója ({package_version}) nem egyezik a release verziójával ({target_version}).")
-
-            # Full data backup before any program file can be replaced.
-            pre_dir = self.private / "pre_update_backups"
-            pre_dir.mkdir(parents=True, exist_ok=True)
-            backup_path = pre_dir / f"SleepMate_pre_update_{APP_VERSION}_to_{target_version}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
-            if progress: progress(45, "Biztonsági mentés", "Teljes rendszerbackup készítése frissítés előtt…")
-            create_full_backup(self.state_base, data_dir, config, backup_path)
-            target_state_base = self._prepare_binary_state_transition(package_root, backup_path, config)
-
-            rollback_dir = self.runtime / "rollback" / f"{APP_VERSION}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            if progress: progress(65, "Rollback pont", "A jelenlegi programverzió teljes pillanatképének készítése…")
-            self._snapshot_program(rollback_dir, APP_VERSION)
-            self._cleanup_dirs(self.runtime / "rollback", 3)
-            self._cleanup_files(pre_dir, "SleepMate_pre_update_*.zip", 5)
-
-            target_runtime = target_state_base / "private" / "update_runtime"
-            target_runtime.mkdir(parents=True, exist_ok=True)
-            marker = target_runtime / "update_boot_ok.json"
-            try: marker.unlink()
-            except FileNotFoundError: pass
-            plan = {
-                "format": "sleepmate-update-plan",
-                "created_at": _now(),
-                "from_version": APP_VERSION,
-                "to_version": target_version,
-                "app_dir": str(self.base),
-                "package_dir": str(package_root),
-                "rollback_dir": str(rollback_dir),
-                "pre_update_backup": str(backup_path),
-                "health_marker": str(marker),
-                "old_pid": os.getpid(),
-                "port": int(port),
-                "tray_pid": self._read_tray_pid(),
-                "launch_vbs": str(self.base / "SleepMate.vbs"),
-                "launcher_exe": str(self.base / "SleepMate.exe"),
-                "state_dir": str(target_state_base),
-                "worker_log": str(self.runtime / "update_worker.log"),
-                "timeout_seconds": 70,
-            }
-            plan_path = work / "update-plan.json"
-            plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
-            self._save_state(last_install={"status": "prepared", "from": APP_VERSION, "to": target_version, "prepared_at": _now(), "backup": str(backup_path)}, last_error=None)
-            if progress: progress(100, "Frissítés előkészítve", f"SleepMate {target_version} készen áll a telepítésre.")
-            self._log("INFO", "Frissítés biztonságosan előkészítve.", {"from": APP_VERSION, "to": target_version, "backup": str(backup_path), "rollback": str(rollback_dir)})
-            return {"ok": True, "target_version": target_version, "plan": str(plan_path), "backup": str(backup_path), "rollback": str(rollback_dir)}
+            raise RuntimeError("A SleepMate frissítés kizárólag ellenőrzött Windows MSI csomagot fogad el.")
 
     def launch_worker(self, plan_path: str) -> dict[str, Any]:
-        import subprocess
         plan = Path(plan_path)
         if not plan.is_file():
             raise FileNotFoundError("A frissítési terv nem található.")
         flags = 0x08000000 if os.name == "nt" else 0
-        updater_dir = self.base / "Updater"
-        updater_exe = updater_dir / "SleepMateUpdater.exe"
-        legacy_updater_exe = self.base / "SleepMateUpdater.exe"
-        if getattr(sys, "frozen", False) and updater_exe.is_file():
-            # The coordinator uses the same transparent PyInstaller onedir
-            # layout as SleepMate. It runs from the already-created update stage
-            # so MSI can replace the installed tree without onefile extraction
-            # or a randomly named executable.
-            coordinator_dir = plan.parent / "coordinator"
-            shutil.copytree(updater_dir, coordinator_dir, dirs_exist_ok=True)
-            worker_copy = coordinator_dir / "SleepMateUpdater.exe"
-            subprocess.Popen([str(worker_copy), str(plan)], cwd=str(coordinator_dir), creationflags=flags, close_fds=(os.name != "nt"))
-        elif getattr(sys, "frozen", False) and legacy_updater_exe.is_file():
-            # One transition release may still contain the former onefile
-            # worker. It can install the first MSI-based update; new builds no
-            # longer produce or package this layout.
-            worker_copy = plan.parent / "SleepMateUpdater-legacy.exe"
-            shutil.copy2(legacy_updater_exe, worker_copy)
-            subprocess.Popen([str(worker_copy), str(plan)], cwd=str(plan.parent), creationflags=flags, close_fds=(os.name != "nt"))
-        else:
-            worker = self.base / "update_worker.py"
-            if not worker.is_file():
-                raise FileNotFoundError("A SleepMate update_worker.py fájl hiányzik.")
-            subprocess.Popen([sys.executable, str(worker), str(plan)], cwd=str(self.base), creationflags=flags, close_fds=(os.name != "nt"))
-        self._save_state(last_install={**(self._load_state().get("last_install") or {}), "status": "worker_started", "worker_started_at": _now()})
-        return {"ok": True, "message": "A frissítő elindult. A SleepMate leáll és az új verzióban újraindul."}
+        payload = json.loads(plan.read_text(encoding="utf-8"))
+        if payload.get("format") != "sleepmate-update-plan":
+            raise RuntimeError("Érvénytelen SleepMate frissítési terv.")
+
+        if payload.get("install_kind") == "msi":
+            if os.name != "nt":
+                raise RuntimeError("Az MSI frissítés csak Windowson indítható.")
+            installer = Path(str(payload.get("installer_path") or "")).resolve()
+            version = str(payload.get("to_version") or "").strip()
+            expected_name = f"SleepMate_Setup_v{version}.msi"
+            if installer.parent != plan.parent or installer.name != expected_name:
+                raise RuntimeError("A frissítési terv nem a stage-elt MSI release assetre mutat.")
+            if not installer.is_file() or _sha256(installer).lower() != str(payload.get("installer_sha256") or "").lower():
+                raise RuntimeError("A stage-elt MSI SHA-256 ellenőrzése sikertelen.")
+            with installer.open("rb") as source:
+                if source.read(8) != bytes.fromhex("D0CF11E0A1B11AE1"):
+                    raise RuntimeError("A stage-elt csomag nem MSI konténer.")
+
+            system_root = Path(str(os.environ.get("SystemRoot") or r"C:\Windows")).resolve()
+            msiexec = system_root / "System32" / "msiexec.exe"
+            if not msiexec.is_file():
+                raise FileNotFoundError("A szabványos Windows Installer (msiexec.exe) nem érhető el.")
+            installer_log = Path(str(payload.get("installer_log") or (plan.parent / "msiexec.log"))).resolve()
+            installer_log.parent.mkdir(parents=True, exist_ok=True)
+
+            # Ask the tray to close the app window and backend gracefully. The
+            # only executable started for the handover is Microsoft's signed
+            # Windows Installer; no copied or generated updater EXE is involved.
+            quit_request = self.private / "quit_tray.request"
+            quit_request.parent.mkdir(parents=True, exist_ok=True)
+            quit_request.write_text(_now(), encoding="ascii")
+            command = [
+                str(msiexec), "/i", str(installer), "/passive", "/norestart",
+                "REBOOT=ReallySuppress", f"INSTALLFOLDER={self.base}",
+                "SLEEPMATE_AUTOLAUNCH=1", "/L*v", str(installer_log),
+            ]
+            try:
+                process = subprocess.Popen(command, cwd=str(plan.parent), creationflags=flags, close_fds=False)
+            except Exception:
+                quit_request.unlink(missing_ok=True)
+                raise
+            self._save_state(last_install={**(self._load_state().get("last_install") or {}), "status": "windows_installer_started", "installer_pid": process.pid, "started_at": _now()})
+            return {"ok": True, "message": "A Windows Installer elindult. A SleepMate szabályosan leáll, települ és újraindul.", "installer_pid": process.pid}
+
+        raise RuntimeError("A SleepMate frissítés kizárólag ellenőrzött Windows MSI csomagot fogad el.")
 
     def _read_tray_pid(self) -> int:
         try:
@@ -599,37 +525,6 @@ class GitHubUpdateManager:
             return pid if pid > 0 else 0
         except Exception:
             return 0
-
-    def prepare_rollback(self, port: int) -> dict[str, Any]:
-        status = self.status({})
-        rows = status.get("rollbacks") or []
-        if not rows:
-            raise RuntimeError("Nincs elérhető korábbi SleepMate verzió a visszaállításhoz.")
-        chosen = Path(str(rows[0]["path"]))
-        version = str(rows[0].get("version") or "korábbi")
-        work = self.runtime / f"rollback-{uuid.uuid4().hex[:10]}"
-        work.mkdir(parents=True, exist_ok=True)
-        marker = self.runtime / "update_boot_ok.json"
-        try: marker.unlink()
-        except FileNotFoundError: pass
-        # To make rollback itself reversible, snapshot the currently running app.
-        current_snapshot = self.runtime / "rollback" / f"{APP_VERSION}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_before_manual_rollback"
-        self._snapshot_program(current_snapshot, APP_VERSION)
-        self._cleanup_dirs(self.runtime / "rollback", 3)
-        plan = {
-            "format": "sleepmate-update-plan", "created_at": _now(),
-            "from_version": APP_VERSION, "to_version": version,
-            "app_dir": str(self.base), "package_dir": str(chosen),
-            "rollback_dir": str(current_snapshot), "pre_update_backup": "",
-            "health_marker": str(marker), "old_pid": os.getpid(), "port": int(port),
-            "tray_pid": self._read_tray_pid(), "launch_vbs": str(self.base / "SleepMate.vbs"),
-            "launcher_exe": str(self.base / "SleepMate.exe"), "state_dir": str(self.state_base),
-            "worker_log": str(self.runtime / "update_worker.log"), "timeout_seconds": 70,
-            "manual_rollback": True,
-        }
-        plan_path = work / "update-plan.json"
-        plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
-        return {"ok": True, "target_version": version, "plan": str(plan_path)}
 
     def mark_boot_ok(self) -> None:
         marker = self.runtime / "update_boot_ok.json"
@@ -790,8 +685,8 @@ class SelfCheckService:
             rows.append(self._row("updater", level, "Frissítési rendszer", msg, {"repo": update_status.get("github_repo"), "latest": update_status.get("latest_version")}))
 
         installed_tree = (self.base / "SleepMate.exe").is_file() or (self.base / "installed.marker").exists()
-        required = (["SleepMate.exe", "Updater/SleepMateUpdater.exe", "build_info.json", "installed.marker"] if installed_tree else
-                    ["app.py", "SleepMate.vbs", "sleepmate_tray.pyw", "web/index.html", "web/app.js", "web/service-worker.js", "cpap/version.py", "update_worker.py"])
+        required = (["SleepMate.exe", "build_info.json", "installed.marker"] if installed_tree else
+                    ["app.py", "SleepMate.vbs", "sleepmate_tray.pyw", "web/index.html", "web/app-core.js", "web/service-worker.js", "cpap/version.py"])
         missing = [name for name in required if not (self.base / name).is_file()]
         rows.append(self._row("program", "ERROR" if missing else "OK", "Programfájlok", "Hiányzó alapfájlok: " + ", ".join(missing) if missing else "A kötelező SleepMate programfájlok megvannak.", {"missing": missing}))
 
@@ -840,7 +735,7 @@ class SupportBundleService:
 
     @staticmethod
     def _inventory(base: Path) -> list[dict[str, Any]]:
-        roots = ["app.py", "SleepMate.pyw", "SleepMate.vbs", "sleepmate_tray.pyw", "update_worker.py", "requirements.txt", "cpap", "web"]
+        roots = ["app.py", "SleepMate.pyw", "SleepMate.vbs", "sleepmate_tray.pyw", "requirements.txt", "cpap", "web"]
         rows = []
         for name in roots:
             p = base / name

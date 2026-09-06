@@ -274,10 +274,9 @@
   }
 
   function loadPackagedOnboarding(){
-    // Development builds load first-run.js from web/app.js. Packaged builds
-    // deliberately restore the frozen app-core.js, so attach the wizard here,
-    // on the integration path that is actually present in the MSI/PWA bundle.
-    if(document.querySelector('script[data-sleepmate-first-run="1"]'))return;
+    // The canonical shell loads onboarding explicitly before this compatibility
+    // guard; retain the guard for independently embedded integration builds.
+    if(document.querySelector('script[src*="first-run.js"],script[data-sleepmate-first-run="1"]'))return;
     const script=document.createElement('script');
     script.src='/first-run.js?v=4';
     script.async=false;

@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 JS = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
+JS_COMPACT = "".join(JS.split())
 APP = (ROOT / "app.py").read_text(encoding="utf-8")
 
 
@@ -23,7 +24,7 @@ def test_logs_reload_system_status_with_diagnostics():
 
 
 def test_warning_visual_precedence_and_complete_diagnostics():
-    render = JS.split('function renderSystemStatus', 1)[1].split('function isoFromCode', 1)[0]
+    render = JS_COMPACT.split('functionrenderSystemStatus', 1)[1].split('functionisoFromCode', 1)[0]
     assert "x.warning?'warn':x.ok?'ok'" in render
     assert "x.warning?'!'" in render
     assert 'filter(x=>x.warning||(!x.ok&&!x.optional))' in render

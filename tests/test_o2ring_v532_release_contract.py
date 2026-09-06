@@ -3,7 +3,7 @@ from cpap.version import API_VERSION, APP_VERSION, BUILD_CHANNEL
 ROOT=Path(__file__).resolve().parents[1]
 def read(path:str)->str:return (ROOT/path).read_text(encoding="utf-8")
 def test_current_release_identity_supersedes_historical_v532_contract():
-    assert APP_VERSION=="5.3.19" and API_VERSION==19 and BUILD_CHANNEL=="stable"
+    assert APP_VERSION=="5.3.20" and API_VERSION==19 and BUILD_CHANNEL=="stable"
     assert read("RELEASE_NOTES_5_3_4.md").startswith("# SleepMate 5.3.4\n")
 def test_current_packaged_pwa_keeps_authoritative_o2_assets_network_first():
     for path in ("web/service-worker.js","web/service-worker-v508-base.js"):
@@ -13,8 +13,9 @@ def test_current_packaged_pwa_keeps_authoritative_o2_assets_network_first():
         assert "/o2ring-v532.js" not in sw and "/frontend-v533.js" not in sw
 def test_current_shell_activates_only_v534_post_release_owner():
     shell=read("cpap/v530_features.py")
+    index=read("web/index.html")
     assert "install_o2ring_runtime_v534" in shell
-    assert "o2ring-v534.css" in shell and "frontend-v534.js" in shell
+    assert "o2ring-v534.css" in index and "frontend-v534.js" in index
     assert "o2ring-v532.js" not in shell and "frontend-v533.js" not in shell
 def test_current_user_requested_surfaces_are_present():
     runtime=read("web/o2ring.js")

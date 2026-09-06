@@ -40,6 +40,7 @@ Thumbs.db
 *.edf
 *.EDF
 testdata/DATALOG/
+.accept-state/
 
 # Generated local configuration/state
 *.sqlite3

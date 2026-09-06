@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -51,11 +52,24 @@ license_text = (ROOT / "LICENSE").read_text(encoding="utf-8", errors="replace") 
 if "GNU AFFERO GENERAL PUBLIC LICENSE" not in license_text or "Version 3" not in license_text:
     errors.append("LICENSE is not recognizable as GNU AGPL v3")
 
-for path in ROOT.rglob("*"):
-    if not path.is_file():
+tracked = subprocess.run(
+    ["git", "ls-files", "-z"],
+    cwd=ROOT,
+    check=False,
+    capture_output=True,
+)
+if tracked.returncode != 0:
+    errors.append(
+        "unable to enumerate tracked files: "
+        + tracked.stderr.decode("utf-8", errors="replace").strip()
+    )
+
+for entry in tracked.stdout.decode("utf-8", errors="surrogateescape").split("\0"):
+    if not entry:
         continue
-    rel = path.relative_to(ROOT).as_posix()
-    if rel.startswith(".git/") or rel == "scripts/verify_public_source.py":
+    rel = Path(entry).as_posix()
+    path = ROOT / entry
+    if not path.is_file() or rel == "scripts/verify_public_source.py":
         continue
     if any(rx.search(rel) for rx in RISKY_FILES):
         errors.append(f"risky tracked filename: {rel}")

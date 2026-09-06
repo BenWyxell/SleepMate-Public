@@ -45,9 +45,6 @@ def main() -> int:
     out = Path(args.out_dir).resolve(); out.mkdir(parents=True, exist_ok=True)
     if not (program / 'SleepMate.exe').is_file():
         raise SystemExit('SleepMate.exe missing from program directory')
-    if not (program / 'Updater' / 'SleepMateUpdater.exe').is_file():
-        raise SystemExit('Updater/SleepMateUpdater.exe missing from program directory')
-
     ver = version()
     commit = git_commit()
     build_id = f'sleepmate-{ver}-{(commit or "local")[:12]}'
@@ -70,20 +67,7 @@ def main() -> int:
             if p.is_file():
                 zf.write(p, (Path(top) / p.relative_to(program)).as_posix())
     digest = sha256(asset)
-    manifest = {
-        'format': 'sleepmate-update',
-        'version': ver,
-        'min_version': args.min_version,
-        'asset': asset_name,
-        'sha256': digest,
-        'package_type': 'windows-x64-program-tree',
-        'build_id': build_id,
-        'git_commit': commit,
-        'requires_installer': False,
-    }
-    manifest_path = out / 'sleepmate-update.json'
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
-    print(json.dumps({'asset': str(asset), 'manifest': str(manifest_path), 'sha256': digest, 'build_id': build_id}, ensure_ascii=False))
+    print(json.dumps({'asset': str(asset), 'sha256': digest, 'build_id': build_id}, ensure_ascii=False))
     return 0
 
 

@@ -213,11 +213,13 @@
   }
 
   async function hydrate(){
-    const results=await Promise.allSettled([request('/api/config'),request('/api/sleepsync/settings'),request('/api/remote/status'),request('/api/ai/config'),request('/api/ui/preferences')]);
+    // Remote access probes external executables and can legitimately be slow.
+    // Keep it out of the normal startup path; step 4 loads it on demand.
+    const results=await Promise.allSettled([request('/api/config'),request('/api/sleepsync/settings'),Promise.resolve({}),request('/api/ai/config'),request('/api/ui/preferences')]);
     state.config=results[0].status==='fulfilled'?results[0].value:{};state.sleepsync=results[1].status==='fulfilled'?results[1].value:{};state.remote=results[2].status==='fulfilled'?results[2].value:{};state.ai=results[3].status==='fulfilled'?results[3].value:{};state.ui=results[4].status==='fulfilled'?results[4].value:{};
     $('#frDataDir').value=state.config.data_dir||'';$('#frAutoScan').checked=state.config.auto_scan_enabled!==false;$('#frSleepSync').checked=!!state.sleepsync.auto_sync_enabled;$('#frBackup').checked=!!state.config.auto_backup_enabled;$('#frAiPrompt').checked=state.ui.ai_prompting_enabled===true;const savedCfHost=String(state.config.cloudflare_hostname||'').trim();$('#frCfHost').value=savedCfHost;const cfOrigin=$('#frCfHostOrigin');if(cfOrigin)cfOrigin.hidden=!savedCfHost;$('#frCfAccess').checked=!!state.config.cloudflare_access_confirmed;
     const old=state.status?.choices||{};state.choices={...state.choices,...old,data_source_configured:!!state.config.data_dir,sleepsync_enabled:!!state.sleepsync.auto_sync_enabled,backup_enabled:!!state.config.auto_backup_enabled,gemini_configured:!!state.ai?.providers?.gemini?.configured,groq_configured:!!state.ai?.providers?.groq?.configured,ai_prompting_enabled:state.ui.ai_prompting_enabled===true};
-    if(old.remote_mode&&['local','tailscale','cloudflare'].includes(old.remote_mode)){const radio=$(`input[name="frRemote"][value="${old.remote_mode}"]`);if(radio)radio.checked=true}updateRemotePanels();await loadRemote(false);
+    if(old.remote_mode&&['local','tailscale','cloudflare'].includes(old.remote_mode)){const radio=$(`input[name="frRemote"][value="${old.remote_mode}"]`);if(radio)radio.checked=true}updateRemotePanels();
   }
 
   async function open(force=false){

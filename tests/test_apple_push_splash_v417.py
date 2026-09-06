@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 HTML=(ROOT/'web'/'index.html').read_text(encoding='utf-8')
 JS=(ROOT/'web'/'app-core.js').read_text(encoding='utf-8')
+JS_COMPACT=''.join(JS.split())
 CSS=(ROOT/'web'/'style.css').read_text(encoding='utf-8')
 PUSH=(ROOT/'cpap'/'push_service.py').read_text(encoding='utf-8')
 BASE_SW=(ROOT/'web'/'service-worker-v508-base.js').read_text(encoding='utf-8')
@@ -22,10 +23,10 @@ def test_standalone_pwa_shows_exactly_one_custom_html_splash_per_document_boot()
 
 
 def test_push_uses_real_https_origin_and_repairs_key_drift():
-    assert 'origin:location.origin' in JS
+    assert 'origin:location.origin' in JS_COMPACT
     assert 'pushSubscriptionKeyMatches' in JS
     assert 'alignPushSubscription' in JS
-    assert 'force:true' in JS
+    assert 'force:true' in JS_COMPACT
     assert 'mailto:sleepmate@localhost' not in PUSH
     assert 'vapid_subject TEXT' in PUSH
     assert 'vapid_public_key TEXT' in PUSH
@@ -48,12 +49,13 @@ def test_vapid_subject_accepts_real_https_and_rejects_localhost():
 
 def test_service_worker_install_is_tolerant_bounded_and_atomic_for_ios_push():
     assert 'c.addAll(SHELL)' not in BASE_SW
-    assert 'cacheShellAsset' in BASE_SW
+    assert 'fetchShellAsset' in BASE_SW
     assert 'AbortController' in BASE_SW
-    assert 'setTimeout(()=>controller.abort(),5000)' in BASE_SW
-    assert 'OPTIONAL_SHELL_ASSETS' in BASE_SW
+    assert "boundedFetch(request,timeout=15000)" in BASE_SW
+    assert "setTimeout(()=>controller.abort(),timeout)" in BASE_SW
     assert 'precacheShellAtomic' in BASE_SW
-    assert 'if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error' in BASE_SW
+    assert 'await caches.delete(SHELL_CACHE);throw error' in BASE_SW
+    assert 'await cache.put(url,response)' in BASE_SW
     assert 'await precacheShellAtomic();await self.skipWaiting()' in BASE_SW
     assert "self.addEventListener('push'" in BASE_SW
 

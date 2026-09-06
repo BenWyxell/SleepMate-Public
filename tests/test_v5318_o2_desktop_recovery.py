@@ -5,39 +5,30 @@ ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
 
 
-def test_app_boots_o2_recovery_independently():
-    app = (WEB / "app.js").read_text(encoding="utf-8")
-    assert "/o2ring-recovery-v5318.js?v=1" in app
-    assert "data-sleepmate-o2-recovery" in app
+def test_retired_recovery_layer_is_not_shipped_or_loaded():
+    assert not (WEB / "o2ring-recovery-v5318.js").exists()
+    combined = "\n".join(
+        (WEB / name).read_text(encoding="utf-8")
+        for name in ("index.html", "frontend-v534.js", "sleepmate-v530.js", "service-worker.js")
+    )
+    assert "o2ring-recovery-v5318" not in combined
 
 
-def test_packaged_frontend_also_boots_o2_recovery_after_app_core_replacement():
-    frontend = (WEB / "frontend-v534.js").read_text(encoding="utf-8")
-    spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
-    assert "shutil.copy2(core_app, WEB_GENERATED / 'app.js')" in spec
-    assert "function ensureO2Recovery()" in frontend
-    assert "/o2ring-recovery-v5318.js?v=" in frontend
-    assert "ensureO2Recovery();bind();" in frontend
+def test_desktop_oximetry_ui_is_installed_by_the_canonical_runtime():
+    bootstrap = (WEB / "sleepmate-v530.js").read_text(encoding="utf-8")
+    o2ring = (WEB / "o2ring.js").read_text(encoding="utf-8")
+    assert "await ensureO2Modules()" in bootstrap
+    assert "await Promise.resolve(window.SleepMateO2Ring.install())" in bootstrap
+    assert '#sidebar [data-page="oximetry"]' in o2ring
+    assert "page-oximetry" in o2ring
+    assert "installNav();installPage();installDaily();installSettingsConnection()" in o2ring
 
 
-def test_recovery_detects_missing_desktop_oximetry_ui():
-    js = (WEB / "o2ring-recovery-v5318.js").read_text(encoding="utf-8")
-    assert "/api/o2ring/status" in js
-    assert '#sidebar [data-page="oximetry"]' in js
-    assert "page-oximetry" in js
-    assert "/o2ring.js?v=" in js
-    assert "SleepMateO2Ring.uninstall" in js
-    assert "SleepMateO2Ring.install" in js
-
-
-def test_recovery_can_restore_sidebar_even_without_reports_anchor():
-    js = (WEB / "o2ring-recovery-v5318.js").read_text(encoding="utf-8")
-    assert "if(reports)nav.insertBefore(button,reports);else nav.appendChild(button);" in js
-    assert "window.SleepMateO2Ring?.open?.('live')" in js
-
-
-def test_recovery_is_not_pwa_or_mobile_gated():
-    js = (WEB / "o2ring-recovery-v5318.js").read_text(encoding="utf-8")
-    assert "display-mode: standalone" not in js
-    assert "sm-phone-pwa" not in js
-    assert "matchMedia" not in js
+def test_source_and_packaged_entrypoints_load_the_same_static_o2_assets():
+    index = (WEB / "index.html").read_text(encoding="utf-8")
+    spec = (ROOT / "build/windows/SleepMate.spec").read_text(encoding="utf-8")
+    for asset in ("frontend-v534.js", "sleepmate-v530.js", "o2ring-data-management.js"):
+        assert index.count(f'src="/{asset}?v=5.3.20"') == 1
+        assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
+    assert "sm-frontend-v534-inline" not in index
+    assert "_patch_index" not in (ROOT / "cpap/v530_features.py").read_text(encoding="utf-8")

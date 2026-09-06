@@ -24,6 +24,4 @@ def test_v524_shell_loads_cache_busted_fix():
     assert 'sleepmate-sleep-v524.js?v=5.2.6' in worker
     assert 'sleepmate-sleep-v523.js?v=5.2.6' in worker
     assert 'sleepmate-chart-v523.js?v=5.2.14' in worker
-    assert "'/sleepmate-sleep-v524.js'" in spec
-    assert "'/sleepmate-sleep-v523.js'" in spec
-    assert "'/sleepmate-chart-v523.js'" in spec
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec

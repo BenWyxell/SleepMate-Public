@@ -4,6 +4,8 @@ import cpap.o2ring_runtime_v534 as o2_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
+INDEX = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
+WORKER = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
 RUNTIME = (ROOT / "cpap" / "o2ring_runtime_v534.py").read_text(encoding="utf-8")
 APP_CORE = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
 
@@ -19,20 +21,22 @@ def test_v534_packaging_requires_current_o2_frontend_assets():
         "/o2ring-v534.css",
         "/frontend-v534.js",
     ):
-        assert repr(asset) in SPEC
-    assert "protected_base_assets" in SPEC
+        assert asset.lstrip('/') in INDEX or repr(asset) in WORKER
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in SPEC
 
 
 def test_v534_packaging_rejects_obsolete_o2_runtime_assets():
-    assert "for obsolete in ('/o2ring-v532.css','/o2ring-v532.js','/frontend-v533.js')" in SPEC
-    assert "obsolete O2 frontend asset returned to active worker" in SPEC
+    for obsolete in ('o2ring-v532.css', 'o2ring-v532.js', 'frontend-v533.js'):
+        assert obsolete not in INDEX
+        assert obsolete not in WORKER
 
 
 def test_v534_packaging_uses_direct_latest_session_duration_fix():
     # The current app-core already renders total therapy duration, so the
     # packager must not depend on a brittle legacy "Befejezve" rewrite.
-    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in APP_CORE
-    assert "$('#latestSessions').textContent=`${latest.sessions?.length||0} szakasz`" in APP_CORE
+    compact = ''.join(APP_CORE.split())
+    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in compact
+    assert "$('#latestSessions').textContent=`${latest.sessions?.length||0}szakasz`" in compact
     assert "$('#latestStatus').textContent='Befejezve'" not in APP_CORE
     assert "$('#latestStatus').textContent='Befejezve'" not in SPEC
 

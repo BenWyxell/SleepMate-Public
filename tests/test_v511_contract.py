@@ -41,8 +41,8 @@ def test_offline_mode_is_network_first_and_gateway_specific():
     assert "[502,503,504]" in worker
     assert "fresh.status>=500" not in worker
     assert "boundedFetch" in worker
-    assert "sleepmate-enhancements.js" in worker
-    assert "sleepmate-offline-runtime.js" in worker
+    assert "navigationFallback" in worker
+    assert "apiNetworkWithFallback" in worker
     assert "X-SleepMate-Offline" in worker
     assert "offline read-only guard" in runtime
     assert "__sleepmateCheckServerRecovery" in runtime

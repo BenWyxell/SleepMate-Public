@@ -66,26 +66,18 @@ def test_pretty_printed_large_recording_metadata_is_prefix_only(tmp_path: Path):
     assert getattr(rows[0], "_samples_loaded") is False
 
 
-def test_o2_recovery_keeps_visible_placeholder_when_status_fails():
-    js = (ROOT / "web/o2ring-recovery-v5318.js").read_text(encoding="utf-8")
-    assert "const BUILD='5.3.19-recovery'" in js
-    assert "data-o2-recovery-placeholder" in js
-    assert "function installPlaceholder(message)" in js
-    assert "ensureSidebarButton()" in js
-    assert "Az O2Ring háttérszolgáltatás most nem válaszol" in js
-    assert "Újrapróbálás" in js
-    assert "api('/api/o2ring/status')" in js
-    assert "showRecoveryError(error?.message||String(error))" in js
+def test_o2_recovery_placeholder_was_removed_in_favor_of_real_ui():
+    assert not (ROOT / "web/o2ring-recovery-v5318.js").exists()
+    js = (ROOT / "web/sleepmate-v530.js").read_text(encoding="utf-8")
+    assert "data-o2-recovery-placeholder" not in js
+    assert "await ensureO2Modules()" in js
 
 
-def test_windows_release_reuses_exact_stable_updater_component():
+def test_windows_release_does_not_build_or_reuse_custom_updater_component():
     build = (ROOT / "build/windows/build_release.ps1").read_text(encoding="utf-8")
-    assert "$StableUpdaterVersion = '5.3.17'" in build
-    assert STABLE_UPDATER_SHA256 in build
-    assert STABLE_UPDATER_SOURCE_BLOB in build
-    assert "git rev-parse HEAD:update_worker.py" in build
-    assert "Invoke-WebRequest -Uri $StableUpdaterZipUrl" in build
-    assert "Pinned updater hash mismatch" in build
-    assert "Packaged updater changed during copy" in build
+    maintenance = (ROOT / "cpap/maintenance.py").read_text(encoding="utf-8")
+    assert "StableUpdater" not in build
     assert "SleepMateUpdater PyInstaller build" not in build
     assert "build\\windows\\SleepMateUpdater.spec" not in build
+    assert 'system_root / "System32" / "msiexec.exe"' in maintenance
+    assert "update_worker.py" not in maintenance

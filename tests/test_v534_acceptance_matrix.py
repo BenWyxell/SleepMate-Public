@@ -14,26 +14,27 @@ def read(path: str) -> str:
 
 def test_acceptance_p0_single_frontend_owner_and_stale_pwa_recovery():
     shell = read("cpap/v530_features.py")
+    index = read("web/index.html")
     sw = read("web/service-worker.js")
     base = read("web/service-worker-v508-base.js")
-    assert APP_VERSION == "5.3.19"
+    assert APP_VERSION == "5.3.20"
     assert 'UI_VERSION = "5.3.4"' in shell
     assert "o2ring-v532.js" not in shell
     assert "frontend-v533.js" not in shell
-    assert "frontend-v534.js" in shell
-    assert "o2ring-v534.css" in shell
+    assert "frontend-v534.js" in index
+    assert "o2ring-v534.css" in index
     for worker in (sw, base):
-        assert "sleepmate-shell-v5.3.19-o2-updater-recovery-1" in worker
-        assert "sleepmate-api-v5.3.9-refactor" in worker
+        assert "sleepmate-shell-v5.3.20" in worker
+        assert "sleepmate-api-v5.3.20" in worker
         assert "/o2ring.js" in worker
-        assert "/frontend-v534.js?v=5.3.4" in worker
-        assert "/o2ring-v534.css?v=5.3.4" in worker
+        assert "/frontend-v534.js?v=5.3.20" in worker
+        assert "/o2ring-v534.css?v=5.3.20" in worker
         assert "/o2ring-v532.js" not in worker
         assert "/frontend-v533.js" not in worker
-        assert "X-SleepMate-UI-Version" in worker
+        assert "RELEASE_VERSION='5.3.20'" in worker
         assert "SLEEPMATE_SHELL_READY" in worker
-        assert "event.respondWith(navigationFallback(req))" in worker
-        assert "event.respondWith(codeNetworkFirst(req))" in worker
+        assert "event.respondWith(navigationFallback(request))" in worker
+        assert "event.respondWith(currentCodeAsset(url.pathname))" in worker
 
 
 def test_acceptance_p0_dashboard_three_modes_and_route_lifecycle_are_single_owned():
@@ -104,7 +105,7 @@ def test_acceptance_p1_all_o2_charts_share_exact_hover_crosshair_zoom_pan_contra
         "syncGroup:'stack-o2'",
         "syncGroup:'recording'",
         "syncGroup:'trends'",
-        "syncGroup:'dash-o2'",
+        "drawTrendLine",
     ):
         assert marker in js
     assert "medianDelta(rows)*3.2" in js
@@ -268,7 +269,7 @@ def test_acceptance_o2_trends_live_handoff_and_hover_redraw_are_gap_safe():
         "if(!measuring&&R.live.length){R.live=[];R.liveZoom=null;drawLive()}",
         "if(R.liveResumePromise===work)",
         "function closeMobileO2Drawer()",
-        "smooth:true,points:true,connectGaps:true,lineWidth:2",
+        "drawTrendLine",
     ):
         assert marker in js
     resume = js[js.index("async function resumeLive()"):js.index("function updateLiveLifecycle()")]

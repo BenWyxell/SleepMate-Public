@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import inspect
 import json
 from html.parser import HTMLParser
 from pathlib import Path
@@ -42,7 +41,7 @@ def test_sleepsync_sidebar_render_has_exactly_one_real_icon() -> None:
 
 
 def test_o2ring_bootstrap_keeps_unknown_distinct_from_disabled() -> None:
-    shell = read("cpap/v530_features.py")
+    shell = read("web/index.html")
     frontend = read("web/sleepmate-v530.js")
 
     assert 'name="sleepmate-o2ring-enabled" content="unknown"' in shell
@@ -52,7 +51,7 @@ def test_o2ring_bootstrap_keeps_unknown_distinct_from_disabled() -> None:
     assert "o2State!==O2_STATE.DISABLED" in frontend
     assert "e.indeterminate=id==='smO2Enabled'&&loading" in frontend
     assert "e.disabled=loading" in frontend
-    assert "if(!resolvedO2())refreshO2State()" in frontend
+    assert "const o2Request=refreshO2State().catch(()=>{})" in frontend
 
 
 def test_late_o2ring_config_reconciles_all_feature_surfaces() -> None:
@@ -65,7 +64,6 @@ def test_late_o2ring_config_reconciles_all_feature_surfaces() -> None:
         "setO2FeatureState()",
         "hydrateO2Master()",
         "ensureO2Modules()",
-        "SleepMateO2Ring?.refresh?.()",
         "disableO2Ui()",
         "renderBottomNav()",
         "renderPwaEditor()",
@@ -77,11 +75,11 @@ def test_late_o2ring_config_reconciles_all_feature_surfaces() -> None:
 def test_service_worker_never_mixes_generations_in_an_active_page() -> None:
     for relative in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         worker = read(relative)
-        assert "sleepmate-shell-v5.3.19-o2-updater-recovery-1" in worker
+        assert "sleepmate-shell-v5.3.20" in worker
         assert "await self.skipWaiting()" in worker
         assert "await self.clients.claim()" in worker
         assert "navigationFallback" in worker
-        assert "codeNetworkFirst" in worker
+        assert "currentCodeAsset" in worker
 
 
 def _fake_msi(path: Path) -> str:
@@ -154,9 +152,8 @@ def test_updater_accepts_only_exact_hashed_msi_release_asset(tmp_path: Path, mon
         manager.prepare_install({}, data, 8895)
 
 
-def test_updater_msi_lifecycle_is_unattended_and_checks_exit_code(tmp_path: Path, monkeypatch) -> None:
-    import update_worker
-
+def test_updater_msi_lifecycle_launches_only_system_msiexec(tmp_path: Path, monkeypatch) -> None:
+    import cpap.maintenance as maintenance
     stage = tmp_path / "stage-test"
     stage.mkdir()
     app_dir = tmp_path / "app"
@@ -167,6 +164,8 @@ def test_updater_msi_lifecycle_is_unattended_and_checks_exit_code(tmp_path: Path
     plan_path = stage / "update-plan.json"
     installer_log = tmp_path / "state" / "msiexec.log"
     plan = {
+        "format": "sleepmate-update-plan",
+        "install_kind": "msi",
         "to_version": target,
         "installer_path": str(installer),
         "installer_sha256": digest,
@@ -178,72 +177,46 @@ def test_updater_msi_lifecycle_is_unattended_and_checks_exit_code(tmp_path: Path
     msiexec.parent.mkdir(parents=True)
     msiexec.write_bytes(b"test")
     monkeypatch.setenv("SystemRoot", str(system_root))
-    monkeypatch.setattr(update_worker, "IS_WINDOWS", True)
+    manager = maintenance.GitHubUpdateManager(app_dir)
+    monkeypatch.setattr(maintenance.os, "name", "nt")
     calls: list[list[str]] = []
-    monkeypatch.setattr(update_worker.subprocess, "run", lambda command, **kwargs: (calls.append(command) or SimpleNamespace(returncode=0)))
-    monkeypatch.setattr(update_worker, "start_tray", lambda *args, **kwargs: SimpleNamespace(pid=1234))
-    monkeypatch.setattr(update_worker, "wait_health", lambda *args, **kwargs: True)
-    monkeypatch.setattr(update_worker, "cleanup_stage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(maintenance.subprocess, "Popen", lambda command, **kwargs: (calls.append(command) or SimpleNamespace(pid=1234)))
 
-    rc = update_worker.install_verified_msi(
-        plan_path=plan_path, plan=plan, app_dir=app_dir,
-        launcher_exe=app_dir / "SleepMate.exe", vbs=app_dir / "SleepMate.vbs",
-        marker=tmp_path / "state" / "update_boot_ok.json", port=8895,
-        log_path=tmp_path / "state" / "worker.log", state_path=tmp_path / "state" / "state.json",
-        timeout=5, restart_tray_requested=True,
-    )
-    assert rc == 0
+    result = manager.launch_worker(str(plan_path))
+    assert result["installer_pid"] == 1234
     assert len(calls) == 1
     command = calls[0]
     assert command[:3] == [str(msiexec.resolve()), "/i", str(installer.resolve())]
-    assert "/qn" in command and "/norestart" in command and "REBOOT=ReallySuppress" in command
+    assert "/passive" in command and "/norestart" in command and "REBOOT=ReallySuppress" in command
+    assert "SLEEPMATE_AUTOLAUNCH=1" in command
     assert "/L*v" in command
-    result = json.loads((tmp_path / "state" / "state.json").read_text(encoding="utf-8"))["last_result"]
-    assert result["installer_exit_code"] == 0 and result["status"] == "success"
-
-    calls.clear()
-    installer.write_bytes(installer.read_bytes() + b"tampered")
-    assert update_worker.install_verified_msi(
-        plan_path=plan_path, plan=plan, app_dir=app_dir,
-        launcher_exe=app_dir / "SleepMate.exe", vbs=app_dir / "SleepMate.vbs",
-        marker=tmp_path / "state" / "update_boot_ok.json", port=8895,
-        log_path=tmp_path / "state" / "worker.log", state_path=tmp_path / "state" / "state.json",
-        timeout=5, restart_tray_requested=True,
-    ) == 9
-    assert calls == []
+    assert (app_dir / "private" / "quit_tray.request").is_file()
 
 
-def test_official_build_uses_onedir_coordinator_and_msi_manifest() -> None:
-    spec = read("build/windows/SleepMateUpdater.spec")
+def test_official_build_uses_no_coordinator_and_an_msi_manifest() -> None:
     release_build = read("build/windows/build_release.ps1")
     workflow = read(".github/workflows/windows-release.yml")
-    worker = read("update_worker.py")
-    msi_path = inspect.getsource(__import__("update_worker").install_verified_msi)
+    maintenance = read("cpap/maintenance.py")
 
-    assert "exclude_binaries=True" in spec and "coll = COLLECT(" in spec
-    assert "$StableUpdaterVersion = '5.3.17'" in release_build
-    assert "$StableUpdaterExeSha256" in release_build
-    assert "Invoke-WebRequest -Uri $StableUpdaterZipUrl" in release_build
-    assert "Pinned updater hash mismatch" in release_build
-    assert "dist\\SleepMate\\Updater" in release_build
+    assert not (ROOT / "build/windows/SleepMateUpdater.spec").exists()
+    assert "StableUpdater" not in release_build
+    assert "dist\\SleepMate\\Updater" not in release_build
     assert "build_msi_update_manifest.py" in workflow
     assert "'package_type': manifest.get('package_type') == 'windows-msi-x64'" in workflow
     assert "'requires_installer': manifest.get('requires_installer') is True" in workflow
-    assert '"msiexec.exe"' in worker
-    assert "replace_program(" not in msi_path
-    assert "clear_program(" not in msi_path
-    assert "stop_sleepmate_image_processes(" not in msi_path
+    assert 'system_root / "System32" / "msiexec.exe"' in maintenance
+    assert "update_worker.py" not in maintenance
 
 
-def test_update_button_is_single_action_and_worker_orders_graceful_msi_lifecycle() -> None:
+def test_update_button_is_single_action_and_installer_handover_is_graceful() -> None:
     frontend = read("web/app-core.js")
     start = frontend.index("async function installAvailableUpdate()")
-    end = frontend.index("async function rollbackSleepMate()", start)
+    end = frontend.index("function renderSelfCheck", start)
     action = frontend[start:end]
-    worker_main = inspect.getsource(__import__("update_worker").main)
+    maintenance = read("cpap/maintenance.py")
 
     assert "confirmAction(" not in action
-    assert "apiWrite('/api/update/install','POST',{})" in action
+    assert "apiWrite('/api/update/install', 'POST', {})" in action
     assert "waitForSleepMateRestart(expected)" in action
-    assert worker_main.index("wait_for_exit(old_pid") < worker_main.index("request_graceful_tray_exit(")
-    assert worker_main.index("request_graceful_tray_exit(") < worker_main.index("install_verified_msi(")
+    assert maintenance.index('quit_request.write_text') < maintenance.index('subprocess.Popen(command')
+    assert '"SLEEPMATE_AUTOLAUNCH=1"' in maintenance

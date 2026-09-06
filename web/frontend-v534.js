@@ -8,17 +8,6 @@ const api=async(path,opts={})=>{const r=await fetch(path,{cache:'no-store',...op
 const setText=(el,value)=>{if(el&&el.textContent!==String(value))el.textContent=String(value)};
 let lastO2Status=null,lastLiveNavEnabled=null,settingsNormalizeRaf=0;
 
-function ensureO2Recovery(){
-  if(window.__sleepmateO2RecoveryV5318||document.querySelector('script[data-sleepmate-o2-recovery="1"]'))return;
-  const build=document.querySelector('meta[name="sleepmate-build-id"]')?.content||'5.3.18';
-  const script=document.createElement('script');
-  script.src=`/o2ring-recovery-v5318.js?v=${encodeURIComponent(build)}`;
-  script.async=false;
-  script.dataset.sleepmateO2Recovery='1';
-  script.onerror=()=>script.remove();
-  document.head.appendChild(script);
-}
-
 function normalizePwaSettings(){
   const tabs=q('.settings-inner-tabs'),sel=id('settingsCategorySelect'),push=tabs?.querySelector('[data-settings-tab="push"]'),pwa=tabs?.querySelector('[data-settings-tab="pwa"]'),pushPanel=q('[data-settings-panel="push"]'),pwaPanel=id('smPwaSettingsPanel');
   if(push&&push.textContent!=='PWA')push.textContent='PWA';
@@ -123,12 +112,6 @@ function watchLatestSessionCard(){
   ob.observe(status,{childList:true,characterData:true,subtree:true});
   ob.observe(sessions,{childList:true,characterData:true,subtree:true});
 }
-async function enforceFrontendGeneration(){
-  // VERSION is the long-lived UI generation, not the application release.
-  // Cache ownership and stale-generation cleanup belong exclusively to the
-  // Service Worker after a matching client confirms the new build is alive.
-  if('serviceWorker'in navigator){try{const reg=await navigator.serviceWorker.getRegistration();await reg?.update?.()}catch{}}
-}
 function waitForDynamicSettings(){
   normalizeAll();const page=id('page-settings');if(!page)return;
   const done=()=>!!(id('smPwaSettingsPanel')&&id('smO2Master')&&id('frSettingsReopen'));
@@ -147,11 +130,17 @@ function bind(){
     normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);
     if(settingsVisible()){hydrateAdvancedO2Settings();normalizeO2Settings()}
   });
+  window.addEventListener('sleepmate-o2-config-ready',e=>{
+    if(e.detail?.status)lastO2Status=e.detail.status;
+    normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);
+    normalizeAll();
+    if(settingsVisible())hydrateAdvancedO2Settings();
+  });
   window.addEventListener('sleepmate-o2-runtime-ready',()=>{normalizeLiveNav();if(settingsVisible())normalizeAll()});
   try{if(typeof setSettingsTab==='function'&&!setSettingsTab.__sm534){const orig=setSettingsTab;setSettingsTab=function(name){const r=orig(name);requestAnimationFrame(normalizeAll);return r};setSettingsTab.__sm534=true}}catch{}
 }
 async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);if(settingsVisible())hydrateAdvancedO2Settings()}
-async function boot(){ensureO2Recovery();bind();hookOverviewLoading();watchLatestSessionCard();fixLatestLoading();await refreshO2State();waitForDynamicSettings();normalizeAll();await enforceFrontendGeneration();setTimeout(normalizeAll,300);setTimeout(normalizeAll,1200)}
+function boot(){bind();hookOverviewLoading();watchLatestSessionCard();fixLatestLoading();waitForDynamicSettings();normalizeAll()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State,syncLatestSessionCard};
 })();

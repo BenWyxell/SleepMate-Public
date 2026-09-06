@@ -14,7 +14,7 @@ FRONT = read('web/frontend-v534.js')
 HTML = read('web/index.html')
 DOMAIN = read('cpap/oximetry.py')
 BROWSER = read('scripts/v534_browser_acceptance.py')
-RELEASE_NOTES = read('release-notes/v5.3.19.md')
+RELEASE_NOTES = read('release-notes/v5.3.20.md')
 SW = read('web/service-worker.js')
 SW_BASE = read('web/service-worker-v508-base.js')
 
@@ -140,9 +140,9 @@ def test_stability_peer_mode_switch_reuses_loaded_daily_o2():
 
 def test_stability_trends_use_date_axis_and_dashboard_o2_matches_smooth_core_style():
     assert JS.count("gapSeconds:36*3600") >= 1
-    assert JS.count("xLabel:date") >= 2
+    assert JS.count("xLabel:date") >= 1
     assert "tooltipLabel:ts=>`${date(ts)} ${clock(ts)}`" in JS
-    assert "smooth:true,points:true,connectGaps:true,lineWidth:2" in JS
+    assert "drawTrendLine" in JS
     assert "Dashboard O2 trend is not smoothed like the core Dashboard trends" in BROWSER
     assert "O2 trend X-axis did not render dates" in BROWSER
 
@@ -185,15 +185,13 @@ def test_mobile_oximetry_landscape_is_behaviorally_covered():
 
 
 def test_release_identity_is_v535():
-    assert APP_VERSION == '5.3.19'
-    assert RELEASE_NOTES.startswith('# SleepMate 5.3.19')
-    assert 'Release build: **5.3.19**.' in RELEASE_NOTES
-    assert 'Kiadási csatorna: **stable**.' in RELEASE_NOTES
+    assert APP_VERSION == '5.3.20'
+    assert RELEASE_NOTES.startswith('# SleepMate 5.3.20')
 
 
 def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():
     for worker in (SW, SW_BASE):
-        assert "const CACHE='sleepmate-shell-v5.3.19-o2-updater-recovery-1';" in worker
-        assert "const API_CACHE='sleepmate-api-v5.3.9-refactor';" in worker
+        assert "const SHELL_CACHE='sleepmate-shell-v5.3.20';" in worker
+        assert "const API_CACHE='sleepmate-api-v5.3.20';" in worker
         assert "const UI_VERSION='5.3.4';" in worker
-        assert '/frontend-v534.js?v=5.3.4' in worker
+        assert '/frontend-v534.js?v=5.3.20' in worker

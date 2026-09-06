@@ -35,7 +35,7 @@ def test_v535_latest_sleep_card_is_duration_not_session_status():
     assert "latest?.summary||latest" in front
     assert "latestDuration(summary)" in front
     assert "<label>Alvásidő</label>" in html
-    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in core
+    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in ''.join(core.split())
     assert "$('#latestStatus').textContent='Befejezve'" not in core
     assert "$('#latestStatus').textContent='Befejezve'" not in spec
 

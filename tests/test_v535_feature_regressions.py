@@ -104,8 +104,9 @@ def test_all_oximetry_line_charts_share_responsive_x_axis_contract():
     assert "mobileClock" in js and "mobileDate" in js
     assert "w-tw-2" in js
     assert js.count("drawResponsiveXAxis(ctx,") == 2  # definition + the common chartDraw call
-    for group in ("live", "daily-o2", "stack-o2", "recording", "trends", "dash-o2"):
+    for group in ("live", "daily-o2", "stack-o2", "recording", "trends"):
         assert f"syncGroup:'{group}'" in js
+    assert "drawTrendLine" in js
 
 
 def test_mobile_sidebar_and_prompt_modal_honor_bottom_nav_and_safe_area():
@@ -128,21 +129,22 @@ def test_mobile_sidebar_and_prompt_modal_honor_bottom_nav_and_safe_area():
 
 def test_luna_milo_and_prompting_have_three_independent_conditions_and_actions():
     js = read("web/app-core.js")
+    compact = ''.join(js.split())
     shell = read("web/sleepmate-v530.js")
     html = read("web/index.html")
     assert "function availableAIAnalysisModes()" in js
     assert "Luna értékelje" in js and "Milo értékelje" in js and "Prompt külső AI-hoz" in js
-    assert "if(modes.length===1)return runAIAnalysisMode" in js
-    assert "showAIAnalysisModeMenu(modes,type,button)" in js
-    assert "btn.textContent='Elemzés indítása'" in js
+    assert "if(modes.length===1)returnrunAIAnalysisMode" in compact
+    assert "showAIAnalysisModeMenu(modes,type,button)" in compact
+    assert "btn.textContent='Elemzésindítása'" in compact
     assert "prefs.ai_luna_visible!==false||prefs.ai_milo_visible!==false||prefs.ai_prompting_enabled===true" in shell
     assert "settingAiLunaVisible" in html and "settingAiMiloVisible" in html
     assert "sm-ai-luna-off" in shell and "sm-ai-milo-off" in shell
     assert "if(o2State===O2_STATE.DISABLED&&location.hash.startsWith('#oximetry'))window.navigate?.('dashboard')" in shell
-    assert "filter(r=>r.provider==='groq'?features.miloVisible:features.lunaVisible)" in js
+    assert "filter(r=>r.provider==='groq'?features.miloVisible:features.lunaVisible)" in compact
     for marker in ("aiPromptCopy", "aiPromptDownload", "aiPromptChatGpt", "aiPromptGemini"):
         assert marker in html
-    assert "apiWrite('/api/ai/prompt','POST',selection)" in js
+    assert "apiWrite('/api/ai/prompt','POST',selection)" in compact
 
 
 def test_phone_web_pwa_and_reduced_motion_keep_aurora_static_without_js_loop():
@@ -159,8 +161,9 @@ def test_phone_web_pwa_and_reduced_motion_keep_aurora_static_without_js_loop():
 
 def test_latest_session_card_never_renders_the_legacy_completion_label():
     core = read("web/app-core.js")
+    compact = ''.join(core.split())
     assert "$('#latestStatus').textContent='Befejezve'" not in core
-    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in core
+    assert "$('#latestStatus').textContent=secondsToHM(latest.therapy_seconds||0)" in compact
 
 
 def test_phone_web_and_pwa_use_first_paint_mobile_performance_mode():
@@ -173,16 +176,15 @@ def test_phone_web_and_pwa_use_first_paint_mobile_performance_mode():
         worker = read(worker_name)
         assert "function navigationFastCache" not in worker
         assert "function codeFastCache" not in worker
-        assert "event.respondWith(navigationFallback(req))" in worker
-        assert "event.respondWith(codeNetworkFirst(req))" in worker
+        assert "event.respondWith(navigationFallback(request))" in worker
+        assert "event.respondWith(currentCodeAsset(url.pathname))" in worker
     assert "document.documentElement.classList.toggle('sm-phone-ui',phone)" in html
     assert "document.documentElement.classList.toggle('sm-phone-ui',phone)" in shell
-    assert '<link rel="preload" as="script" href="/app-engine119.js?v=130">' in html
-    assert '<link rel="preload" as="script" href="/app-core.js?v=5.0.8">' in html
+    assert html.index('/app-core.js?v=5.3.20') < html.index('/app-engine119.js?v=5.3.20')
     assert "html.sm-phone-ui .sm-starfield" in css
     assert "backdrop-filter:none!important" in css
     assert "html.sm-phone-ui .sm-aurora-flow .flow{stroke-dashoffset:0!important}" in css
-    assert "const [ver]=await Promise.all([api('/api/version'),loadDays(),loadConfig()]);" in core
+    assert "const[ver]=awaitPromise.all([api('/api/version'),loadDays(),loadConfig()]);" in ''.join(core.split())
     assert "phoneUi&&!verboseDiagnostics" in diagnostics
     assert "if(phoneUi&&!verboseDiagnostics&&label!=='startup-slow')return" in diagnostics
     assert "if(!phoneUi||verboseDiagnostics){snapshot('dom-content-loaded')" in diagnostics

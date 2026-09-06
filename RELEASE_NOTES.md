@@ -1,3 +1,22 @@
+# SleepMate 5.3.20
+
+Release build: **5.3.20**.
+
+Kiadási csatorna: **stable**.
+
+## Oximetria, PWA-frissítés és Windows update-lánc
+
+- Az O2Ring engedélyezett állapota, az Oximetria menü, oldal, beállítások és grafikonok most egyetlen statikus, verzióazonos frontend-indítási útvonalon töltődnek be; megszűntek a versengő runtime-injekciók és recovery retry-rétegek.
+- A Service Worker atomi shell-telepítést végez, nem navigálja újra saját maga a klienseket, nem vár régi buildazonosítójú kliens-visszaigazolásra, és nem kever régi query-stringes kódfájlt az új cache-be.
+- Verzióváltáskor egyetlen vezérlőváltás és legfeljebb egy kliensoldali újratöltés történik; a régi cache-ek az új worker aktiválásakor eltűnnek.
+- A Windows önfrissítés kizárólag a letöltött és SHA-256-tal ellenőrzött MSI-t indítja a rendszer `msiexec.exe` folyamatával. A `SleepMateUpdater.exe` nem része többé a buildnek vagy a telepítőnek.
+- Stabil GitHub-kiadás csak SignPath trusted-build aláírás, Authenticode-ellenőrzés, valamint az aláírt MSI-ből újragenerált hash és frissítési manifeszt után publikálható.
+- A látható felület és a terápiás adatok számítása nem változott.
+
+A kódaláírás és az egyszerűsített frissítési architektúra csökkenti a reputációs és heurisztikus vírusvédelmi riasztások kockázatát, de egyik vírusvédelmi termékre sem jelent abszolút garanciát.
+
+---
+
 # SleepMate 5.3.18
 
 Release build: **5.3.18**.

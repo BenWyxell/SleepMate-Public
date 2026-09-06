@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any
-import urllib.parse
 
 from . import sleep_analysis as sa
 
@@ -249,49 +248,6 @@ def analyze(self: sa.SleepAnalysisService, dataset, period: str = "30") -> dict[
     }
 
 
-def _install_shell_loader(app_module) -> None:
-    """Load the 5.2 sleep UI and its correction in source and packaged builds.
-
-    Windows packaging intentionally restores the proven v5.0.8 app.js, so a
-    source-only app.js change is not enough. Serving the shell with these two
-    deferred scripts makes the feature deterministic for desktop, PWA and the
-    service-worker navigation cache without touching the proven core bootstrap.
-    """
-    handler_cls = app_module.Handler
-    previous_get = handler_cls.do_GET
-
-    def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
-        if parsed.path in {"/", "/index.html"}:
-            try:
-                index_path = app_module.WEB / "index.html"
-                text = index_path.read_text(encoding="utf-8")
-                scripts = []
-                if "sleepmate-sleep.js" not in text:
-                    scripts.append('<script src="/sleepmate-sleep.js?v=5.2.1"></script>')
-                if "sleepmate-sleep-v521.js" not in text:
-                    scripts.append('<script src="/sleepmate-sleep-v521.js?v=5.2.1"></script>')
-                if scripts:
-                    marker = "</body>"
-                    inject = "\n" + "\n".join(scripts) + "\n"
-                    text = text.replace(marker, inject + marker, 1) if marker in text else text + inject
-                body = text.encode("utf-8")
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(body)
-                return
-            except Exception:
-                # If shell decoration ever fails, preserve the original static
-                # handler rather than making the whole SleepMate UI unavailable.
-                pass
-        return previous_get(self)
-
-    handler_cls.do_GET = do_GET
-
-
 def install_sleep_analysis_v521(app_module) -> None:
     global _installed
     if _installed:
@@ -304,7 +260,6 @@ def install_sleep_analysis_v521(app_module) -> None:
     sa.SleepAnalysisService._build_blocks = _build_blocks
     sa.SleepAnalysisService.analyze = analyze
     sa.aggregate_rows = aggregate_rows
-    _install_shell_loader(app_module)
     _installed = True
 
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 app = (root / 'app.py').read_text(encoding='utf-8')
-js = (root / 'web' / 'app.js').read_text(encoding='utf-8')
+js = (root / 'web' / 'app-core.js').read_text(encoding='utf-8')
 html = (root / 'web' / 'index.html').read_text(encoding='utf-8')
 
 # SleepMate must never open Windows Explorer/folders from application logic.

@@ -45,11 +45,11 @@ def test_official_public_updater_has_no_user_credentials():
 def test_cloudflare_saved_hostname_provenance_and_cache_bust():
     first = (ROOT / "web" / "first-run.js").read_text(encoding="utf-8")
     hydration = (ROOT / "web" / "sleepsync-hydration-v529.js").read_text(encoding="utf-8")
-    source_loader = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    source_loader = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     assert 'id="frCfHostOrigin"' in first
     assert 'Korábban mentett SleepMate-beállítás.' in first
     assert "savedCfHost" in first and "origin.hidden=true" in first
     assert '/first-run.css?v=4' in first
     assert '/first-run.js?v=4' in hydration
-    assert "const FIRST_RUN='/first-run.js?v=4'" in source_loader
-    assert "/sleepsync-hydration-v529.js?v=131" in source_loader
+    assert "/first-run.js?v=4" in source_loader
+    assert "/sleepsync-hydration-v529.js?v=5.3.20" in source_loader

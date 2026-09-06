@@ -11,9 +11,8 @@ def test_windows_release_has_single_version_source():
     assert re.fullmatch(r"\d+\.\d+\.\d+", APP_VERSION)
 
     app_spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
-    updater_spec = (ROOT / "build" / "windows" / "SleepMateUpdater.spec").read_text(encoding="utf-8")
     assert "version_info.generated.txt" in app_spec
-    assert "version_info.generated.txt" in updater_spec
+    assert not (ROOT / "build" / "windows" / "SleepMateUpdater.spec").exists()
     assert not (ROOT / "build" / "windows" / "version_info.txt").exists()
 
     source_build_info = (ROOT / "build_info.json").read_text(encoding="utf-8")
@@ -24,9 +23,6 @@ def test_windows_release_has_single_version_source():
     assert "from cpap.version import APP_VERSION" in build
     assert "version_info.generated.txt" in build
     assert "sleepmate-$AppVersion-windows" in build
-    assert "SleepMateUpdater.exe ProductVersion mismatch" in build
-    assert "Update manifest version mismatch" in build
-    assert "Update manifest asset mismatch" in build
     assert "Expected update ZIP missing" in build
     assert "Program-tree release contract OK" in build
     assert "ISCC.exe" not in build
@@ -52,10 +48,10 @@ def test_release_pwa_shell_cannot_lose_sleep_feature_after_update():
     refresh_feature_version = "5.2.12"
     base = (ROOT / "web" / "service-worker-v508-base.js").read_text(encoding="utf-8")
     live = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
-    shell_patch = (ROOT / "cpap" / "sleep_analysis_v522.py").read_text(encoding="utf-8")
+    index = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 
-    assert "sleepmate-shell-v5.2.14" in base
-    assert "sleepmate-shell-v5.2.14-ss131" in live
+    assert f"sleepmate-shell-v{APP_VERSION}" in base
+    assert f"sleepmate-shell-v{APP_VERSION}" in live
     for asset_name in (
         "sleepmate-sleep.js",
         "sleepmate-sleep-v523.js",
@@ -64,46 +60,42 @@ def test_release_pwa_shell_cannot_lose_sleep_feature_after_update():
         asset = f"{asset_name}?v={sleep_feature_version}"
         assert asset in base
         assert asset in live
-        assert asset in shell_patch
+        assert asset in index
 
     chart_asset = f"sleepmate-chart-v523.js?v={chart_feature_version}"
     assert chart_asset in base
     assert chart_asset in live
-    assert chart_asset in shell_patch
+    assert chart_asset in index
 
     refresh_asset = f"sleepmate-sleep-refresh-v5212.js?v={refresh_feature_version}"
     assert refresh_asset in base
     assert refresh_asset in live
-    assert refresh_asset in shell_patch
+    assert refresh_asset in index
 
     for worker in (base, live):
         assert "sleep-analysis" in worker
         assert "precacheShellAtomic" in worker
-        assert "if(!OPTIONAL_SHELL_ASSETS.has(pathname))throw error" in worker
+        assert "await caches.delete(SHELL_CACHE);throw error" in worker
         assert "await self.skipWaiting()" in worker
         assert "await self.clients.claim()" in worker
-        assert "hadPreviousShell" in worker
-        assert "await client.navigate(client.url)" in worker
         assert "SLEEPMATE_SHELL_READY" in worker
-        assert "SLEEPMATE_CLIENT_READY" in worker
-        assert "data.buildId!==BUILD_ID" in worker
+        assert "await client.navigate(client.url)" not in worker
+        assert "SLEEPMATE_CLIENT_READY" not in worker
         assert "cleanupStaleSleepMateCaches" in worker
         assert "key.startsWith('sleepmate-shell-')||key.startsWith('sleepmate-api-')" in worker
         activate = worker.split("self.addEventListener('activate'", 1)[1].split("function backendUnavailable", 1)[0]
-        assert "caches.delete" not in activate
+        assert "await cleanupStaleSleepMateCaches()" in activate
         assert "self.clients.matchAll({type:'window',includeUncontrolled:true})" in worker
-        assert "event.respondWith(navigationFallback(req))" in worker
-        assert "event.respondWith(codeNetworkFirst(req))" in worker
+        assert "event.respondWith(navigationFallback(request))" in worker
+        assert "event.respondWith(currentCodeAsset(url.pathname))" in worker
         assert "/sleepmate-chart-v523.js" in worker
 
     spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
-    assert "'/sleepmate-chart-v523.js'" in spec
-    assert "'/sleepmate-sleep-v523.js'" in spec
-    assert "'/sleepmate-sleep-refresh-v5212.js'" in spec
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
 
 
 def test_v529_sleepsync_settings_are_hydrated_before_schedule_save():
-    app = (ROOT / "web" / "app.js").read_text(encoding="utf-8")
+    app = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     hydration = (ROOT / "web" / "sleepsync-hydration-v529.js").read_text(encoding="utf-8")
     integration = (ROOT / "cpap" / "sleepsync_integration.py").read_text(encoding="utf-8")
 
@@ -244,7 +236,7 @@ def test_v5213_packaged_pwa_scheduler_always_hydrates_and_is_mobile_ready():
 
 def test_v5214_mobile_tooltip_stays_outside_finger_and_cannot_use_stale_overlay():
     chart = (ROOT / "web" / "sleepmate-chart-v523.js").read_text(encoding="utf-8")
-    loader = (ROOT / "cpap" / "sleep_analysis_v522.py").read_text(encoding="utf-8")
+    index = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     base = (ROOT / "web" / "service-worker-v508-base.js").read_text(encoding="utf-8")
     live = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
     spec = (ROOT / "build" / "windows" / "SleepMate.spec").read_text(encoding="utf-8")
@@ -255,27 +247,22 @@ def test_v5214_mobile_tooltip_stays_outside_finger_and_cannot_use_stale_overlay(
     assert "event?.pointerType==='touch'" in chart
     assert "cy+gap" not in chart
     assert "y+gap" not in chart
-    assert "sleepmate-chart-v523.js?v=5.2.14" in loader
+    assert "sleepmate-chart-v523.js?v=5.2.14" in index
     assert "sleepmate-chart-v523.js?v=5.2.14" in base
     assert "sleepmate-chart-v523.js?v=5.2.14" in live
-    assert "'/sleepmate-chart-v523.js'" in spec
+    assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
 
 
-def test_v5214_updater_gracefully_removes_tray_icon_before_force_fallback():
+def test_v5214_windows_installer_requests_graceful_tray_exit_without_helper_exe():
     tray = (ROOT / "sleepmate_tray.pyw").read_text(encoding="utf-8")
-    updater = (ROOT / "update_worker.py").read_text(encoding="utf-8")
+    updater = (ROOT / "cpap" / "maintenance.py").read_text(encoding="utf-8")
 
     assert 'QUIT_REQUEST_FILE = STATE_BASE / "private" / "quit_tray.request"' in tray
     assert "if QUIT_REQUEST_FILE.is_file():" in tray
     assert "self.quit()" in tray
     assert "self.icon.stop()" in tray
 
-    assert "def request_graceful_tray_exit" in updater
-    assert 'request = state_dir / "private" / "quit_tray.request"' in updater
-    assert "graceful = request_graceful_tray_exit(tray_pid, state_dir, log_path)" in updater
-    assert "if not graceful and not stop_process_tree" in updater
-    graceful_pos = updater.index("graceful = request_graceful_tray_exit")
-    force_pos = updater.index("stop_process_tree(tray_pid", graceful_pos)
-    image_fallback_pos = updater.index("stop_sleepmate_image_processes(launcher_exe", graceful_pos)
-    assert graceful_pos < force_pos < image_fallback_pos
-    assert '["taskkill", "/IM", image_name, "/T", "/F"]' in updater
+    assert 'quit_request = self.private / "quit_tray.request"' in updater
+    assert 'system_root / "System32" / "msiexec.exe"' in updater
+    assert '"SLEEPMATE_AUTOLAUNCH=1"' in updater
+    assert "taskkill" not in updater

@@ -1,13 +1,10 @@
 (function(){
+  if(!window.__sleepmateCoreLoaded)throw new Error('SleepMate core must load before the SleepSync integration');
   const style=document.createElement('link');
   style.rel='stylesheet';
   style.href='/sleepsync.css?v=engine-2';
   document.head.appendChild(style);
 
-  const core=document.createElement('script');
-  core.src='/app-core.js?v=5.0.8';
-  core.async=false;
-  core.onload=()=>{
     const coreNavigate=window.navigate;
     const coreRoute=window.route;
     if(typeof coreNavigate!=='function'||typeof coreRoute!=='function')return;
@@ -679,6 +676,4 @@
       if(document.visibilityState==='visible'&&location.hash.startsWith('#sleepsync'))refreshSleepSyncStatus(true);
     },2000);
     integrationRoute();
-  };
-  document.head.appendChild(core);
 })();

@@ -14,8 +14,9 @@ def test_dashboard_comparison_has_real_delete_action():
     html = text("web/index.html")
     js = text("web/app-core.js")
     assert 'id="clearComparison"' in html
-    assert "$('#clearComparison').onclick=clearComparison" in js
-    assert "state.comparison=null" in js
+    compact = ''.join(js.split())
+    assert "$('#clearComparison').onclick=clearComparison" in compact
+    assert "state.comparison=null" in compact
     assert "panel?.classList.add('hidden')" in js
 
 def test_dashboard_bar_charts_are_the_last_pair():
@@ -32,15 +33,15 @@ def test_windows_notifications_use_sleepmate_identity_and_icon():
     assert 'ICON_PATH = BASE / "SleepMate.ico"' in tray
     assert 'self.pystray.Icon("SleepMate", image, "SleepMate", menu)' in tray
 
-def test_startup_has_one_web_loader_and_second_launch_signals_existing_tray():
+def test_startup_has_one_canonical_web_entrypoint_and_second_launch_signals_existing_tray():
     html = text("web/index.html")
     js = text("web/app-core.js")
-    loader = text("web/app.js")
     tray = text("sleepmate_tray.pyw")
     main = text("sleepmate_main.py")
     assert html.count('id="startupSplash"') == 1
     assert "window.__sleepmateBootStarted" in js
-    assert "const ENGINE='/app-engine119.js?v=130'" in loader
+    assert html.count('src="/app-core.js?v=5.3.20"') == 1
+    assert html.count('src="/app-engine119.js?v=5.3.20"') == 1
     assert "OPEN_REQUEST_FILE" in tray
     assert "monitor_open_requests" in tray
     assert "OPEN_REQUEST_FILE.write_text" in tray

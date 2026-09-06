@@ -2,6 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "web" / "app-core.js").read_text(encoding="utf-8")
+APP_COMPACT = "".join(APP.split())
 HTML = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "web" / "style.css").read_text(encoding="utf-8")
 SW = (ROOT / "web" / "service-worker.js").read_text(encoding="utf-8")
@@ -23,12 +24,12 @@ def test_pwa_only_bottom_navigation_and_no_duplicate_quick_view():
 
 def test_daily_page_survives_optional_endpoint_failures():
     assert "Promise.allSettled" in APP
-    assert "const s=await api(`/api/day/${day}`)" in APP
+    assert "consts=awaitapi(`/api/day/${day}`)" in APP_COMPACT
     assert "Napi kiegészítő adat" in APP
 
 
 def test_touch_charts_support_pinch_pan_doubletap_and_scroll_cleanup():
-    assert "pointerType==='touch'" in APP
+    assert "pointerType==='touch'" in APP_COMPACT
     assert "handleHeroPinch" in APP
     assert "moveTouchPinch" in APP
     assert "panChartTouch" in APP

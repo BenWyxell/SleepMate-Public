@@ -147,7 +147,7 @@ def main() -> int:
 
     if not source_dir.is_dir():
         raise SystemExit(f"Source directory does not exist: {source_dir}")
-    for required in ("SleepMate.exe", "Updater/SleepMateUpdater.exe", "SleepMate.ico"):
+    for required in ("SleepMate.exe", "SleepMate.ico"):
         if not (source_dir / required).is_file():
             raise SystemExit(f"{required} missing from MSI source tree")
 
@@ -444,6 +444,13 @@ def main() -> int:
         q("CustomAction"),
         {"Id": "LaunchSleepMate", "FileKey": main_exe_file_id, "ExeCommand": "", "Execute": "immediate", "Return": "asyncNoWait", "Impersonate": "yes"},
     )
+    execute_sequence = ET.SubElement(product, q("InstallExecuteSequence"))
+    update_launch = ET.SubElement(
+        execute_sequence,
+        q("Custom"),
+        {"Action": "LaunchSleepMate", "After": "InstallFinalize"},
+    )
+    update_launch.text = 'SLEEPMATE_AUTOLAUNCH = 1 AND NOT REMOVE~="ALL"'
     ui = ET.SubElement(product, q("UI"))
     publish = ET.SubElement(
         ui,

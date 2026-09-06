@@ -73,13 +73,12 @@ with tempfile.TemporaryDirectory() as td:
         destination.parent.mkdir(parents=True, exist_ok=True); destination.write_bytes(src.read_bytes())
     mgr.check = fake_check
     mgr._download_asset = fake_download
-    result = mgr.prepare_install({'update_github_repo':'ignored/legacy-value'}, base/'private'/'measurement', 8895)
-    assert result['target_version']==NEXT_VERSION
-    assert Path(result['backup']).is_file()
-    assert Path(result['rollback']).is_dir()
-    plan = json.loads(Path(result['plan']).read_text(encoding='utf-8'))
-    assert plan['from_version']==APP_VERSION and plan['to_version']==NEXT_VERSION
-    assert (Path(result['rollback'])/'app.py').read_text(encoding='utf-8') == 'print("old")\n'
+    try:
+        mgr.prepare_install({'update_github_repo':'ignored/legacy-value'}, base/'private'/'measurement', 8895)
+    except RuntimeError as exc:
+        assert 'Windows MSI' in str(exc)
+    else:
+        raise AssertionError('Legacy portable update package was accepted')
 
     # Self-check and support bundle must not leak secret data or raw EDF files.
     class DS:
@@ -98,4 +97,4 @@ with tempfile.TemporaryDirectory() as td:
         for secret in (b'PLAIN_MUST_NOT_LEAK',b'SECRET_REMOTE',b'SECRET_ENDPOINT',b'SECRET_LOG_TOKEN',sample_value.encode()):
             assert secret not in blob
 
-print(f'PASS: SleepMate {APP_VERSION} public GitHub updater staging + pre-update backup + rollback point + self-check + secret-free support bundle')
+print(f'PASS: SleepMate {APP_VERSION} rejects legacy portable updates + self-check + secret-free support bundle')
