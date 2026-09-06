@@ -1,6 +1,6 @@
 # Public publication checklist
 
-The canonical public repository and the first public MSI-form Windows candidate are live. This checklist tracks the remaining requirements for the SignPath Foundation application and later production signing activation.
+The canonical public repository and the automated verified MSI release pipeline are live. This checklist tracks the remaining requirements for the SignPath Foundation application and later production signing activation.
 
 ## Blocking items before SignPath Foundation application
 
@@ -23,7 +23,7 @@ The canonical public repository and the first public MSI-form Windows candidate 
 - [x] Public CI/release workflow definitions use GitHub-hosted runners.
 - [x] Installer architecture is migrated to the intended SignPath-supported MSI production format and has passed build/install/runtime/uninstall CI.
 - [x] A public release exists in the same general MSI form that will later be signed: `v5.2.16` / `SleepMate_Setup_v5.2.16.msi`.
-- [x] The one-time unsigned release publisher used only to satisfy the pre-application MSI-release requirement has been removed; normal CI does not publish GitHub Releases.
+- [x] The one-time unsigned release publisher used only to satisfy the pre-application MSI-release requirement has been removed. Ordinary `main` CI never publishes GitHub Releases; the dedicated `release-auto` orchestrator may publish a new verified-unsigned release only after the canonical Windows build, MSI install/runtime/uninstall smoke test, release-set integrity verification, exact-tag verification, and safe `main` synchronization all succeed.
 - [x] Add a visible **Code signing policy** section/link to the `v5.2.16` GitHub Release page, including the required SignPath Foundation attribution and privacy-policy link. Verified on the public release page on 2026-08-31.
 - [ ] Submit the SignPath Foundation application.
 

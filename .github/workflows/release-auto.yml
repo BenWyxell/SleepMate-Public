@@ -56,6 +56,16 @@ jobs:
             exit 0
           fi
 
+          RELEASE_AUTO_SHA="$(git rev-parse HEAD)"
+          BASE_MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          git fetch --no-tags origin "refs/heads/main:refs/remotes/origin/main"
+          git merge-base --is-ancestor "$BASE_MAIN_SHA" "$RELEASE_AUTO_SHA" || {
+            echo "release-auto must descend from current main before a release: main=$BASE_MAIN_SHA release-auto=$RELEASE_AUTO_SHA" >&2
+            exit 1
+          }
+          echo "Release source descends from canonical main: $BASE_MAIN_SHA -> $RELEASE_AUTO_SHA"
+          echo "base_main_sha=$BASE_MAIN_SHA" >> "$GITHUB_OUTPUT"
+
           LATEST_TAG="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
           PREVIOUS="${LATEST_TAG#v}"
           [[ "$PREVIOUS" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid latest release tag: $LATEST_TAG" >&2; exit 1; }
@@ -112,6 +122,7 @@ jobs:
           python -m pip install pytest
           python scripts/verify_sleepsync_integration.py
           python -m pytest -q \
+            tests/test_release_auto_contract.py \
             tests/test_release_signing_modes.py \
             tests/test_release_version_contract.py \
             tests/test_v5320_critical_regressions.py \
@@ -232,6 +243,45 @@ jobs:
           test "$(jq -r '.signature_mode' sleepmate-update.json)" = 'verified-unsigned'
           test "$(jq -r '.signed' release-metadata.json)" = 'false'
           test "$(jq -r '.signature_mode' release-metadata.json)" = 'verified-unsigned'
+
+      - name: Synchronize canonical main to verified release source
+        if: steps.plan.outputs.already_released != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_MAIN_SHA: ${{ steps.plan.outputs.base_main_sha }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          CURRENT_RELEASE_AUTO="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/release-auto" --jq '.object.sha')"
+
+          [[ "$CURRENT_MAIN" == "$BASE_MAIN_SHA" ]] || {
+            echo "main moved during release verification: expected $BASE_MAIN_SHA, found $CURRENT_MAIN" >&2
+            exit 1
+          }
+          [[ "$CURRENT_RELEASE_AUTO" == "$RELEASE_SHA" ]] || {
+            echo "release-auto moved during release verification: expected $RELEASE_SHA, found $CURRENT_RELEASE_AUTO" >&2
+            exit 1
+          }
+
+          git merge-base --is-ancestor "$CURRENT_MAIN" "$RELEASE_SHA" || {
+            echo "Verified release commit $RELEASE_SHA is not a fast-forward descendant of main $CURRENT_MAIN" >&2
+            exit 1
+          }
+
+          gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/git/refs/heads/main" \
+            -f sha="$RELEASE_SHA" \
+            -F force=false >/dev/null
+
+          UPDATED_MAIN="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          [[ "$UPDATED_MAIN" == "$RELEASE_SHA" ]] || {
+            echo "main synchronization failed: expected $RELEASE_SHA, found $UPDATED_MAIN" >&2
+            exit 1
+          }
+          echo "Canonical main synchronized to verified release commit $UPDATED_MAIN."
 
       - name: Build automatic GitHub Release notes
         if: steps.plan.outputs.already_released != 'true'
