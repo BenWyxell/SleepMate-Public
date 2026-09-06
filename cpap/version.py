@@ -4,4 +4,6 @@ APP_VERSION = "5.3.20"
 API_VERSION = 19
 BUILD_CHANNEL = "stable"
 UPDATE_MANIFEST_FORMAT = "sleepmate-update"
+# Local, build-time trust floor. A downloaded manifest cannot lower this.
+UPDATE_SIGNATURE_POLICY = "verified-unsigned"
 SUPPORT_BUNDLE_FORMAT = "sleepmate-support"

@@ -47,6 +47,8 @@ GitHub source commit
   -> GitHub Release publication
 ```
 
+Amíg SignPath nincs konfigurálva, a canonical workflow a signing requestet kihagyja, és `UPDATE_SIGNATURE_POLICY=verified-unsigned` mellett ugyanezen build-, smoke- és integritási kapuk után a `verified-unsigned` artifactot publikálja. SignPath bekapcsolásakor a forrás policyjét egyszer `authenticode-required` értékre kell állítani; ezt a workflow ellenőrzi. A részleges konfiguráció vagy policy-eltérés hibának számít, nincs csendes visszaesés unsigned módra.
+
 ## Uninstall
 
 With MSI, uninstall is performed by Windows Installer (`msiexec.exe`). SleepMate does not need to ship its own `unins000.exe`, eliminating the unsigned custom-uninstaller problem.
@@ -55,7 +57,7 @@ With MSI, uninstall is performed by Windows Installer (`msiexec.exe`). SleepMate
 
 The in-app updater accepts only an exact-version MSI named by `sleepmate-update.json`. SleepMate downloads and verifies that MSI, requests graceful shutdown, and hands installation to the signed Windows system `msiexec.exe`. The MSI itself restarts the installed `SleepMate.exe` when the update transaction completes. There is no project-owned updater process, executable, unpacker or rollback coordinator in the release payload.
 
-The workflow generates the update manifest after signing, so its SHA-256 always identifies the final signed MSI bytes. The final MSI and the `SleepMate.exe` contained in both release containers must pass Authenticode validation before publication.
+The manifest records either `signature_mode=verified-unsigned` or `signature_mode=authenticode`, and its SHA-256 always identifies the exact published MSI bytes. The updater trust floor is compiled into the installed build as `UPDATE_SIGNATURE_POLICY`; downloaded metadata cannot lower an `authenticode-required` build to unsigned mode. In signed mode the final MSI and the `SleepMate.exe` contained in both release containers must pass Authenticode validation before publication.
 
 ## Avast / antivirus hygiene
 

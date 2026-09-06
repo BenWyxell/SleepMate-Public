@@ -6,7 +6,7 @@ This policy defines how official SleepMate Windows releases are built and approv
 
 **Free code signing provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/).**
 
-The canonical workflow blocks stable publication unless the SignPath Foundation trusted-build integration is configured and returns verifiably signed artifacts.
+The canonical workflow has two explicit publication modes. Until signing is configured it may publish a fully verified unsigned transitional release. When all SignPath settings are configured, signing and Authenticode verification become mandatory for that run; a partial or failed signing configuration never falls back to unsigned publication.
 
 ## Project and repository
 
@@ -73,8 +73,9 @@ The unsigned production candidate is assembled in explicit stages:
 2. The exact application tree is uploaded as a GitHub Actions artifact.
 3. A GitHub-hosted Windows runner generates the deterministic MSI authoring source and builds `SleepMate_Setup_vX.Y.Z.msi` with pinned WiX.
 4. A GitHub-hosted Windows runner installs the MSI with `msiexec`, starts the installed application, verifies required runtime APIs, uninstalls with `msiexec`, and verifies that program files are removed while user state is preserved.
-5. Only artifacts that passed these gates are supplied to the SignPath trusted-build signing stage.
-6. The workflow verifies the final MSI signature and the `SleepMate.exe` signature inside both final containers, then regenerates the update manifest and hashes from those signed bytes.
+5. Only artifacts that passed these gates can be published or supplied to SignPath.
+6. With no SignPath configuration, the verified unsigned set is published with `signature_mode=verified-unsigned`.
+7. With complete SignPath configuration, the workflow verifies the final MSI signature and the `SleepMate.exe` signature inside both final containers, then regenerates the manifest and hashes with `signature_mode=authenticode`.
 
 ## Release branches and approval
 
@@ -88,9 +89,9 @@ A release must not be published if:
 - required tests fail;
 - the MSI install/runtime/uninstall smoke test fails;
 - the build does not come from the canonical GitHub Actions workflow;
-- SignPath origin verification fails;
-- any required SleepMate-owned executable is unsigned;
-- the MSI signature is missing or invalid;
+- SignPath is partially configured;
+- SignPath is configured but origin verification or signing fails;
+- signed mode is selected and any required SleepMate-owned executable or the MSI is unsigned/invalid;
 - product metadata is inconsistent across project-owned signed binaries;
 - release hashes/manifests do not match the final signed output.
 
@@ -121,12 +122,18 @@ The MSI must not delete `%LOCALAPPDATA%\SleepMate` user therapy/profile state du
 
 Signed binaries must never be modified after signing.
 
-For production releases:
+For signed production releases:
 
 1. signing occurs before final release hash generation;
 2. the final portable ZIP must contain the final signed SleepMate-owned executables;
 3. the final MSI must contain the final signed SleepMate-owned executables and must itself be signed;
 4. the release manifest and SHA-256 files are generated only from the final signed outputs.
+
+During the certificate-less transition, the canonical workflow may instead publish only the already smoke-tested and integrity-verified unsigned set. Its manifest and release metadata must both say `verified-unsigned`; it must never be labelled as signed.
+
+The updater's minimum trust level is compiled into the installed application as `UPDATE_SIGNATURE_POLICY`, not selected by downloaded metadata. During transition it is `verified-unsigned`. Before enabling SignPath production releases it must be changed to `authenticode-required`; the workflow verifies this pairing and refuses a mismatched release mode. Such a signed build rejects `verified-unsigned` manifests and cannot be downgraded by manifest manipulation.
+
+The already published v5.3.20 Windows binary predates this transition contract and unconditionally requires WinVerifyTrust success. It cannot automatically install a later unsigned MSI; that installed binary requires either a signed next MSI or one manual MSI bridge installation. No release metadata change may be used to bypass that immutable client-side check.
 
 ## Privacy policy
 

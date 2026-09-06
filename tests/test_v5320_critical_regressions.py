@@ -67,7 +67,7 @@ def test_pwa_handover_is_atomic_and_has_no_competing_navigation_or_ack_deadlock(
     assert "postPwaClientReady" not in core
 
 
-def test_release_uses_windows_installer_and_blocks_unsigned_publication():
+def test_release_uses_windows_installer_and_supports_explicit_signing_modes():
     maintenance = read("cpap/maintenance.py")
     build = read("build/windows/build_release.ps1")
     generator = read("scripts/generate_msi_wxs.py")
@@ -83,8 +83,11 @@ def test_release_uses_windows_installer_and_blocks_unsigned_publication():
     assert 'update_launch.text = \'SLEEPMATE_AUTOLAUNCH = 1 AND NOT REMOVE~="ALL"\'' in generator
     assert "signpath/github-action-submit-signing-request@v1" in workflow
     assert "SleepMate-Windows-x64-SIGNED-RELEASE" in workflow
+    assert "SleepMate-Windows-x64-VERIFIED-RELEASE" in workflow
     assert "Get-AuthenticodeSignature" in workflow
-    assert "Unsigned artifacts will not be published" in workflow
+    assert "signing_configured" in workflow
+    assert "verified-unsigned" in workflow
+    assert "authenticode-required" in maintenance
 
 
 def test_only_msi_stage_creates_the_update_manifest():
@@ -93,3 +96,4 @@ def test_only_msi_stage_creates_the_update_manifest():
     assert "sleepmate-update.json" not in portable
     assert '"package_type": "windows-msi-x64"' in msi
     assert '"requires_installer": True' in msi
+    assert '"signature_mode": args.signature_mode' in msi

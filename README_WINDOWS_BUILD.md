@@ -80,7 +80,7 @@ GitHub-hosted `windows-latest` runner:
 9. ellenőrzi, hogy a külön felhasználói state megmaradt;
 10. összeállítja a teljes, még aláíratlan CI release-jelöltet.
 
-Az ellenőrzött jelöltet a tagelt stabil kiadás SignPath trusted-build kérésbe küldi. A publikálás csak akkor indulhat el, ha az MSI és a mindkét konténerben lévő `SleepMate.exe` Authenticode-aláírása érvényes. A végső `sleepmate-update.json` és SHA-256 fájlok kizárólag ezután, az aláírt MSI-ből készülnek.
+Az ellenőrzött jelölt tagelt stabil kiadásnál automatikusan továbbmegy publikálásra. Ha mind az öt SignPath-beállítás hiányzik, és a forrás policyje `verified-unsigned`, a workflow VERIFIED UNSIGNED módban publikálja a már ellenőrzött artifactot. Ha mind az öt beállítás megvan, a forrás policyjének `authenticode-required` értékűnek kell lennie, majd kötelezően lefut a SignPath és az Authenticode-ellenőrzés. Részleges konfiguráció, policy-eltérés vagy sikertelen signing nem eshet vissza unsigned publikálásra.
 
 Az alkalmazáson belüli frissítés a letöltött MSI hash-ellenőrzése után közvetlenül a Windows rendszer `msiexec.exe` folyamatát indítja. Saját frissítő EXE nem készül és nem kerül a csomagba.
 
@@ -139,9 +139,15 @@ A SleepMate alkalmazáson belüli frissítésének egyetlen elfogadott telepít�
 
 `SleepMate_Setup_vX.Y.Z.msi`
 
-A `sleepmate-update.json` az MSI pontos nevét, verzióját, méretét és SHA-256 értékét rögzíti. A SleepMate letöltés után ezeket, az MSI konténerazonosítóját és a Windows Authenticode-aláírást is ellenőrzi, teljes adatmentést készít, majd a rendszer saját `msiexec.exe` folyamatának adja át a telepítést. Saját updater EXE, ZIP-kicsomagoló vagy programfát felülíró rollback folyamat nincs.
+A `sleepmate-update.json` az MSI pontos nevét, verzióját, méretét, SHA-256 értékét és az explicit `signature_mode` értéket rögzíti. A jelenlegi `verified-unsigned` build elfogadja a canonical workflow teljes ellenőrzési láncán átment unsigned MSI-t; `authenticode` manifest esetén továbbra is ellenőrzi az aláírást. Egy későbbi, `authenticode-required` policyvel fordított build kizárólag aláírt MSI-t fogad el. A minimum policy az alkalmazásba van fordítva, ezért a manifest nem tudja lejjebb állítani.
+
+A SleepMate minden módban megköveteli a hivatalos `BenWyxell/SleepMate-Public` GitHub Release API-t, HTTPS-t, stabil release-t, a pontos MSI-nevet, verzióegyezést, `windows-msi-x64`/`requires_installer` contractot, érvényes SHA-256 egyezést és MSI konténert. Ezután teljes adatmentést készít, majd a rendszer saját `msiexec.exe` folyamatának adja át a telepítést. Saját updater EXE, ZIP-kicsomagoló vagy programfát felülíró rollback folyamat nincs.
 
 A hordozható ZIP továbbra is kézi, telepítés nélküli használatra készül, de az alkalmazás nem használja önfrissítésre.
+
+### Már publikált v5.3.20 átmeneti korlát
+
+A publikált v5.3.20 frozen Windows bináris feltétel nélkül WinVerifyTrust-ellenőrzést kér az új MSI-re. Ezt egy későbbi release-ben lévő forrásmódosítás nem tudja visszamenőleg átírni. Ezért a már telepített v5.3.20 példányok csak Authenticode-aláírt következő MSI-re tudnak automatikusan frissülni; unsigned átmeneti buildre egyszeri kézi MSI-telepítés szükséges. A kézi átmenet után a következő build már az itt dokumentált kétmódú szerződést használja. Ezt a korlátot nem oldjuk meg manifest-downgrade-dal vagy saját updater EXE visszahozásával.
 
 ## Production kódaláírás
 
@@ -151,14 +157,12 @@ A production buildben nem használunk repository PFX secretet és nem írunk al�
 
 A tervezett sorrend:
 
-1. GitHub Actions felépíti az unsigned programfát és MSI-t;
-2. GitHub Actions artifactként rögzíti a signing inputot;
-3. SignPath Trusted Build ellenőrzi a repository/commit/workflow origint;
-4. manuális approval;
-5. SignPath deep signing aláírja a SleepMate saját PE fájljait és az MSI-t;
-6. Authenticode verification;
-7. csak ezután készülnek a végleges release hash-ek és manifest;
-8. csak a végleges signed artifact publikálható.
+1. GitHub Actions felépíti és teljesen ellenőrzi az unsigned programfát és MSI-t.
+2. SignPath hiányában ezt VERIFIED UNSIGNED módban automatikusan publikálja.
+3. Teljes SignPath-konfiguráció esetén artifactként rögzíti a signing inputot.
+4. SignPath Trusted Build ellenőrzi a repository/commit/workflow origint, majd approval után aláír.
+5. A workflow kötelező Authenticode-ellenőrzést futtat.
+6. A végleges hash-eket és manifestet az aláírt bájtokból újragenerálja, majd automatikusan publikálja.
 
 Részletes szabály: `CODE_SIGNING_POLICY.md`.
 

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import platform
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -23,9 +24,20 @@ from typing import Any, Callable
 
 from .patient_store import LocalProtector
 from .services import create_full_backup
-from .version import APP_NAME, APP_VERSION, API_VERSION, BUILD_CHANNEL, UPDATE_MANIFEST_FORMAT, SUPPORT_BUNDLE_FORMAT
+from .version import (
+    APP_NAME,
+    APP_VERSION,
+    API_VERSION,
+    BUILD_CHANNEL,
+    UPDATE_MANIFEST_FORMAT,
+    UPDATE_SIGNATURE_POLICY,
+    SUPPORT_BUNDLE_FORMAT,
+)
 
 OFFICIAL_GITHUB_REPO = "BenWyxell/SleepMate-Public"
+OFFICIAL_GITHUB_API_HOST = "api.github.com"
+UPDATE_SIGNATURE_MODES = frozenset({"verified-unsigned", "authenticode"})
+RELEASE_VERSION_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 def _now() -> str:
@@ -250,8 +262,8 @@ class GitHubUpdateManager:
             try:
                 release = self._json_request(url)
                 tag = str(release.get("tag_name") or release.get("name") or "").strip().lstrip("vV")
-                if not tag:
-                    raise RuntimeError("A legfrissebb GitHub release nem tartalmaz verziószámot.")
+                if not RELEASE_VERSION_PATTERN.fullmatch(tag):
+                    raise RuntimeError("A legfrissebb GitHub release nem tartalmaz szabályos verziószámot.")
                 assets = []
                 for a in release.get("assets") or []:
                     if isinstance(a, dict):
@@ -281,11 +293,32 @@ class GitHubUpdateManager:
         parsed = urllib.parse.urlparse(asset_url)
         if parsed.scheme.lower() != "https":
             raise RuntimeError("A SleepMate frissítési asset csak HTTPS kapcsolaton tölthető le.")
+        expected_prefix = f"/repos/{OFFICIAL_GITHUB_REPO}/releases/assets/".lower()
+        if (
+            (parsed.hostname or "").lower() != OFFICIAL_GITHUB_API_HOST
+            or not parsed.path.lower().startswith(expected_prefix)
+            or not parsed.path[len(expected_prefix):].isdigit()
+        ):
+            raise RuntimeError("A frissítési asset nem a hivatalos SleepMate GitHub repository release-e.")
         data = self._request(asset_url, accept="application/octet-stream", timeout=120)
         destination.parent.mkdir(parents=True, exist_ok=True)
         tmp = destination.with_suffix(destination.suffix + ".tmp")
         tmp.write_bytes(data)
         os.replace(tmp, destination)
+
+    @staticmethod
+    def _requires_authenticode(manifest: dict[str, Any]) -> bool:
+        signature_mode = str(manifest.get("signature_mode") or "").strip().lower()
+        if signature_mode not in UPDATE_SIGNATURE_MODES:
+            raise RuntimeError("A frissítési manifest aláírási módja hiányzik vagy nem támogatott.")
+        if UPDATE_SIGNATURE_POLICY == "authenticode-required":
+            if signature_mode != "authenticode":
+                raise RuntimeError("Ez a SleepMate build kizárólag Authenticode-dal aláírt MSI frissítést fogad el.")
+            return True
+        elif UPDATE_SIGNATURE_POLICY == "verified-unsigned":
+            return signature_mode == "authenticode"
+        else:
+            raise RuntimeError(f"Ismeretlen helyi updater-aláírási policy: {UPDATE_SIGNATURE_POLICY}")
 
     @staticmethod
     def _validate_msi_package(path: Path, target_version: str, manifest: dict[str, Any]) -> None:
@@ -296,13 +329,14 @@ class GitHubUpdateManager:
             raise RuntimeError("A frissítési manifest nem Windows MSI csomagot jelöl.")
         if manifest.get("requires_installer") is not True:
             raise RuntimeError("A frissítési manifestből hiányzik a kötelező Windows Installer jelölés.")
+        verify_authenticode = GitHubUpdateManager._requires_authenticode(manifest)
         # MSI files use the OLE Compound File header. This is not a signature,
         # but rejects a renamed HTML/ZIP/executable before Windows Installer is
         # ever started; SHA-256 remains the cryptographic integrity check.
         with path.open("rb") as source:
             if source.read(8) != bytes.fromhex("D0CF11E0A1B11AE1"):
                 raise RuntimeError("A letöltött csomag nem érvényes MSI konténer.")
-        if os.name == "nt" and getattr(sys, "frozen", False):
+        if verify_authenticode and os.name == "nt" and getattr(sys, "frozen", False):
             GitHubUpdateManager._verify_windows_authenticode(path)
 
     @staticmethod
@@ -390,18 +424,24 @@ class GitHubUpdateManager:
             if not isinstance(manifest, dict) or manifest.get("format") != UPDATE_MANIFEST_FORMAT:
                 raise RuntimeError("Nem támogatott SleepMate frissítési manifest.")
             target_version = str(manifest.get("version") or "").strip().lstrip("vV")
+            if not RELEASE_VERSION_PATTERN.fullmatch(target_version):
+                raise RuntimeError("A frissítési manifest verziószáma érvénytelen.")
             if target_version != str(release.get("tag") or "").strip().lstrip("vV"):
                 raise RuntimeError("A release és a frissítési manifest verziója nem egyezik.")
             if not version_newer(target_version, APP_VERSION):
                 raise RuntimeError("A frissítési csomag nem újabb a telepített verziónál.")
-            min_version = str(manifest.get("min_version") or "0.0.0")
+            min_version = str(manifest.get("min_version") or "").strip().lstrip("vV")
+            if not RELEASE_VERSION_PATTERN.fullmatch(min_version):
+                raise RuntimeError("A frissítési manifest min_version értéke hiányzik vagy érvénytelen.")
             if _version_tuple(APP_VERSION) < _version_tuple(min_version):
                 raise RuntimeError(f"Ez a frissítés legalább SleepMate {min_version} verziót igényel.")
-            asset_name = str(manifest.get("asset") or f"SleepMate_Setup_v{target_version}.msi")
+            asset_name = str(manifest.get("asset") or "").strip()
+            if not asset_name:
+                raise RuntimeError("A frissítési manifestből hiányzik a kötelező MSI asset neve.")
             if Path(asset_name).name != asset_name:
                 raise RuntimeError("A frissítési manifest érvénytelen asset nevet tartalmaz.")
             expected_hash = str(manifest.get("sha256") or "").lower().strip()
-            if len(expected_hash) != 64:
+            if not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
                 raise RuntimeError("A frissítési manifestből hiányzik az érvényes SHA-256 hash.")
             asset = next((a for a in (release.get("assets") or []) if a.get("name") == asset_name), None)
             if not asset:

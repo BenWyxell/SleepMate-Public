@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 import sys
@@ -37,7 +38,16 @@ def main() -> int:
     parser.add_argument("--msi", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--min-version", default="4.2.2")
+    parser.add_argument(
+        "--signature-mode",
+        required=True,
+        choices=("verified-unsigned", "authenticode"),
+        help="Explicit release trust mode recorded for updater enforcement.",
+    )
     args = parser.parse_args()
+
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", args.min_version):
+        raise SystemExit("--min-version must be a canonical X.Y.Z version")
 
     msi = Path(args.msi).resolve()
     expected_name = f"SleepMate_Setup_v{APP_VERSION}.msi"
@@ -56,6 +66,7 @@ def main() -> int:
         "package_type": "windows-msi-x64",
         "git_commit": git_commit(),
         "requires_installer": True,
+        "signature_mode": args.signature_mode,
     }
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)

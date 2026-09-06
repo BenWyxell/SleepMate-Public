@@ -109,6 +109,7 @@ def test_updater_accepts_only_exact_hashed_msi_release_asset(tmp_path: Path, mon
         "sha256": digest,
         "package_type": "windows-msi-x64",
         "requires_installer": True,
+        "signature_mode": "verified-unsigned",
     }), encoding="utf-8")
     release_state = {
         "tag": target,
@@ -149,6 +150,29 @@ def test_updater_accepts_only_exact_hashed_msi_release_asset(tmp_path: Path, mon
     bad_manifest["requires_installer"] = False
     manifest.write_text(json.dumps(bad_manifest), encoding="utf-8")
     with pytest.raises(RuntimeError, match="Windows Installer"):
+        manager.prepare_install({}, data, 8895)
+
+    bad_manifest["requires_installer"] = True
+    bad_manifest["asset"] = ""
+    manifest.write_text(json.dumps(bad_manifest), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="kötelező MSI asset"):
+        manager.prepare_install({}, data, 8895)
+
+    bad_manifest["asset"] = msi.name
+    bad_manifest["sha256"] = "not-a-sha256"
+    manifest.write_text(json.dumps(bad_manifest), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="érvényes SHA-256"):
+        manager.prepare_install({}, data, 8895)
+
+    bad_manifest["sha256"] = "0" * 64
+    manifest.write_text(json.dumps(bad_manifest), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="SHA-256 ellenőrzése sikertelen"):
+        manager.prepare_install({}, data, 8895)
+
+    bad_manifest["sha256"] = digest
+    bad_manifest["min_version"] = "latest"
+    manifest.write_text(json.dumps(bad_manifest), encoding="utf-8")
+    with pytest.raises(RuntimeError, match="min_version"):
         manager.prepare_install({}, data, 8895)
 
 

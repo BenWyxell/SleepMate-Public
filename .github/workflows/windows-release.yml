@@ -1,7 +1,7 @@
 # RELEASE PIPELINE SAFETY NOTE:
 # This workflow builds and fully verifies the Windows release before publication.
-# No job may publish before the install/runtime/uninstall, release-integrity and
-# SignPath trusted-build signing gates succeed.
+# No job may publish before the install/runtime/uninstall and release-integrity
+# gates succeed. SignPath is an optional additional gate when fully configured.
 #
 # Compatibility markers for the pre-WiX-Toolset release contract tests:
 # SleepMate_Setup_v${VERSION}.msi
@@ -178,7 +178,8 @@ jobs:
           python .\tools\build_msi_update_manifest.py `
             --msi $msi `
             --output .\release\sleepmate-update.json `
-            --min-version 4.2.2
+            --min-version 4.2.2 `
+            --signature-mode verified-unsigned
           if ($LASTEXITCODE -ne 0) { throw "MSI update manifest generation failed: $LASTEXITCODE" }
 
       - name: Inspect MSI payload by administrative extraction
@@ -370,6 +371,7 @@ jobs:
     outputs:
       version: ${{ steps.identity.outputs.version }}
       tag: ${{ steps.identity.outputs.tag }}
+      signing_configured: ${{ steps.signing-mode.outputs.configured }}
 
     steps:
       - name: Checkout exact tested source
@@ -396,6 +398,53 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve optional SignPath mode
+        id: signing-mode
+        shell: bash
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != 'push' || "$GITHUB_REF" != refs/tags/v* ]]; then
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          values=(
+            "$SIGNPATH_API_TOKEN"
+            "$SIGNPATH_ORGANIZATION_ID"
+            "$SIGNPATH_PROJECT_SLUG"
+            "$SIGNPATH_POLICY_SLUG"
+            "$SIGNPATH_ARTIFACT_CONFIGURATION_SLUG"
+          )
+          configured=0
+          for value in "${values[@]}"; do
+            [[ -n "$value" ]] && configured=$((configured + 1))
+          done
+          SOURCE_POLICY="$(python -c 'from cpap.version import UPDATE_SIGNATURE_POLICY; print(UPDATE_SIGNATURE_POLICY)')"
+          if [[ "$configured" -eq 0 ]]; then
+            [[ "$SOURCE_POLICY" == 'verified-unsigned' ]] || {
+              echo "Unsigned publication requires UPDATE_SIGNATURE_POLICY=verified-unsigned, found $SOURCE_POLICY." >&2
+              exit 1
+            }
+            echo 'SignPath is not configured; verified unsigned publication mode selected.'
+            echo 'configured=false' >> "$GITHUB_OUTPUT"
+          elif [[ "$configured" -eq "${#values[@]}" ]]; then
+            [[ "$SOURCE_POLICY" == 'authenticode-required' ]] || {
+              echo "Signed production publication requires UPDATE_SIGNATURE_POLICY=authenticode-required, found $SOURCE_POLICY." >&2
+              exit 1
+            }
+            echo 'SignPath is fully configured; signed publication mode selected.'
+            echo 'configured=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'SignPath configuration is partial. Configure all five settings or remove all of them.' >&2
+            exit 1
+          fi
 
       - name: Download exact smoke-tested release set
         uses: actions/download-artifact@v4
@@ -466,6 +515,7 @@ jobs:
               'package_type': manifest.get('package_type') == 'windows-msi-x64',
               'git_commit': manifest.get('git_commit') == sha,
               'requires_installer': manifest.get('requires_installer') is True,
+              'signature_mode': manifest.get('signature_mode') == 'verified-unsigned',
           }
           failed = [name for name, ok in checks.items() if not ok]
           if failed:
@@ -544,7 +594,8 @@ jobs:
                   'user-state preservation',
               ],
               'signed': False,
-              'signing_status': 'Unsigned until SignPath Foundation trusted-build signing is available.',
+              'signature_mode': 'verified-unsigned',
+              'signing_status': 'Verified unsigned transitional release; SignPath was not used for this artifact set.',
           }
           Path('release-staging/release-metadata.json').write_text(
               json.dumps(metadata, ensure_ascii=False, indent=2) + '\n', encoding='utf-8'
@@ -579,7 +630,10 @@ jobs:
 
   sign-release-set:
     needs: verify-release-set
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.verify-release-set.outputs.signing_configured == 'true'
     runs-on: windows-latest
     timeout-minutes: 45
     permissions:
@@ -597,22 +651,6 @@ jobs:
         with:
           name: SleepMate-Windows-x64-VERIFIED-RELEASE
           path: signpath-input
-
-      - name: Require configured trusted signing
-        shell: powershell
-        env:
-          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
-          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG }}
-          SIGNPATH_ARTIFACT_CONFIGURATION_SLUG: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG','SIGNPATH_POLICY_SLUG','SIGNPATH_ARTIFACT_CONFIGURATION_SLUG')) {
-            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
-              throw "Stable release is blocked: $name is not configured. Unsigned artifacts will not be published."
-            }
-          }
 
       - name: Upload exact SignPath input
         id: signpath-input
@@ -663,12 +701,13 @@ jobs:
 
           Get-ChildItem signpath-output -File -Recurse | Where-Object Name -notin @('SHA256SUMS.txt','release-metadata.json','sleepmate-update.json') | Copy-Item -Destination signed-release -Force
           Copy-Item signpath-input\msi-inventory.txt,signpath-input\build-msi-toolchain.txt -Destination signed-release -Force
-          python .\tools\build_msi_update_manifest.py --msi $msi.FullName --output signed-release\sleepmate-update.json --min-version 4.2.2
+          python .\tools\build_msi_update_manifest.py --msi $msi.FullName --output signed-release\sleepmate-update.json --min-version 4.2.2 --signature-mode authenticode
           $hash = (Get-FileHash $msi.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $($msi.Name)" | Set-Content "signed-release\$($msi.Name).sha256" -Encoding ascii
 
           $metadata = Get-Content signpath-input\release-metadata.json -Raw | ConvertFrom-Json
           $metadata.signed = $true
+          $metadata.signature_mode = 'authenticode'
           $metadata.signing_status = 'SignPath trusted-build Authenticode signatures verified before publication.'
           $metadata.release_validation += 'SignPath trusted-build signing'
           $metadata.release_validation += 'MSI Authenticode signature verification'
@@ -694,7 +733,15 @@ jobs:
     needs:
       - verify-release-set
       - sign-release-set
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.verify-release-set.result == 'success' &&
+      (
+        (needs.verify-release-set.outputs.signing_configured == 'false' && needs.sign-release-set.result == 'skipped') ||
+        (needs.verify-release-set.outputs.signing_configured == 'true' && needs.sign-release-set.result == 'success')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -747,11 +794,11 @@ jobs:
 
           echo 'publish=true' >> "$GITHUB_OUTPUT"
 
-      - name: Download signed release set only
+      - name: Download selected verified publication set
         if: steps.target.outputs.publish == 'true'
         uses: actions/download-artifact@v4
         with:
-          name: SleepMate-Windows-x64-SIGNED-RELEASE
+          name: ${{ needs.verify-release-set.outputs.signing_configured == 'true' && 'SleepMate-Windows-x64-SIGNED-RELEASE' || 'SleepMate-Windows-x64-VERIFIED-RELEASE' }}
           path: release-staging
 
       - name: Re-verify downloaded publication set
@@ -759,6 +806,7 @@ jobs:
         shell: bash
         env:
           VERSION: ${{ needs.verify-release-set.outputs.version }}
+          SIGNING_CONFIGURED: ${{ needs.verify-release-set.outputs.signing_configured }}
         run: |
           set -euo pipefail
           cd release-staging
@@ -767,13 +815,23 @@ jobs:
           test -s "SleepMate_v${VERSION}_windows_x64.zip"
           test -s sleepmate-update.json
           test -s release-metadata.json
-          test "$(jq -r '.signed' release-metadata.json)" = 'true'
+          if [[ "$SIGNING_CONFIGURED" == 'true' ]]; then
+            EXPECTED_SIGNED=true
+            EXPECTED_MODE=authenticode
+          else
+            EXPECTED_SIGNED=false
+            EXPECTED_MODE=verified-unsigned
+          fi
+          test "$(jq -r '.signed' release-metadata.json)" = "$EXPECTED_SIGNED"
+          test "$(jq -r '.signature_mode' release-metadata.json)" = "$EXPECTED_MODE"
+          test "$(jq -r '.signature_mode' sleepmate-update.json)" = "$EXPECTED_MODE"
 
       - name: Build GitHub Release notes
         if: steps.target.outputs.publish == 'true'
         shell: bash
         env:
           VERSION: ${{ needs.verify-release-set.outputs.version }}
+          SIGNING_CONFIGURED: ${{ needs.verify-release-set.outputs.signing_configured }}
         run: |
           set -euo pipefail
           export VERSION GITHUB_SHA
@@ -782,13 +840,20 @@ jobs:
           from pathlib import Path
 
           version = os.environ['VERSION']
+          signed = os.environ.get('SIGNING_CONFIGURED') == 'true'
           text = Path('RELEASE_NOTES.md').read_text(encoding='utf-8')
           marker = f'# SleepMate {version}'
           if marker not in text:
               raise SystemExit(f'Missing {marker} section in RELEASE_NOTES.md')
           section = text.split(marker, 1)[1]
           section = section.split('\n---\n', 1)[0].strip()
-          notes = f'''# SleepMate {version}\n\n{section}\n\n---\n\n## Kiadás ellenőrzése és aláírás\n\nEz a GitHub Release kizárólag a teljesen zöld Windows release-pipeline **ellenőrzött és SignPath trusted-build folyamatban aláírt** artifactjából készült. A publikálás előtt lefutott a teljes tesztkészlet, a PyInstaller build, a WiX magyar MSI build, a valódi `msiexec` telepítési/eltávolítási próba, valamint az MSI és a benne, illetve a hordozható ZIP-ben található `SleepMate.exe` Authenticode-ellenőrzése. A végső hash-ek és a frissítési manifeszt csak az aláírt kimenetből készültek.\n\nA digitális aláírás csökkenti a hamis riasztások és reputációs figyelmeztetések kockázatát, de egyetlen vírusvédelmi termékre sem jelent matematikai garanciát.\n\n**Fontos:** a SleepMate nem orvosi diagnosztikai szoftver és nem helyettesíti az orvosi értékelést.\n\nVerified commit: `{os.environ['GITHUB_SHA']}`\n'''
+          if signed:
+              trust = ('Az artifact SignPath trusted-build folyamatban készült, és a végső MSI, valamint a '
+                       'SleepMate saját futtatható állományainak Authenticode-aláírását publikálás előtt ellenőrizte a workflow.')
+          else:
+              trust = ('A SignPath nincs konfigurálva, ezért ez egy VERIFIED UNSIGNED átmeneti kiadás. A teljes teszt-, '
+                       'MSI telepítési/eltávolítási és SHA-256 integritási kapu sikeresen lefutott, de az artifact nem rendelkezik Authenticode-aláírással.')
+          notes = f'''# SleepMate {version}\n\n{section}\n\n---\n\n## Kiadás ellenőrzése és aláírás\n\n{trust}\n\nA digitális aláírás hiánya Windows SmartScreen vagy vírusvédelmi reputációs figyelmeztetést okozhat.\n\n**Fontos:** a SleepMate nem orvosi diagnosztikai szoftver és nem helyettesíti az orvosi értékelést.\n\nVerified commit: `{os.environ['GITHUB_SHA']}`\n'''
           Path('release-notes.generated.md').write_text(notes, encoding='utf-8')
           PY
 

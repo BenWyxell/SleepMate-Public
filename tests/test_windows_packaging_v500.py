@@ -37,6 +37,10 @@ def test_windows_release_pipeline_uses_localized_msi_and_verified_publish_contra
     assert "- verify-release-set" in workflow and "- sign-release-set" in workflow
     assert "signpath/github-action-submit-signing-request@v1" in workflow
     assert "SleepMate-Windows-x64-SIGNED-RELEASE" in workflow
+    assert "signing_configured" in workflow
+    assert "verified-unsigned" in workflow
+    assert "needs.sign-release-set.result == 'skipped'" in workflow
+    assert "needs.sign-release-set.result == 'success'" in workflow
     assert "gh release create" in workflow
     assert "--draft" in workflow
     assert "gh release upload" in workflow
@@ -44,7 +48,7 @@ def test_windows_release_pipeline_uses_localized_msi_and_verified_publish_contra
     assert "Install Inno Setup" not in workflow
     assert "WINDOWS_CERT_PFX_BASE64" not in workflow
     assert "WINDOWS_CERT_PASSWORD" not in workflow
-    assert "publish-unsigned" not in workflow
+    assert "contents: write" in workflow
 
     build = (ROOT / "build/windows/build_release.ps1").read_text(encoding="utf-8")
     assert "SLEEPMATE_SIGN_PFX" not in build
