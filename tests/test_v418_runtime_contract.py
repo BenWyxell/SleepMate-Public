@@ -17,5 +17,5 @@ assert 'result = import_resmed_tree(tmp, self.dataset.root, copy_cb)' in app
 assert 'user_initiated' in app and 'initialdir=initial' in app
 assert "{user_initiated:true,initial_dir:current}" in js_compact
 assert 'os.startfile(' not in app and 'explorer.exe' not in app.lower()
-assert 'sleepmate-shell-v5.3.20' in sw
+assert 'sleepmate-shell-v5.3.21' in sw
 print('PASS: current runtime routes primary refresh through protected mirror; imports remain additive; no automatic Temp/Explorer opening')
