@@ -15,7 +15,7 @@ from playwright.sync_api import BrowserContext, Page, sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE = "5.3.20"
+RELEASE = "5.3.21"
 
 
 def free_port() -> int:
@@ -180,7 +180,7 @@ def assert_current_pwa(page: Page, backend_log: Path) -> None:
               readyState:document.readyState,registrationStarted:typeof pwaRegistrationStarted==='undefined'?null:pwaRegistrationStarted,
               resources:performance.getEntriesByType('resource').filter(x=>x.duration>5000).map(x=>({name:x.name,duration:x.duration,transferSize:x.transferSize}))};}"""
         )
-        if "sleepmate-shell-v5.3.20" in state["caches"] and state["active"] == "activated":
+        if "sleepmate-shell-v5.3.21" in state["caches"] and state["active"] == "activated":
             break
         page.wait_for_timeout(200)
     else:
@@ -220,7 +220,7 @@ def open_and_assert(context: BrowserContext, url: str, backend_log: Path) -> Non
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="SleepMate 5.3.20 browser/PWA acceptance")
+    parser = argparse.ArgumentParser(description="SleepMate 5.3.21 browser/PWA acceptance")
     parser.add_argument("--browser", default=r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
     args = parser.parse_args()
     browser_executable = Path(args.browser)
@@ -256,7 +256,7 @@ def main() -> int:
             finally:
                 stop_backend(process)
 
-    print("SleepMate 5.3.20 browser/PWA acceptance OK")
+    print("SleepMate 5.3.21 browser/PWA acceptance OK")
     return 0
 
 

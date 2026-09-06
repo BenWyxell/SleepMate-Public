@@ -1,3 +1,20 @@
+# SleepMate 5.3.21
+
+Release build: **5.3.21**.
+
+Kiadási csatorna: **stable**.
+
+## Bridge release – átmeneti verified unsigned frissítési lánc
+
+- A v5.3.21 egyszeri bridge kiadás a tanúsítvány nélküli átmeneti időszakhoz.
+- A Windows release SignPath hiányában ellenőrzött `verified-unsigned` MSI-ként publikálható.
+- A SignPath opcionális; később, érvényes tanúsítvány esetén a kiadási lánc Authenticode-aláírásra válthat.
+- A SleepMate saját `SleepMateUpdater.exe` segédprogramot nem használ.
+- A Windows frissítés a Microsoft Windows Installer / `msiexec.exe` segítségével történik.
+- A v5.3.21 egyszeri kézi telepítése után a következő unsigned kiadással tesztelhető a teljes automatikus MSI-frissítési folyamat.
+- A SleepMate alkalmazás funkcionális működése ebben a bridge kiadásban nem változik.
+
+---
 # SleepMate 5.3.20
 
 Release build: **5.3.20**.
