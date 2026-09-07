@@ -128,7 +128,7 @@ jobs:
           ) | Set-Content -Path build-msi-toolchain.txt -Encoding utf8
 
       - name: Download Windows program tree
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: SleepMate-Windows-x64-PROGRAM-TREE
           path: ci-input
@@ -230,13 +230,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Download portable release inputs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: SleepMate-Windows-x64-PROGRAM-TREE
           path: ci-input
 
       - name: Download MSI
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: SleepMate-MSI-UNSIGNED-CI
           path: ci-msi
@@ -443,7 +443,7 @@ jobs:
           fi
 
       - name: Download exact smoke-tested release set
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: SleepMate-Windows-x64-UNSIGNED-CI
           path: release-input
@@ -643,7 +643,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download verified unsigned candidate
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: SleepMate-Windows-x64-VERIFIED-RELEASE
           path: signpath-input
@@ -792,7 +792,7 @@ jobs:
 
       - name: Download selected verified publication set
         if: steps.target.outputs.publish == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.verify-release-set.outputs.signing_configured == 'true' && 'SleepMate-Windows-x64-SIGNED-RELEASE' || 'SleepMate-Windows-x64-VERIFIED-RELEASE' }}
           path: release-staging
