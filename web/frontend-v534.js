@@ -92,15 +92,35 @@ async function saveO2Toggles(){
 }
 function captureO2Toggle(e){if(!['smO2Enabled','smO2Ble','smO2AutoConnect','smO2AutoSync'].includes(e.target?.id))return;e.stopImmediatePropagation();saveO2Toggles()}
 
-function latestSummary(){let latest=null;try{latest=state?.dashboardOverview?.latest||null}catch{}return latest?.summary||latest||null}
+let latestSleepCardBlock=null,latestSleepCardRequest=0;
 function latestDuration(summary){const seconds=Number(summary?.therapy_seconds);if(Number.isFinite(seconds)&&seconds>=0){const mins=Math.round(seconds/60);return `${Math.floor(mins/60)}:${String(mins%60).padStart(2,'0')}`}const usage=String(summary?.usage||'');return /^\d+:\d{2}/.test(usage)?usage.slice(0,5):'—'}
-function fixLatestLoading(){const status=id('latestStatus');if(status&&status.textContent!=='—')status.textContent='—';setText(id('latestSessions'),'—')}
-function syncLatestSessionCard(){const status=id('latestStatus'),sessions=id('latestSessions');if(!status||!sessions)return;const summary=latestSummary();if(!summary){setText(status,'—');setText(sessions,'—');return}const count=Array.isArray(summary.sessions)?summary.sessions.length:null;setText(status,latestDuration(summary));setText(sessions,count==null?'teljes terápiás idő':`${count} szakasz`)}
+function latestSleepBlock(payload){
+  const blocks=payload?.latest?.blocks;if(!Array.isArray(blocks)||!blocks.length)return null;
+  return blocks.reduce((latest,block)=>{
+    if(!latest)return block;
+    const end=Date.parse(block?.end||block?.start||''),latestEnd=Date.parse(latest?.end||latest?.start||'');
+    return !Number.isNaN(end)&&(Number.isNaN(latestEnd)||end>latestEnd)?block:latest;
+  },null);
+}
+function fixLatestLoading(){latestSleepCardBlock=null;latestSleepCardRequest++;const status=id('latestStatus');if(status&&status.textContent!=='—')status.textContent='—';setText(id('latestSessions'),'—')}
+function syncLatestSessionCard(){
+  const status=id('latestStatus'),sessions=id('latestSessions');if(!status||!sessions)return;
+  const block=latestSleepCardBlock;if(!block){setText(status,'—');setText(sessions,'—');return}
+  const count=Number(block.session_count);setText(status,latestDuration(block));setText(sessions,Number.isFinite(count)&&count>0?`${count} szakasz`:'—');
+}
+async function refreshLatestSleepCard(){
+  const request=++latestSleepCardRequest;
+  try{
+    const sleep=await api('/api/sleep-analysis?period=day');if(request!==latestSleepCardRequest)return;
+    latestSleepCardBlock=latestSleepBlock(sleep);
+  }catch{if(request!==latestSleepCardRequest)return;latestSleepCardBlock=null}
+  syncLatestSessionCard();
+}
 function hookOverviewLoading(){
   try{
     if(typeof loadDashboardOverview==='function'&&!loadDashboardOverview.__smLoading534){
       const orig=loadDashboardOverview;
-      loadDashboardOverview=async function(...a){fixLatestLoading();const r=await orig(...a);syncLatestSessionCard();return r};
+      loadDashboardOverview=async function(...a){fixLatestLoading();const r=await orig(...a);await refreshLatestSleepCard();return r};
       loadDashboardOverview.__smLoading534=true;
     }
   }catch{}
@@ -142,5 +162,5 @@ function bind(){
 async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);if(settingsVisible())hydrateAdvancedO2Settings()}
 function boot(){bind();hookOverviewLoading();watchLatestSessionCard();fixLatestLoading();waitForDynamicSettings();normalizeAll()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
-window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State,syncLatestSessionCard};
+window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State,syncLatestSessionCard,refreshLatestSleepCard};
 })();
