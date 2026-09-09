@@ -18,7 +18,7 @@ def _cluster_has_therapy_payload(cluster: list[FileInfo]) -> bool:
     Those stubs are normal device behaviour and must not be reported as missing
     BRP/PLD data. If a cluster contains waveform/derived samples or a classified
     EVE event, it is considered a real therapy cluster and missing files remain a
-    diagnostic warning.
+    diagnostic completeness detail.
     """
     for info in cluster:
         if info.kind in {"BRP", "PLD", "SA2"} and info.edf.duration_s > 0:
@@ -29,8 +29,8 @@ def _cluster_has_therapy_payload(cluster: list[FileInfo]) -> bool:
                     if classify_event(ann.description) is not None:
                         return True
             except Exception:
-                # Be conservative when an EVE file cannot be decoded: do not
-                # suppress a potentially real missing-file warning.
+                # Be conservative when an EVE file cannot be decoded: keep the
+                # completeness detail visible instead of silently suppressing it.
                 return True
     return False
 
@@ -71,7 +71,9 @@ def _diagnostics_v513(self: ResMedDataset) -> dict[str, Any]:
             kinds = {x.kind for x in cluster}
             missing = [k for k in ("BRP", "PLD", "EVE") if k not in kinds]
             # A header-only/zero-duration AirSense start is not a therapy session.
-            # Only report missing required files when the cluster has real payload.
+            # For a real therapy cluster, keep missing detail-file information in
+            # the diagnostic table, but do not escalate it to a health/error alert:
+            # ResMed does not guarantee every detail file for every short segment.
             if missing and _cluster_has_therapy_payload(cluster):
                 missing_required.append({
                     "day": day,
@@ -121,9 +123,12 @@ def _diagnostics_v513(self: ResMedDataset) -> dict[str, Any]:
         "message": self.last_refresh_at.isoformat(timespec="seconds"),
     })
     rows.append({
-        "level": "WARN" if missing_required else "INFO",
+        "level": "INFO",
         "title": "Hiányzó BRP / PLD / EVE",
-        "message": f"{len(missing_required)} érintett szakasz." if missing_required else "Nem találtam hiányzó kötelező ResMed szakaszfájlt.",
+        "message": (
+            f"{len(missing_required)} szakasznál hiányzik egy vagy több részletfájl; ez tájékoztató adat-teljességi jelzés."
+            if missing_required else "Nem találtam hiányzó kötelező ResMed szakaszfájlt."
+        ),
     })
     rows.append({
         "level": "WARN" if damaged else "INFO",
