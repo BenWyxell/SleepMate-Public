@@ -7,10 +7,10 @@ def text(path):
 
 def test_packaged_dashboard_pwa_css_is_build_versioned():
     spec = text("build/windows/SleepMate.spec")
-    assert "/dashboard-pwa-v5312.css?v=5.3.24" in text("web/index.html")
+    assert "/dashboard-pwa-v5312.css?v=5.3.25" in text("web/index.html")
     assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
-    assert "/dashboard-pwa-v5312.css?v=5.3.24" in text("web/service-worker-v508-base.js")
-    assert "/dashboard-pwa-v5312.css?v=5.3.24" in text("web/service-worker.js")
+    assert "/dashboard-pwa-v5312.css?v=5.3.25" in text("web/service-worker-v508-base.js")
+    assert "/dashboard-pwa-v5312.css?v=5.3.25" in text("web/service-worker.js")
 
 
 def test_daily_o2_has_runtime_independent_api_fallback():

@@ -27,19 +27,19 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="sleepmate-ui-version" content="5.3.4">
-  <meta name="sleepmate-release-version" content="5.3.24">
-  <meta name="sleepmate-build-id" content="5.3.24">
+  <meta name="sleepmate-release-version" content="5.3.25">
+  <meta name="sleepmate-build-id" content="5.3.25">
   <meta name="sleepmate-o2ring-enabled" content="unknown">
-  <link rel="stylesheet" href="/style.css?v=5.3.24">
-  <link rel="stylesheet" href="/sleepsync.css?v=5.3.24">
-  <link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.24">
-  <link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.24">
-  <link rel="stylesheet" href="/dashboard-pwa-v5312.css?v=5.3.24">
-  <link rel="stylesheet" href="/o2ring.css?v=5.3.24">
-  <link rel="stylesheet" href="/o2ring-v534.css?v=5.3.24">
+  <link rel="stylesheet" href="/style.css?v=5.3.25">
+  <link rel="stylesheet" href="/sleepsync.css?v=5.3.25">
+  <link rel="stylesheet" href="/sleepmate-aurora.css?v=5.3.25">
+  <link rel="stylesheet" href="/sleepmate-v530.css?v=5.3.25">
+  <link rel="stylesheet" href="/dashboard-pwa-v5312.css?v=5.3.25">
+  <link rel="stylesheet" href="/o2ring.css?v=5.3.25">
+  <link rel="stylesheet" href="/o2ring-v534.css?v=5.3.25">
   <style id="sm-o2-master-visibility">body:has(#smO2Enabled:not(:checked)) .o2ring-report-option{display:none!important}[data-settings-tab="pwa"]{display:none!important}</style>
-  <script src="/o2ring.js?v=5.3.24"></script>
-  <script src="/o2ring-report-ui.js?v=5.3.24"></script>
+  <script src="/o2ring.js?v=5.3.25"></script>
+  <script src="/o2ring-report-ui.js?v=5.3.25"></script>
 </head>
 <body>
 <div id="startupSplash" class="startup-splash">
@@ -963,18 +963,18 @@
 <script>
 const PATIENT_SCHEMAS={profile:{title:'Személyes adatok szerkesztése',fields:[['name','Név','text'],['birth_date','Születési idő','date'],['taj','TAJ-szám','text'],['taj_validate','TAJ ellenőrzőszám ellenőrzése','checkbox'],['diagnosis_date','Diagnózis felállításának dátuma','date'],['therapy_start_date','PAP-terápia megkezdésének dátuma','date'],['doctor_name','Kezelőorvos neve','text'],['institution','Kezelőintézmény','text'],['next_control_date','Következő kontroll','date'],['notes','Saját megjegyzések','textarea'],['profile_photo','Profilkép','file']]},diagnosis:{title:'Diagnózis / vizsgálat',fields:[['date','Diagnózis / vizsgálat dátuma','date'],['diagnosis_type','Diagnózis típusa','select:OSA|CSA|Kevert|Egyéb'],['ahi','Diagnosztikai AHI (/óra)','number'],['odi','ODI (/óra)','number'],['spo2_min','Legalacsonyabb SpO₂ (%)','number'],['spo2_avg','Átlagos SpO₂ (%)','number'],['diagnosis','Diagnózis / megjegyzés','textarea']]},titration:{title:'Titrálás',fields:[['date','Titrálás dátuma','date'],['type','Titrálás típusa','select:Alváslaboros|Otthoni|Automata PAP|Manuális|Egyéb'],['pressure_type','Javasolt nyomás típusa','select:Fix CPAP|APAP'],['fixed_pressure','Fix nyomás (cmH₂O)','number'],['min_pressure','APAP minimum (cmH₂O)','number'],['max_pressure','APAP maximum (cmH₂O)','number'],['ahi','AHI a titrálás során (/óra)','number'],['central_ahi','Centrális AHI (/óra)','number'],['spo2_min','SpO₂ minimum (%)','number'],['note','Megjegyzés','textarea']]},prescription:{title:'Terápiás előírás',fields:[['effective_from','Érvényes ettől','date'],['effective_to','Érvényes eddig (opcionális)','date'],['mode','Terápiás mód','select:Fix CPAP|APAP / AutoCPAP'],['fixed_pressure','Előírt fix nyomás (cmH₂O)','number'],['min_pressure','Előírt minimum (cmH₂O)','number'],['max_pressure','Előírt maximum (cmH₂O)','number'],['note','Megjegyzés','textarea']]},medication:{title:'Gyógyszer',fields:[['name','Gyógyszer neve','text'],['strength','Hatáserősség','text'],['dosage','Adagolás','text'],['time','Szedés időpontja','text'],['start_date','Kezdés dátuma','date'],['end_date','Befejezés dátuma','date'],['active','Aktív','checkbox'],['note','Megjegyzés','textarea']]},device:{title:'PAP-készülék',fields:[['manufacturer','Gyártó','catalog-device-manufacturer'],['model','Típus / modell','catalog-device-model'],['product_code','Termékkód','text'],['serial_number','Sorozatszám (opcionális)','text'],['start_date','Használat kezdete','date'],['replacement_interval','Csere / felülvizsgálat gyakorisága','select:Nincs szükség időzítésre|2 hét|1 hónap|3 hónap|6 hónap|1 év'],['end_date','Használat vége','date'],['active','Aktív készülék','checkbox'],['note','Megjegyzés','textarea']]},mask:{title:'CPAP maszk',fields:[['manufacturer','Gyártó','catalog-mask-manufacturer'],['model','Maszk típusa / modell','catalog-mask-model'],['mask_type','Kialakítás','catalog-mask-category'],['size','Méret','catalog-mask-size'],['start_date','Használat kezdete','date'],['replacement_interval','Csere gyakorisága','select:Nincs szükség időzítésre|2 hét|1 hónap|3 hónap|6 hónap|1 év'],['end_date','Használat vége','date'],['active','Aktív maszk','checkbox'],['note','Megjegyzés','textarea']]},accessory:{title:'CPAP kiegészítő',fields:[['category','Kiegészítő típusa','catalog-accessory-category'],['manufacturer','Gyártó','catalog-accessory-manufacturer'],['model','Típus / modell','catalog-accessory-model'],['device_id','Kapcsolódó készülék (opcionális)','select-device'],['start_date','Használat kezdete','date'],['replacement_interval','Csere gyakorisága','select:Nincs szükség időzítésre|2 hét|1 hónap|3 hónap|6 hónap|1 év'],['end_date','Használat vége','date'],['active','Aktív kiegészítő','checkbox'],['note','Megjegyzés','textarea']]},setup:{title:'Használati konfiguráció',fields:[['device_id','Készülék','select-device'],['mask_id','Maszk','select-mask'],['accessory_ids','Kiegészítők','select-accessories'],['start_date','Konfiguráció kezdete','date'],['end_date','Konfiguráció vége','date'],['active','Aktív konfiguráció','checkbox'],['note','Megjegyzés','textarea']]},timeline_event:{title:'Saját terápiás esemény',fields:[['date','Dátum','date'],['event_type','Típus','select:Egyéb|Maszkváltás|Készülékváltás|Beállításváltozás|Kontroll|Életmódbeli változás'],['title','Esemény rövid neve','text'],['note','Megjegyzés','textarea']]}};
 </script>
-<script src="/app-core.js?v=5.3.24"></script>
-<script src="/app-engine119.js?v=5.3.24"></script>
+<script src="/app-core.js?v=5.3.25"></script>
+<script src="/app-engine119.js?v=5.3.25"></script>
 <script src="/first-run.js?v=4"></script>
-<script src="/sleepsync-hydration-v529.js?v=5.3.24"></script>
-<script src="/sleepsync-polish.js?v=5.3.24"></script>
+<script src="/sleepsync-hydration-v529.js?v=5.3.25"></script>
+<script src="/sleepsync-polish.js?v=5.3.25"></script>
 <script src="/sleepmate-sleep.js?v=5.2.6"></script>
 <script src="/sleepmate-sleep-v523.js?v=5.2.6"></script>
 <script src="/sleepmate-chart-v523.js?v=5.2.14"></script>
 <script src="/sleepmate-sleep-v524.js?v=5.2.6"></script>
 <script src="/sleepmate-sleep-refresh-v5212.js?v=5.2.12"></script>
-<script src="/frontend-v534.js?v=5.3.24"></script>
-<script src="/sleepmate-v530.js?v=5.3.24"></script>
-<script src="/o2ring-data-management.js?v=5.3.24"></script>
+<script src="/frontend-v534.js?v=5.3.25"></script>
+<script src="/sleepmate-v530.js?v=5.3.25"></script>
+<script src="/o2ring-data-management.js?v=5.3.25"></script>
 </body>
 </html>

@@ -41,7 +41,7 @@ def test_cold_pwa_boot_loads_one_coherent_shell_and_authoritative_o2_master():
     engine = read("web/app-engine119.js")
     shell = read("web/index.html")
     o2 = read("web/sleepmate-v530.js")
-    assert app.index('/app-core.js?v=5.3.24') < app.index('/app-engine119.js?v=5.3.24')
+    assert app.index('/app-core.js?v=5.3.25') < app.index('/app-engine119.js?v=5.3.25')
     assert "sleepmate:sleepsync-ready" in engine
     assert "<svg viewBox=" in engine
     assert 'name="sleepmate-o2ring-enabled"' in shell

@@ -130,10 +130,10 @@ require("def _repair_stale_tailscale_serve" in ENGINE, "portable Tailscale stale
 require("tailscale_auto_serve" in ENGINE and "tailscale_enable()" in ENGINE, "Tailscale repair does not rebind Serve to the active port")
 
 script_order = [
-    "/app-core.js?v=5.3.24",
-    "/app-engine119.js?v=5.3.24",
-    "/sleepsync-hydration-v529.js?v=5.3.24",
-    "/sleepsync-polish.js?v=5.3.24",
+    "/app-core.js?v=5.3.25",
+    "/app-engine119.js?v=5.3.25",
+    "/sleepsync-hydration-v529.js?v=5.3.25",
+    "/sleepsync-polish.js?v=5.3.25",
 ]
 positions = [UI.find(asset) for asset in script_order]
 require(all(position >= 0 for position in positions) and positions == sorted(positions), "canonical parser-ordered SleepSync script order is missing")
@@ -152,7 +152,7 @@ require("state.latestDay || state.currentDay || state.days[0]" in CORE_UI and "l
 require("d.average_usage_seconds == null ? null : d.average_usage_seconds / 60" in CORE_UI, "zero usage delta is still treated as missing data")
 require("if (state.pullRefreshing) resetPullRefreshUi()" in CORE_UI, "mobile pull-refresh indicator is not transient")
 
-require("sleepmate-aurora.css?v=5.3.24" in UI, "core Aurora stylesheet is not packaged")
+require("sleepmate-aurora.css?v=5.3.25" in UI, "core Aurora stylesheet is not packaged")
 require(".page:not(#page-sleepsync)" in AURORA, "Aurora visual system is not isolated from SleepSync")
 for page in ("#page-dashboard", "#page-patient", "#page-sessions", "#page-events", "#page-reports", "#page-ai", "#page-faq", "#page-equipment", "#page-upload", "#page-logs", "#page-settings"):
     require(page in AURORA, f"Aurora page pass is missing {page}")
@@ -187,10 +187,10 @@ require("if QUIT_REQUEST_FILE.is_file():" in TRAY and "self.quit()" in TRAY and 
 
 # Release/PWA shell. SleepSync asset generations remain pinned, while the release
 # worker uses one atomic shell generation and one page-owned controller reload.
-require('APP_VERSION = "5.3.24"' in VERSION, "release version is not 5.3.24")
+require('APP_VERSION = "5.3.25"' in VERSION, "release version is not 5.3.25")
 require('BUILD_CHANNEL = "stable"' in VERSION, "release channel is not stable")
-require("const SHELL_CACHE='sleepmate-shell-v5.3.24'" in SERVICE_WORKER, "current shell cache generation is missing")
-require("const API_CACHE='sleepmate-api-v5.3.24'" in SERVICE_WORKER, "current API cache generation is missing")
+require("const SHELL_CACHE='sleepmate-shell-v5.3.25'" in SERVICE_WORKER, "current shell cache generation is missing")
+require("const API_CACHE='sleepmate-api-v5.3.25'" in SERVICE_WORKER, "current API cache generation is missing")
 for asset in (
     "/sleepsync-hydration-v529.js",
     "/sleepsync-mobile-v5213.css",
