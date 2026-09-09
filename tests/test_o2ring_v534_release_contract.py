@@ -42,7 +42,7 @@ def fake_service(recordings: list[dict], start: datetime, end: datetime, *, auto
 def test_v534_release_identity_and_single_active_frontend_owner():
     shell = read("cpap/v530_features.py")
     index = read("web/index.html")
-    assert APP_VERSION == "5.3.22"
+    assert APP_VERSION == "5.3.23"
     assert API_VERSION == 19
     assert BUILD_CHANNEL == "stable"
     assert 'UI_VERSION = "5.3.4"' in shell
@@ -222,13 +222,13 @@ def test_v534_reports_dashboard_palette_and_loading_regressions_are_guarded():
 def test_v534_service_workers_only_activate_current_o2_frontend_generation():
     for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         sw = read(path)
-        assert "sleepmate-shell-v5.3.22" in sw
-        assert "/o2ring-v534.css?v=5.3.22" in sw
-        assert "/frontend-v534.js?v=5.3.22" in sw
+        assert "sleepmate-shell-v5.3.23" in sw
+        assert "/o2ring-v534.css?v=5.3.23" in sw
+        assert "/frontend-v534.js?v=5.3.23" in sw
         assert "'/o2ring.js'" in sw
         assert "o2ring-v532.js?v=5.3.3" not in sw
         assert "frontend-v533.js?v=5.3.3" not in sw
-        assert "RELEASE_VERSION='5.3.22'" in sw
+        assert "RELEASE_VERSION='5.3.23'" in sw
 
 
 def test_v534_extracts_affected_sleepsync_days_without_full_rescan_contract():

@@ -18,7 +18,7 @@ def test_pwa_navigation_does_not_create_history_for_edge_back_gesture():
 def test_custom_loader_is_enabled_once_in_pwa():
     assert 'window.__sleepmateBootStarted' in JS
     assert 'html.pwa-standalone #startupSplash{display:grid!important}' in CSS
-    assert 'sleepmate-shell-v5.3.22' in SW
+    assert 'sleepmate-shell-v5.3.23' in SW
 
 
 def test_diagnostic_push_is_human_readable_and_only_on_changed_data():

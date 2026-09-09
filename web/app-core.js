@@ -856,7 +856,7 @@ function showPage(page) {
     logs: 'Naplók',
     settings: 'Beállítások'
   };
-  if ($('#sidebarVersion')) $('#sidebarVersion').textContent = `v${document.querySelector('meta[name="sleepmate-release-version"]')?.content||'5.3.22'}`;
+  if ($('#sidebarVersion')) $('#sidebarVersion').textContent = `v${document.querySelector('meta[name="sleepmate-release-version"]')?.content||'5.3.23'}`;
   $('#pageTitle').textContent = titles[page];
   const subs = {
     dashboard: 'Legutóbbi alvás • trendek • OSCAR-referencia',
