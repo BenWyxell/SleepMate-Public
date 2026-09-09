@@ -15,7 +15,7 @@ def test_o2ring_has_one_static_deterministic_boot_chain():
     frontend = read("web/frontend-v534.js")
 
     for asset in ("frontend-v534.js", "sleepmate-v530.js", "o2ring-data-management.js"):
-        assert index.count(f'src="/{asset}?v=5.3.22"') == 1
+        assert index.count(f'src="/{asset}?v=5.3.24"') == 1
     assert "o2ring-recovery-v5318.js" not in index + frontend
     assert "do_GET" not in installer
     assert "_patch_index" not in installer
@@ -54,8 +54,8 @@ def test_pwa_handover_is_atomic_and_has_no_competing_navigation_or_ack_deadlock(
     assert "SLEEPMATE_CLIENT_READY" not in worker
     assert "SHELL_BY_PATH.get(pathname)" in worker
     assert "releaseMatches(fresh)" in worker
-    assert "sleepmate-shell-v5.3.22" in worker
-    assert "sleepmate-api-v5.3.22" in worker
+    assert "sleepmate-shell-v5.3.24" in worker
+    assert "sleepmate-api-v5.3.24" in worker
     assert "navigator.serviceWorker.addEventListener('controllerchange'" not in core
     controller = index.split("navigator.serviceWorker.addEventListener('controllerchange'", 1)[1].split("})})();", 1)[0]
     assert controller.count("location.reload()") == 1

@@ -1,3 +1,15 @@
+# SleepMate 5.3.24
+
+Célzott Dashboard-javítás az Alvásidő / Alvások kártyához.
+
+- a Dashboard kis alváskártyája most ugyanazt a SleepMate alvásfelismerési logikát használja, mint a Napok és az alvásrészletező
+- a legutóbb befejeződött alvásblokk teljes időtartamát jeleníti meg akkor is, ha az alvás átnyúlik a ResMed déli terápiás napváltásán
+- a kártya szakaszszáma az alvásblokkhoz tartozó összefűzött CPAP-szakaszok számából érkezik
+- a Dashboard Használati idő kártyája és a ResMed déli terápiás nap szerinti bontása változatlan marad
+- regressziós teszt védi, hogy az alváskártya ne térjen vissza a nyers terápiás napi összegzéshez
+
+---
+
 # SleepMate 5.3.22
 
 Automatikus MSI-frissítés tesztkiadás a v5.3.21 → v5.3.22 frissítési út ellenőrzésére.

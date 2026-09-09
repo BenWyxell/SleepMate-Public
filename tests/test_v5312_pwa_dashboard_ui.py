@@ -10,7 +10,7 @@ def read(path: str) -> str:
 
 def test_pwa_dashboard_stylesheet_is_loaded_once_from_canonical_index() -> None:
     index = read("web/index.html")
-    assert index.count("dashboard-pwa-v5312.css?v=5.3.22") == 1
+    assert index.count("dashboard-pwa-v5312.css?v=5.3.24") == 1
 
 
 def test_pwa_dashboard_uses_compact_bento_grids_without_hiding_data() -> None:
@@ -35,5 +35,5 @@ def test_pwa_dashboard_uses_compact_bento_grids_without_hiding_data() -> None:
 def test_pwa_shell_precaches_dashboard_style() -> None:
     for path in ("web/service-worker.js", "web/service-worker-v508-base.js"):
         source = read(path)
-        assert "/dashboard-pwa-v5312.css?v=5.3.22" in source
+        assert "/dashboard-pwa-v5312.css?v=5.3.24" in source
         assert "/dashboard-pwa-v5312.css" in source
