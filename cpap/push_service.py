@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import sqlite3
 import threading
@@ -14,6 +15,7 @@ from urllib.parse import urlparse
 DEFAULT_PREFS = {
     "new_night": True,
     "data_update": True,
+    "sync_complete": True,
     "warning": True,
     "backup_error": True,
 }
@@ -309,18 +311,76 @@ class PushService:
             return self._send_rows(self._rows(endpoint), event_type, title, body, url, extra)
 
     def send_warning_once(self, signature, title, body, url="/#logs"):
+        """Send a diagnostic warning once per human-visible warning message.
+
+        Older builds remembered only one aggregate diagnostics signature. If any
+        unrelated warning was added or removed, that aggregate changed and an old
+        first warning could be pushed again. Keep the aggregate guard for quick
+        repeats, but also persist the warning body's own fingerprint. Existing
+        installations are deliberately baselined on the first v5.3.25 check so a
+        historical warning is not re-announced just because the dedupe format was
+        upgraded.
+        """
         if not signature:
             return {"sent": 0, "failed": 0, "removed": 0}
+        body_signature = hashlib.sha256(f"{title}|{body}".encode("utf-8")).hexdigest()
         with self._lock, self._db() as con:
             old = con.execute("SELECT value FROM meta WHERE key='last_warning_signature'").fetchone()
             if old and old[0] == signature:
                 return {"sent": 0, "failed": 0, "removed": 0}
+
+            history_row = con.execute("SELECT value FROM meta WHERE key='warning_body_history_v5325'").fetchone()
+            history: list[str] = []
+            if history_row:
+                try:
+                    raw = json.loads(history_row[0] or "[]")
+                    if isinstance(raw, list):
+                        history = [str(x) for x in raw if isinstance(x, str)]
+                except Exception:
+                    history = []
+
+            # Upgrade baseline: an installation with an older aggregate warning
+            # marker must not immediately re-push its already-known warning merely
+            # because v5.3.25 introduced per-message deduplication.
+            if history_row is None and old:
+                history = [body_signature]
+                con.execute(
+                    "INSERT INTO meta(key,value) VALUES('warning_body_history_v5325',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (json.dumps(history),),
+                )
+                con.execute(
+                    "INSERT INTO meta(key,value) VALUES('last_warning_signature',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (signature,),
+                )
+                return {"sent": 0, "failed": 0, "removed": 0}
+
+            if body_signature in history:
+                con.execute(
+                    "INSERT INTO meta(key,value) VALUES('last_warning_signature',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (signature,),
+                )
+                return {"sent": 0, "failed": 0, "removed": 0}
             subscriptions = int(con.execute("SELECT COUNT(*) FROM subscriptions").fetchone()[0])
+
         if not subscriptions:
             return {"sent": 0, "failed": 0, "removed": 0}
         result = self.send("warning", title, body, url)
         if result.get("sent"):
             with self._lock, self._db() as con:
+                row = con.execute("SELECT value FROM meta WHERE key='warning_body_history_v5325'").fetchone()
+                history = []
+                if row:
+                    try:
+                        parsed = json.loads(row[0] or "[]")
+                        if isinstance(parsed, list):
+                            history = [str(x) for x in parsed if isinstance(x, str)]
+                    except Exception:
+                        history = []
+                history = [x for x in history if x != body_signature][-127:] + [body_signature]
+                con.execute(
+                    "INSERT INTO meta(key,value) VALUES('warning_body_history_v5325',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (json.dumps(history),),
+                )
                 con.execute(
                     "INSERT INTO meta(key,value) VALUES('last_warning_signature',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                     (signature,),
