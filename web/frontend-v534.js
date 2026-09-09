@@ -6,7 +6,26 @@ const VERSION='5.3.4';
 const q=s=>document.querySelector(s),qa=s=>[...document.querySelectorAll(s)],id=x=>document.getElementById(x);
 const api=async(path,opts={})=>{const r=await fetch(path,{cache:'no-store',...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});const x=await r.json().catch(()=>({}));if(!r.ok)throw new Error(x.error||`HTTP ${r.status}`);return x};
 const setText=(el,value)=>{if(el&&el.textContent!==String(value))el.textContent=String(value)};
-let lastO2Status=null,lastLiveNavEnabled=null,settingsNormalizeRaf=0;
+let lastO2Status=null,lastLiveNavEnabled=null,settingsNormalizeRaf=0,bleQuickBusy=false,diagnosticRaf=0;
+
+function installV5325Styles(){
+  if(id('smV5325TargetedStyles'))return;
+  const style=document.createElement('style');
+  style.id='smV5325TargetedStyles';
+  style.textContent=`
+    @media(max-width:700px){
+      .system-maintenance-panel .settings-actions,.system-maintenance-panel .settings-actions.wrap{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;align-items:stretch!important;width:100%!important}
+      .system-maintenance-panel .settings-actions button{flex:none!important;width:100%!important;min-width:0!important;min-height:40px!important;height:auto!important;padding:9px 10px!important;line-height:1.25!important;white-space:normal!important}
+    }
+    @media(max-width:390px){.system-maintenance-panel .settings-actions,.system-maintenance-panel .settings-actions.wrap{grid-template-columns:minmax(0,1fr)!important}}
+    .o2r-compact-status.sm-o2-ble-toggle{cursor:pointer;user-select:none;-webkit-user-select:none;transition:border-color .16s ease,background .16s ease,box-shadow .16s ease;outline:none}
+    .o2r-compact-status.sm-o2-ble-toggle:hover{border-color:rgba(82,220,255,.55)!important;background:rgba(11,29,44,.78)!important}
+    .o2r-compact-status.sm-o2-ble-toggle:focus-visible{border-color:rgba(82,220,255,.78)!important;box-shadow:0 0 0 3px rgba(82,220,255,.12)!important}
+    .o2r-compact-status.sm-o2-ble-toggle.sm-ble-off>i{background:#e7bb67!important;box-shadow:0 0 9px rgba(231,187,103,.35)}
+    .o2r-compact-status.sm-o2-ble-toggle.sm-ble-busy{opacity:.66;pointer-events:none}
+  `;
+  document.head.appendChild(style);
+}
 
 function normalizePwaSettings(){
   const tabs=q('.settings-inner-tabs'),sel=id('settingsCategorySelect'),push=tabs?.querySelector('[data-settings-tab="push"]'),pwa=tabs?.querySelector('[data-settings-tab="pwa"]'),pushPanel=q('[data-settings-panel="push"]'),pwaPanel=id('smPwaSettingsPanel');
@@ -43,7 +62,7 @@ function normalizeLiveNav(enabled=!!lastO2Status?.settings?.o2ring_enabled){
   else{delete V.NAV.oximetry_live;delete V.ICONS.oximetry_live}
   V.renderBottomNav?.();V.renderPwaEditor?.();
 }
-function normalizeAll(){normalizePwaSettings();normalizeO2Settings();normalizeSetupWizard();normalizeLiveNav()}
+function normalizeAll(){normalizePwaSettings();normalizeO2Settings();normalizeSetupWizard();normalizeLiveNav();installO2BleQuickToggle();normalizeDiagnosticCompletenessCopy()}
 
 function installAdvancedO2Settings(){
   const panel=q('[data-settings-panel="display"]');if(!panel||id('smO2AdvancedV534')){hydrateAdvancedO2Settings();return}
@@ -91,6 +110,54 @@ async function saveO2Toggles(){
   }finally{saveBusy=false;panel?.classList.remove('sm-saving');normalizeAll()}
 }
 function captureO2Toggle(e){if(!['smO2Enabled','smO2Ble','smO2AutoConnect','smO2AutoSync'].includes(e.target?.id))return;e.stopImmediatePropagation();saveO2Toggles()}
+
+function updateO2BleQuickToggle(){
+  const status=id('o2rStatus'),toggle=status?.closest('.o2r-compact-status');if(!toggle)return;
+  const enabled=lastO2Status?.settings?.o2ring_ble_enabled!==false;
+  toggle.classList.toggle('sm-ble-off',!enabled);toggle.classList.toggle('sm-ble-busy',bleQuickBusy);
+  toggle.setAttribute('aria-pressed',enabled?'true':'false');
+  toggle.setAttribute('aria-label',enabled?'Bluetooth kikapcsolása':'Bluetooth bekapcsolása');
+  toggle.title=enabled?'Bluetooth kikapcsolása':'Bluetooth bekapcsolása';
+}
+async function toggleO2BleQuick(){
+  if(bleQuickBusy)return;bleQuickBusy=true;updateO2BleQuickToggle();
+  const statusEl=id('o2rStatus');
+  try{
+    let current=lastO2Status;if(!current?.settings)current=await api('/api/o2ring/status');
+    const next=current?.settings?.o2ring_ble_enabled===false;
+    setText(statusEl,next?'BLE bekapcsolása…':'BLE kikapcsolása…');
+    const settings=await api('/api/o2ring/settings',{method:'POST',body:JSON.stringify({o2ring_ble_enabled:next})});
+    lastO2Status={...(current||{}),settings:{...(current?.settings||{}),...settings}};
+    setChecked('smO2Ble',next);
+    await window.SleepMateO2Ring?.refreshStatus?.();
+    try{lastO2Status=await api('/api/o2ring/status')}catch{}
+  }catch(e){setText(statusEl,e?.message||String(e));try{if(typeof showError==='function')showError(e)}catch{}}
+  finally{bleQuickBusy=false;updateO2BleQuickToggle()}
+}
+function installO2BleQuickToggle(){
+  const status=id('o2rStatus'),toggle=status?.closest('.o2r-compact-status');if(!toggle)return;
+  if(!toggle.__smBleQuick5325){
+    toggle.__smBleQuick5325=true;toggle.id='o2rBleToggle';toggle.classList.add('sm-o2-ble-toggle');toggle.setAttribute('role','button');toggle.tabIndex=0;
+    toggle.addEventListener('click',toggleO2BleQuick);
+    toggle.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleO2BleQuick()}});
+  }
+  updateO2BleQuickToggle();
+}
+function normalizeDiagnosticCompletenessCopy(){
+  const page=id('page-logs');if(!page)return;
+  for(const el of page.querySelectorAll('p,span,small,div')){
+    if(el.children.length)continue;
+    const text=(el.textContent||'').trim();
+    if(text.includes('készíts teljes SD-mentést újra')&&text.includes('BRP')){
+      el.textContent='Tájékoztató adat-teljességi jelzés. A SleepMate a rendelkezésre álló EDF-ekkel tovább dolgozik; önmagában ez nem jelent sérült adatot. Teendő csak akkor indokolt, ha sérült / csonka EDF figyelmeztetés is társul hozzá.';
+    }
+  }
+}
+function installDiagnosticCopyObserver(){
+  const page=id('page-logs');if(!page||page.__smDiag5325)return;page.__smDiag5325=true;
+  const schedule=()=>{if(diagnosticRaf)return;diagnosticRaf=requestAnimationFrame(()=>{diagnosticRaf=0;normalizeDiagnosticCompletenessCopy()})};
+  new MutationObserver(schedule).observe(page,{childList:true,subtree:true,characterData:true});
+}
 
 // Historical source-contract note (pre-v5.3.23): the card used
 // latest?.summary||latest, latestDuration(summary), summary.sessions,
@@ -148,23 +215,23 @@ function waitForDynamicSettings(){
 function settingsVisible(){return !!id('page-settings')?.classList.contains('active')}
 function bind(){
   document.addEventListener('change',captureO2Toggle,true);
-  window.addEventListener('hashchange',()=>{if(settingsVisible())normalizeAll()});
+  window.addEventListener('hashchange',()=>{if(settingsVisible())normalizeAll();requestAnimationFrame(()=>{installO2BleQuickToggle();installDiagnosticCopyObserver();normalizeDiagnosticCompletenessCopy()})});
   window.addEventListener('sleepmate-o2-status',e=>{
     lastO2Status=e.detail||lastO2Status;
-    normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);
+    normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);installO2BleQuickToggle();updateO2BleQuickToggle();
     if(settingsVisible()){hydrateAdvancedO2Settings();normalizeO2Settings()}
   });
   window.addEventListener('sleepmate-o2-config-ready',e=>{
     if(e.detail?.status)lastO2Status=e.detail.status;
     normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);
-    normalizeAll();
+    normalizeAll();installO2BleQuickToggle();
     if(settingsVisible())hydrateAdvancedO2Settings();
   });
-  window.addEventListener('sleepmate-o2-runtime-ready',()=>{normalizeLiveNav();if(settingsVisible())normalizeAll()});
+  window.addEventListener('sleepmate-o2-runtime-ready',()=>{normalizeLiveNav();installO2BleQuickToggle();if(settingsVisible())normalizeAll()});
   try{if(typeof setSettingsTab==='function'&&!setSettingsTab.__sm534){const orig=setSettingsTab;setSettingsTab=function(name){const r=orig(name);requestAnimationFrame(normalizeAll);return r};setSettingsTab.__sm534=true}}catch{}
 }
-async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);if(settingsVisible())hydrateAdvancedO2Settings()}
-function boot(){bind();hookOverviewLoading();watchLatestSessionCard();fixLatestLoading();waitForDynamicSettings();normalizeAll()}
+async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);installO2BleQuickToggle();if(settingsVisible())hydrateAdvancedO2Settings()}
+function boot(){installV5325Styles();bind();hookOverviewLoading();watchLatestSessionCard();fixLatestLoading();waitForDynamicSettings();normalizeAll();installDiagnosticCopyObserver();setTimeout(()=>{installO2BleQuickToggle();normalizeDiagnosticCompletenessCopy()},500)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State,syncLatestSessionCard,refreshLatestSleepCard};
 })();
