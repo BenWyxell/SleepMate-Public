@@ -14,13 +14,11 @@ def compact(path: str) -> str:
     return "".join(read(path).split())
 
 
-def test_sleepsync_has_dedicated_completion_push_after_wifi_restore() -> None:
-    push = read("cpap/push_service.py")
+def test_sleepsync_sends_user_push_after_wifi_restore() -> None:
     integration = read("cpap/sleepsync_integration.py")
 
-    assert '"sync_complete": True' in push
-    assert 'ps.send(\n            "sync_complete"' in integration
-    assert '"SleepSync szinkron kész"' in integration
+    assert "send_therapy_refresh_push" in integration
+    assert '"SleepSync szinkron kész"' not in integration
     assert "_engine_sync_job(self, jid, trigger)" in integration
     assert "SleepMate-SleepSync-Push" in integration
     assert "time.sleep(2.0)" in integration
