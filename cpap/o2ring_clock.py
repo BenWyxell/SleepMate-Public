@@ -34,35 +34,26 @@ def created_at_epoch(value: Any) -> float | None:
 
 
 def detect_recent_one_day_lag(recording: dict[str, Any], *, now_ts: float) -> float | None:
-    """Detect the narrow v5.3.26 migration case: a fresh recording exactly one day late.
+    """Never infer a stored one-day correction from import time alone.
 
-    The O2Ring VLD header contains local device date/time. If the ring RTC is one
-    calendar day behind, a freshly auto-downloaded session has a created_at about
-    24 hours after its stored end_ts. We intentionally do not repair arbitrary old
-    recordings: only the newest, recently-created item is eligible and only when
-    adding exactly one day puts its end close to the import time.
+    v5.3.26 attempted a deliberately narrow automatic repair when ``created_at``
+    was about one day after a VLD's stored end timestamp. Field evidence showed
+    that a *missing newest VLD download* can look like a calendar-day problem in
+    the UI while the last visible historical recording is actually correct.
+
+    Rewriting health-data timestamps from import timing is therefore too
+    speculative. The VLD header remains the source of truth; recovery now happens
+    in the BLE/sync lifecycle instead of mutating an existing recording.
     """
-    created_ts = created_at_epoch(recording.get("created_at"))
-    try:
-        end_ts = float(recording.get("end_ts") or 0.0)
-        start_ts = float(recording.get("start_ts") or 0.0)
-    except (TypeError, ValueError):
-        return None
-    if created_ts is None or end_ts <= start_ts:
-        return None
-    if abs(float(now_ts) - created_ts) > MAX_REPAIR_RECORD_AGE_SECONDS:
-        return None
-    lag = created_ts - end_ts
-    if not (ONE_DAY_LAG_MIN_SECONDS <= lag <= ONE_DAY_LAG_MAX_SECONDS):
-        return None
-    repaired_end = end_ts + DAY_SECONDS
-    if abs(created_ts - repaired_end) > REPAIRED_END_MAX_DISTANCE_SECONDS:
-        return None
-    return DAY_SECONDS
+    _ = recording, now_ts
+    return None
 
 
 def shifted_recording_payload(payload: dict[str, Any], delta_seconds: float) -> dict[str, Any]:
-    """Shift one stored recording while preserving its stable recording_id/raw VLD."""
+    """Shift a recording payload explicitly; retained for controlled/manual tooling.
+
+    This helper is intentionally not used for automatic migration in v5.3.27.
+    """
     delta = float(delta_seconds)
     result = deepcopy(payload)
     original_start = float(result.get("start_ts") or 0.0)
@@ -80,7 +71,7 @@ def shifted_recording_payload(payload: dict[str, Any], delta_seconds: float) -> 
                 continue
     result["time_repair"] = {
         "schema": 1,
-        "reason": "device_clock_one_day_lag",
+        "reason": "explicit_timestamp_shift",
         "delta_seconds": delta,
         "original_start_ts": original_start,
         "original_end_ts": original_end,

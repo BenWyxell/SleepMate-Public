@@ -8,12 +8,63 @@ must not lose the restart merely because the stopping thread is still alive.
 """
 from __future__ import annotations
 
+import time
+
 
 DEFAULT_STOP_TIMEOUT_SECONDS = 20.0
+POST_RECORDING_DRAIN_TIMEOUT_SECONDS = 22.0
+
+
+def _drain_pending_post_recording_sync(manager, timeout: float) -> None:
+    """Give a just-removed ring a short chance to finish its final VLD sync.
+
+    The O2Ring can expose the closed VLD a few seconds after the worn->off
+    transition. If the user disables BLE immediately, an unconditional stop used
+    to terminate the retry loop before that newest file appeared. Only an already
+    pending post-recording sync is drained here; ordinary OFF operations remain
+    immediate.
+    """
+    snapshot = getattr(manager, "snapshot", None)
+    if not callable(snapshot):
+        return
+    try:
+        state = snapshot()
+    except Exception:
+        return
+    if not bool((state or {}).get("post_recording_sync_pending")):
+        return
+
+    # Wake the normal FileList path immediately, then let its existing 2/5/10/20
+    # second retries do the real work. No alternate download implementation is
+    # introduced here.
+    try:
+        request_sync = getattr(manager, "request_sync", None)
+        if callable(request_sync):
+            request_sync()
+    except Exception:
+        pass
+
+    deadline = time.monotonic() + max(0.0, min(float(timeout), POST_RECORDING_DRAIN_TIMEOUT_SECONDS))
+    while time.monotonic() < deadline:
+        try:
+            if not bool((snapshot() or {}).get("post_recording_sync_pending")):
+                return
+        except Exception:
+            return
+        thread = getattr(manager, "_thread", None)
+        if thread is not None and callable(getattr(thread, "is_alive", None)) and not thread.is_alive():
+            return
+        time.sleep(0.25)
 
 
 def stop_and_wait(manager, timeout: float = DEFAULT_STOP_TIMEOUT_SECONDS) -> None:
-    """Request BLE stop and wait until the worker can no longer mutate state."""
+    """Request BLE stop and wait until the worker can no longer mutate state.
+
+    When the ring has just been removed, first preserve the normal post-recording
+    retry window so the newest VLD is not lost merely because BLE was switched off
+    immediately from the Oximetry quick toggle.
+    """
+    _drain_pending_post_recording_sync(manager, POST_RECORDING_DRAIN_TIMEOUT_SECONDS)
     manager.stop()
     thread = getattr(manager, "_thread", None)
     if thread is not None and thread.is_alive():
@@ -56,6 +107,7 @@ def start_reliably(manager, *, sync_on_start: bool = True,
 
 __all__ = [
     "DEFAULT_STOP_TIMEOUT_SECONDS",
+    "POST_RECORDING_DRAIN_TIMEOUT_SECONDS",
     "stop_and_wait",
     "start_reliably",
 ]

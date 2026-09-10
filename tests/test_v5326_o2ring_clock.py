@@ -15,21 +15,17 @@ def test_vendor_settime_format_is_local_wall_clock() -> None:
     assert value == "2026-09-10,06:07:08"
 
 
-def test_exact_recent_one_day_lag_is_detected_but_normal_import_is_not() -> None:
+def test_v5327_does_not_infer_one_day_shift_from_import_time() -> None:
     now = time.time()
     stale = {
         "start_ts": now - DAY_SECONDS - 7 * 3600,
         "end_ts": now - DAY_SECONDS - 60,
         "created_at": datetime.now().astimezone().isoformat(),
     }
-    assert detect_recent_one_day_lag(stale, now_ts=now) == DAY_SECONDS
-
-    normal = dict(stale)
-    normal["end_ts"] = now - 60
-    assert detect_recent_one_day_lag(normal, now_ts=now) is None
+    assert detect_recent_one_day_lag(stale, now_ts=now) is None
 
 
-def test_timestamp_shift_preserves_recording_identity_and_moves_all_samples() -> None:
+def test_timestamp_shift_helper_preserves_identity_but_is_not_automatic() -> None:
     payload = {
         "recording_id": "stable-id",
         "start_ts": 1000.0,
@@ -82,37 +78,30 @@ def _service_without_init(store: OximetryStore) -> O2RingService:
     return service
 
 
-def test_v5326_repairs_already_saved_latest_recording_exactly_once(tmp_path) -> None:
+def test_v5327_keeps_existing_recording_timestamps_unchanged(tmp_path) -> None:
     store = OximetryStore(tmp_path)
     now = time.time()
-    stale_end = now - DAY_SECONDS - 30
-    stale_start = stale_end - 3600
+    stored_end = now - DAY_SECONDS - 30
+    stored_start = stored_end - 3600
     saved = store.save_recording(
         device_id="ring",
-        start_ts=stale_start,
-        end_ts=stale_end,
-        samples=[OximetrySample(timestamp=stale_start, spo2=96, heart_rate=60)],
-        source_name="stale.vld",
+        start_ts=stored_start,
+        end_ts=stored_end,
+        samples=[OximetrySample(timestamp=stored_start, spo2=96, heart_rate=60)],
+        source_name="historical.vld",
         raw_bytes=b"raw-vld-kept",
     )
     service = _service_without_init(store)
 
     fixed = service._repair_latest_one_day_clock_lag()
-    assert fixed is not None
+    assert fixed is None
     row = store.get_recording(saved["recording_id"])
     assert row is not None
-    assert abs(float(row["start_ts"]) - (stale_start + DAY_SECONDS)) < 0.01
-    assert abs(float(row["end_ts"]) - (stale_end + DAY_SECONDS)) < 0.01
-    assert abs(float(row["samples"][0]["timestamp"]) - (stale_start + DAY_SECONDS)) < 0.01
+    assert abs(float(row["start_ts"]) - stored_start) < 0.01
+    assert abs(float(row["end_ts"]) - stored_end) < 0.01
+    assert abs(float(row["samples"][0]["timestamp"]) - stored_start) < 0.01
     assert (store.raw_dir / f"{saved['recording_id']}.vld").read_bytes() == b"raw-vld-kept"
-    assert service._clock_repair_marker_path().is_file()
-
-    # Marker makes the migration idempotent; a restart cannot shift the same
-    # recording by another day.
-    assert service._repair_latest_one_day_clock_lag() is None
-    again = store.get_recording(saved["recording_id"])
-    assert again is not None
-    assert abs(float(again["start_ts"]) - (stale_start + DAY_SECONDS)) < 0.01
+    assert not service._clock_repair_marker_path().is_file()
 
 
 def test_clock_sync_is_queued_only_when_ring_is_not_recording(tmp_path) -> None:
@@ -127,6 +116,5 @@ def test_clock_sync_is_queued_only_when_ring_is_not_recording(tmp_path) -> None:
     value = service.manager.queued[0]["SetTIME"]
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2},\d{2}:\d{2}:\d{2}", value)
 
-    # Repeated live packets must not spam device configuration writes.
     service._queue_device_clock_sync({"connected": True, "worn": False, "measuring": False})
     assert len(service.manager.queued) == 1
