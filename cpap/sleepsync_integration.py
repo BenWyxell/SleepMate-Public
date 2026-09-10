@@ -11,6 +11,7 @@ from .sleepsync_engine_v2 import (
     get_service,
     install_sleepsync_integration as _install_engine,
 )
+from .therapy_push_v5328 import install_therapy_push_v5328, send_therapy_refresh_push
 from .sleepsync_wifi_v5215 import install_sleepsync_wifi_v5215
 
 
@@ -76,9 +77,10 @@ SleepSyncService.save_settings = _resilient_save_settings
 # The legacy acquisition path refreshes SleepMate while the PC is still connected
 # to the isolated ez Share WLAN. A Web Push attempt at that exact point has no
 # internet route and therefore cannot reach Apple. Keep the proven acquisition
-# sequence intact, then send the user-facing completion notification only after
-# _sync_job has returned from _run_with_wifi and restored the previous internet
-# connection. Notification delivery is best effort and never changes sync success.
+# sequence intact. Once _sync_job has restored the previous internet connection,
+# send the same therapy-centric notification contract used by every other refresh
+# path. Technical file counts stay in SleepSync history/logs and never become the
+# user-facing notification.
 _engine_sync_job = SleepSyncService._sync_job
 
 
@@ -104,29 +106,20 @@ def _post_sync_notifications(self: SleepSyncService, result: dict[str, Any]) -> 
     ps = getattr(self.handler, "push_service", None)
     if not ps:
         return
+
+    imported = result.get("import") if isinstance(result, dict) else None
+    if not isinstance(imported, dict):
+        imported = {}
     try:
-        changed = _changed_import_count(result)
-        checked = int(result.get("checked_files", 0) or 0)
-        body = (
-            f"A szinkron sikeresen befejeződött • {changed} új vagy módosult fájl feldolgozva."
-            if changed
-            else "A szinkron sikeresen befejeződött • minden naprakész."
-        )
-        push_result = ps.send(
-            "sync_complete",
-            "SleepSync szinkron kész",
-            body,
-            "/#sleepsync",
-            {"checked_files": checked, "changed_files": changed},
-        )
+        push_result = send_therapy_refresh_push(self.handler, imported, "SleepSync szinkron")
         if push_result.get("failed"):
             self.log(
-                "SleepSync sikerértesítés nem minden feliratkozásra jutott el: "
+                "A CPAP-terápia értesítés nem minden feliratkozásra jutott el: "
                 + "; ".join(str(x) for x in (push_result.get("errors") or [])[:2]),
                 "WARN",
             )
     except Exception as exc:
-        self.log(f"SleepSync sikerértesítés küldése sikertelen: {exc}", "WARN")
+        self.log(f"SleepSync utáni CPAP-terápia értesítés sikertelen: {exc}", "WARN")
 
     # Only changed therapy data can introduce a new diagnostic condition. Run
     # this after internet restoration as well; BRP/PLD/EVE completeness details
@@ -195,6 +188,7 @@ def install_sleepsync_integration(app_module) -> None:
     by guessing at frontend timing.
     """
     _install_engine(app_module)
+    install_therapy_push_v5328(app_module)
 
     handler_cls = app_module.Handler
     original_get = handler_cls.do_GET
