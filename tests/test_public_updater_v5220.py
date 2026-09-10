@@ -52,4 +52,4 @@ def test_cloudflare_saved_hostname_provenance_and_cache_bust():
     assert '/first-run.css?v=4' in first
     assert '/first-run.js?v=4' in hydration
     assert "/first-run.js?v=4" in source_loader
-    assert "/sleepsync-hydration-v529.js?v=5.3.26" in source_loader
+    assert "/sleepsync-hydration-v529.js?v=5.3.27" in source_loader

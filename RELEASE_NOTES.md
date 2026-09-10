@@ -1,3 +1,17 @@
+# SleepMate 5.3.27
+
+Korrekció az O2Ring legutóbbi felvételének kezeléséhez.
+
+- A v5.3.26 automatikus, importidőből következtetett +1 napos időbélyeg-javítása letiltva: meglévő O2Ring felvétel dátumát a program többé nem írja át pusztán azért, mert a friss mérés hiányzik a listából.
+- A BLE kikapcsolása előtt a SleepMate, ha éppen folyamatban van a gyűrű levétele utáni automatikus felvétel-szinkron, rövid ideig hagyja lefutni a meglévő FileList/VLD retry folyamatot, és csak utána állítja le a Bluetooth háttérfolyamatot.
+- Ez megelőzi azt az esetet, amikor a gyors BLE-kikapcsolás megszakítja a legfrissebb, még lezárás alatt álló VLD letöltését.
+- A már meglévő, helyes történeti felvételek változatlanok maradnak.
+- A gyűrű eszközórájának biztonságos SetTIME szinkronja változatlanul csak nem viselt/nem mérő állapotban történhet.
+
+Ha egy korábbi mérés már kimaradt a helyi SleepMate-adatokból, a gyűrűn még meglévő VLD a BLE visszakapcsolása és egy Szinkron futtatása után tölthető le; a SleepMate nem hamisít helyette új időbélyeget.
+
+---
+
 # SleepMate 5.3.26
 
 O2Ring időbélyeg- és eszközóra-javítás.

@@ -11,14 +11,14 @@ def read(path: str) -> str:
 def test_packaged_index_injects_dashboard_pwa_stylesheet():
     spec = read("build/windows/SleepMate.spec")
     index = read("web/index.html")
-    assert index.count('/dashboard-pwa-v5312.css?v=5.3.26') == 1
+    assert index.count('/dashboard-pwa-v5312.css?v=5.3.27') == 1
     assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
 
 
 def test_packaged_worker_keeps_dashboard_pwa_stylesheet_network_first():
     base = read("web/service-worker-v508-base.js")
     spec = read("build/windows/SleepMate.spec")
-    assert "'/dashboard-pwa-v5312.css?v=5.3.26'" in base
+    assert "'/dashboard-pwa-v5312.css?v=5.3.27'" in base
     assert "'/dashboard-pwa-v5312.css'" in base
     assert "shutil.copytree(WEB_SOURCE, WEB_GENERATED)" in spec
 

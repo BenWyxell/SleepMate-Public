@@ -180,7 +180,7 @@ def test_phone_web_and_pwa_use_first_paint_mobile_performance_mode():
         assert "event.respondWith(currentCodeAsset(url.pathname))" in worker
     assert "document.documentElement.classList.toggle('sm-phone-ui',phone)" in html
     assert "document.documentElement.classList.toggle('sm-phone-ui',phone)" in shell
-    assert html.index('/app-core.js?v=5.3.26') < html.index('/app-engine119.js?v=5.3.26')
+    assert html.index('/app-core.js?v=5.3.27') < html.index('/app-engine119.js?v=5.3.27')
     assert "html.sm-phone-ui .sm-starfield" in css
     assert "backdrop-filter:none!important" in css
     assert "html.sm-phone-ui .sm-aurora-flow .flow{stroke-dashoffset:0!important}" in css

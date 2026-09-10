@@ -40,8 +40,8 @@ def test_startup_has_one_canonical_web_entrypoint_and_second_launch_signals_exis
     main = text("sleepmate_main.py")
     assert html.count('id="startupSplash"') == 1
     assert "window.__sleepmateBootStarted" in js
-    assert html.count('src="/app-core.js?v=5.3.26"') == 1
-    assert html.count('src="/app-engine119.js?v=5.3.26"') == 1
+    assert html.count('src="/app-core.js?v=5.3.27"') == 1
+    assert html.count('src="/app-engine119.js?v=5.3.27"') == 1
     assert "OPEN_REQUEST_FILE" in tray
     assert "monitor_open_requests" in tray
     assert "OPEN_REQUEST_FILE.write_text" in tray

@@ -24,5 +24,5 @@ assert 'endpoint=endpoint' in BACKEND
 assert 'con.close()' in PUSH
 assert 'def maintenance(self)' in PUSH
 assert "_looks_like_sqlite" in SERVICES and "push.sqlite3" in SERVICES
-assert "sleepmate-shell-v5.3.26" in SW
+assert "sleepmate-shell-v5.3.27" in SW
 print('PASS: compact settings/AI UI, gesture arbitration, targeted push test and push backup fix present')
