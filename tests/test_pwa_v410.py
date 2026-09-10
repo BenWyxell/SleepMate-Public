@@ -19,7 +19,7 @@ assert 'mobileMenuToggle' in html and 'sidebarScrim' in html and 'mobileMenuClos
 assert '.sidebar.mobile-open' in css and 'width:288px!important' in css
 assert 'function setMobileSidebar(open)' in js and 'closeMobileSidebar()' in js
 assert 'patientPhotoUrl' in js and 'photo_version' in js
-assert 'sleepmate-shell-v5.3.25' in sw and 'sleepmate-splash-v410.webp' in sw
+assert 'sleepmate-shell-v5.3.26' in sw and 'sleepmate-splash-v410.webp' in sw
 assert 'APP_VERSION' in app and 'from cpap.version import APP_NAME, APP_VERSION' in app
 
 with tempfile.TemporaryDirectory() as td:

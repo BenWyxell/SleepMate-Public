@@ -34,13 +34,13 @@ def test_ai_chat_does_not_ios_zoom_and_autogrows():
 
 
 def test_mobile5_cache_bust():
-    assert 'sleepmate-shell-v5.3.25' in SW
+    assert 'sleepmate-shell-v5.3.26' in SW
     assert "const UI_VERSION='5.3.4'" in SW
-    assert 'sleepmate-api-v5.3.25' in SW
-    assert '/style.css?v=5.3.25' in SW
-    assert '/app-core.js?v=5.3.25' in SW
-    assert '/style.css?v=5.3.25' in HTML
-    assert '/app-core.js?v=5.3.25' in HTML
+    assert 'sleepmate-api-v5.3.26' in SW
+    assert '/style.css?v=5.3.26' in SW
+    assert '/app-core.js?v=5.3.26' in SW
+    assert '/style.css?v=5.3.26' in HTML
+    assert '/app-core.js?v=5.3.26' in HTML
     assert 'UI_VERSION = "5.3.4"' in RECOVERY
     assert '_patch_index' not in RECOVERY
     assert 'do_GET' not in RECOVERY

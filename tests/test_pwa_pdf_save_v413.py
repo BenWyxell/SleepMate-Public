@@ -10,6 +10,6 @@ assert 'navigator.share' in js and 'navigator.canShare' in js
 assert 'newFile([blob],name' in compact
 assert 'isApplePwa()' in js
 assert 'PDF elkészült. Koppints a „Mentés a Fájlokba” gombra.' in js
-assert '/style.css?v=5.3.25' in html and '/app-core.js?v=5.3.25' in html
-assert "sleepmate-shell-v5.3.25" in sw
+assert '/style.css?v=5.3.26' in html and '/app-core.js?v=5.3.26' in html
+assert "sleepmate-shell-v5.3.26" in sw
 print('PASS: current iOS/PWA PDF save-to-Files flow')
