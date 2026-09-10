@@ -1,3 +1,17 @@
+# SleepMate 5.3.28
+
+A PWA/Web Push CPAP-értesítések mostantól technikai fájlszámok helyett a tényleges feldolgozott terápiáról adnak rövid, használható összefoglalót.
+
+- Az értesítés címe egységesen **„CPAP terápia feldolgozva”**; az „éjszaka” megnevezés kikerült az értesítésből, így nappali szundi/maszkhasználat esetén is helyes.
+- Az értesítés tartalma: **Használat • AHI • Szivárgás P95**, például: `Használat: 1:57 • AHI: 0.8 • Szivárgás P95: 2.4 L/perc`.
+- A terápia kiválasztása a frissítéssel ténylegesen érintett EDF-szakaszokból történik, majd a SleepMate meglévő összefűzött alvás/terápia blokkját használja; ezért egy nappali szundi nem kapja meg tévesen a teljes ResMed terápiás nap összegét.
+- Ugyanez a terápiaértesítés működik kézi frissítésnél, automatikus frissítésnél, importnál és SleepSyncnél is.
+- SleepSync esetén a push továbbra is csak az internetkapcsolat visszaállítása után indul, de a „6 új vagy módosult fájl” jellegű technikai értesítés megszűnik.
+- Ha a frissítés nem hozott új vagy módosult terápiás blokkot, nem érkezik felesleges „minden naprakész” push.
+- A diagnosztikai és backup-hiba értesítések változatlanul külön események maradnak.
+
+---
+
 # SleepMate 5.3.27
 
 Korrekció az O2Ring legutóbbi felvételének kezeléséhez.
