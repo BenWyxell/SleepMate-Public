@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import threading
+import time
 import urllib.parse
 from typing import Any
 
 from .o2ring_ble import O2RingBLEManager
+from .o2ring_clock import (
+    DAY_SECONDS,
+    created_at_epoch,
+    detect_recent_one_day_lag,
+    format_device_time,
+    shifted_recording_payload,
+)
 from .o2ring_export import export_o2ring_data
 from .o2ring_lifecycle import start_reliably, stop_and_wait
 from .o2ring_vld import parse_vld
@@ -37,12 +46,20 @@ DEFAULTS = {
 
 
 class O2RingService:
+    CLOCK_SYNC_COOLDOWN_SECONDS = 6 * 60 * 60
+    CLOCK_REPAIR_MARKER = "clock_repair_v5326.json"
+
     def __init__(self, app_module):
         self.app = app_module
         self.store = OximetryStore(app_module.STATE_BASE / "private")
         self._lock = threading.RLock()
         self._known_source_names: set[str] = set()
         self._last_export_folder: Path | None = None
+        self._last_clock_sync_monotonic = 0.0
+        # v5.3.26 one-time migration runs before BLE can import anything new.
+        # It only touches the newest recording when created_at proves that its
+        # VLD clock was almost exactly one day behind at download time.
+        self._repair_latest_one_day_clock_lag()
         # This must happen before the BLE manager is allowed to start. Deleted
         # O2Ring sessions can still remain in ring memory; treating persisted
         # tombstones as known at construction time closes the restart race where
@@ -66,6 +83,129 @@ class O2RingService:
             and cfg.get("o2ring_ble_enabled", True)
             and cfg.get("o2ring_auto_connect", True)
         )
+
+    def _clock_repair_marker_path(self) -> Path:
+        return self.store.root / "oximetry" / self.CLOCK_REPAIR_MARKER
+
+    def _write_clock_repair_marker(self, payload: dict[str, Any]) -> None:
+        path = self._clock_repair_marker_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        body = {
+            "schema": 1,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            **payload,
+        }
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, path)
+
+    def _repair_latest_one_day_clock_lag(self) -> dict[str, Any] | None:
+        """One-time, conservative repair for a freshly saved VLD exactly one day late."""
+        marker = self._clock_repair_marker_path()
+        if marker.is_file():
+            return None
+        try:
+            rows = list(self.store.list_recordings())
+            if not rows:
+                return None
+
+            def imported_at(row: dict[str, Any]) -> float:
+                return float(created_at_epoch(row.get("created_at")) or 0.0)
+
+            latest = max(rows, key=imported_at)
+            created_ts = imported_at(latest)
+            if created_ts <= 0:
+                return None
+            delta = detect_recent_one_day_lag(latest, now_ts=time.time())
+            if delta != DAY_SECONDS:
+                return None
+
+            rid = str(latest.get("recording_id") or "").strip()
+            if not rid:
+                return None
+            payload = self.store.get_recording(rid)
+            if not isinstance(payload, dict):
+                return None
+            start_ts = float(payload.get("start_ts") or 0.0)
+            end_ts = float(payload.get("end_ts") or 0.0)
+            if end_ts <= start_ts:
+                return None
+
+            repaired_start = start_ts + delta
+            repaired_end = end_ts + delta
+            # Never create an accidental duplicate. Two genuine recordings on the
+            # same calendar day are valid, so collision means same near-identical
+            # time interval, not merely the same date.
+            for other in rows:
+                if str(other.get("recording_id") or "") == rid:
+                    continue
+                try:
+                    other_start = float(other.get("start_ts") or 0.0)
+                    other_end = float(other.get("end_ts") or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if abs(other_start - repaired_start) <= 120 and abs(other_end - repaired_end) <= 120:
+                    return None
+
+            repaired = shifted_recording_payload(payload, delta)
+            target = self.store.recordings_dir / f"{rid}.json"
+            tmp = target.with_suffix(".repair.tmp")
+            tmp.write_text(
+                json.dumps(repaired, ensure_ascii=False, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            os.replace(tmp, target)
+            self._write_clock_repair_marker({
+                "status": "repaired",
+                "recording_id": rid,
+                "source_name": payload.get("source_name"),
+                "delta_seconds": delta,
+                "original_start_ts": start_ts,
+                "original_end_ts": end_ts,
+                "repaired_start_ts": repaired_start,
+                "repaired_end_ts": repaired_end,
+            })
+            try:
+                self.app.Handler.persistent_log.append(
+                    "INFO",
+                    "o2ring",
+                    "O2Ring időbélyeg automatikusan javítva: a friss felvétel eszközórája egy nappal késett.",
+                    {"recording_id": rid, "delta_seconds": delta, "source_name": payload.get("source_name")},
+                )
+            except Exception:
+                pass
+            return repaired
+        except Exception as exc:
+            # No data loss on migration failure. The raw VLD and original JSON
+            # remain untouched unless the complete repaired JSON was atomically
+            # written. Keep the marker absent so a later clean startup can retry.
+            try:
+                self.app.Handler.persistent_log.append(
+                    "WARN", "o2ring", f"O2Ring egyszeri időbélyeg-javítás kihagyva: {exc}", {}
+                )
+            except Exception:
+                pass
+            return None
+
+    def _queue_device_clock_sync(self, state: dict[str, Any]) -> None:
+        """Keep the ring's local clock aligned without ever changing an active recording."""
+        if not state.get("connected"):
+            return
+        if state.get("measuring") or state.get("worn") is True:
+            return
+        now = time.monotonic()
+        if self._last_clock_sync_monotonic and now - self._last_clock_sync_monotonic < self.CLOCK_SYNC_COOLDOWN_SECONDS:
+            return
+        # Viatom Oxy CMD_CONFIG expects SetTIME as "yyyy-MM-dd,HH:mm:ss".
+        value = format_device_time()
+        self.manager.queue_device_config({"SetTIME": value})
+        self._last_clock_sync_monotonic = now
+        try:
+            self.app.Handler.persistent_log.append(
+                "INFO", "o2ring", "O2Ring eszközóra szinkronizálása előkészítve.", {"device_time": value}
+            )
+        except Exception:
+            pass
 
     def _load_known_names(self) -> None:
         known = {
@@ -115,15 +255,20 @@ class O2RingService:
             )
         except Exception:
             pass
+        # If the one-day-late file was still only on the ring when v5.3.26
+        # started, give the just-imported newest recording the same conservative
+        # migration check. Once repaired, the marker makes this permanently
+        # idempotent.
+        self._repair_latest_one_day_clock_lag()
 
     def _remember_connected_device(self, state: dict[str, Any]) -> None:
         address = str(state.get("device_address") or "").strip()
-        if not address:
-            return
-        cfg = self.settings()
-        if not str(cfg.get("o2ring_preferred_address") or "").strip():
-            self.app.save_config({"o2ring_preferred_address": address})
-            self.manager.set_preferred_device(address)
+        if address:
+            cfg = self.settings()
+            if not str(cfg.get("o2ring_preferred_address") or "").strip():
+                self.app.save_config({"o2ring_preferred_address": address})
+                self.manager.set_preferred_device(address)
+        self._queue_device_clock_sync(state)
 
     def settings(self) -> dict[str, Any]:
         cfg = dict(DEFAULTS)
