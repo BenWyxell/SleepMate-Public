@@ -203,6 +203,56 @@ function watchLatestSessionCard(){
   ob.observe(status,{childList:true,characterData:true,subtree:true});
   ob.observe(sessions,{childList:true,characterData:true,subtree:true});
 }
+
+// The core trend renderer intentionally draws roughly six date labels and always
+// adds the newest date. On narrow phone/PWA canvases the penultimate scheduled
+// label can then collide with that forced final label. Keep the existing sampling
+// and all chart data untouched; only suppress labels whose painted rectangles
+// would overlap, while always reserving room for the newest date.
+let adaptiveTrendAxisDays=null;
+function adaptiveTrendDaySet(canvas,rows,kind){
+  if(!canvas||!Array.isArray(rows)||!rows.length)return null;
+  const n=rows.length,step=Math.max(1,Math.ceil(n/6)),candidates=[];
+  for(let i=0;i<n;i++)if(i%step===0||i===n-1)candidates.push(i);
+  if(candidates.length<2)return new Set(candidates.map(i=>String(rows[i]?.day??'')));
+  const rect=canvas.getBoundingClientRect(),w=Math.max(1,rect.width||canvas.clientWidth||0),h=Math.max(1,rect.height||canvas.clientHeight||0);
+  const pr=typeof window.trendRect==='function'?window.trendRect(w,h):{l:48,w:Math.max(1,w-66)};
+  const pos=(i)=>{
+    if(kind==='line'&&typeof window.trendX==='function')return window.trendX(i,n,pr);
+    if(kind!=='line'&&typeof window.trendBarX==='function')return window.trendBarX(i,n,pr);
+    return pr.l+(n<=1?0:i/(n-1))*pr.w;
+  };
+  const ctx=canvas.getContext('2d');
+  ctx.save();ctx.font='10px Segoe UI';
+  const box=i=>{
+    const text=typeof window.trendDateLabel==='function'?window.trendDateLabel(rows[i]):String(rows[i]?.day??''),tw=Math.max(1,ctx.measureText(text).width),x=pos(i),left=Math.max(pr.l,Math.min(pr.l+pr.w-tw,x-tw/2));
+    return{left,right:left+tw};
+  };
+  const keep=new Set(),first=candidates[0],last=candidates.at(-1),lastBox=box(last);
+  keep.add(String(rows[first]?.day??''));
+  let previous=box(first).right;
+  for(const i of candidates.slice(1,-1)){
+    const b=box(i);
+    if(b.left<previous+8||b.right>lastBox.left-8)continue;
+    keep.add(String(rows[i]?.day??''));previous=b.right;
+  }
+  keep.add(String(rows[last]?.day??''));
+  ctx.restore();
+  return keep;
+}
+function installAdaptiveDashboardTrendAxis(){
+  if(window.__smAdaptiveDashboardTrendAxis5329)return;
+  const originalLabel=window.trendDateLabel;
+  if(typeof originalLabel!=='function')return;
+  window.__smAdaptiveDashboardTrendAxis5329=true;
+  window.trendDateLabel=function(row){const text=originalLabel(row);if(!adaptiveTrendAxisDays)return text;return adaptiveTrendAxisDays.has(String(row?.day??''))?text:''};
+  const wrap=(name,kind)=>{
+    const original=window[name];if(typeof original!=='function'||original.__smAdaptiveAxis5329)return;
+    const wrapped=function(canvas,rows,...rest){const previous=adaptiveTrendAxisDays;adaptiveTrendAxisDays=adaptiveTrendDaySet(canvas,rows,kind);try{return original.call(this,canvas,rows,...rest)}finally{adaptiveTrendAxisDays=previous}};
+    wrapped.__smAdaptiveAxis5329=true;wrapped.__smOriginal=original;window[name]=wrapped;
+  };
+  wrap('drawTrendLine','line');wrap('drawUsageBars','bar');wrap('drawEventBars','bar');
+}
 function waitForDynamicSettings(){
   normalizeAll();const page=id('page-settings');if(!page)return;
   const done=()=>!!(id('smPwaSettingsPanel')&&id('smO2Master')&&id('frSettingsReopen'));
@@ -231,6 +281,7 @@ function bind(){
   try{if(typeof setSettingsTab==='function'&&!setSettingsTab.__sm534){const orig=setSettingsTab;setSettingsTab=function(name){const r=orig(name);requestAnimationFrame(normalizeAll);return r};setSettingsTab.__sm534=true}}catch{}
 }
 async function refreshO2State(){try{lastO2Status=await api('/api/o2ring/status')}catch{lastO2Status=null}normalizeLiveNav(!!lastO2Status?.settings?.o2ring_enabled);installO2BleQuickToggle();if(settingsVisible())hydrateAdvancedO2Settings()}
+installAdaptiveDashboardTrendAxis();
 function boot(){installV5325Styles();bind();hookOverviewLoading();watchLatestSessionCard();fixLatestLoading();waitForDynamicSettings();normalizeAll();installDiagnosticCopyObserver();setTimeout(()=>{installO2BleQuickToggle();normalizeDiagnosticCompletenessCopy()},500)}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 window.SleepMateFrontendV534={normalize:normalizeAll,version:VERSION,refreshO2State,syncLatestSessionCard,refreshLatestSleepCard};
