@@ -24,8 +24,8 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
     root = Path(__file__).resolve().parents[1]
     sw = (root / "web" / "service-worker.js").read_text(encoding="utf-8")
 
-    assert "sleepmate-shell-v5.3.28" in sw
-    assert "sleepmate-api-v5.3.28" in sw
+    assert "sleepmate-shell-v5.3.29" in sw
+    assert "sleepmate-api-v5.3.29" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw
@@ -43,8 +43,8 @@ def test_pwa_precaches_sleep_feature_and_rotates_shell_cache():
 def test_packaged_service_worker_base_precaches_same_sleep_feature():
     root = Path(__file__).resolve().parents[1]
     sw = (root / "web" / "service-worker-v508-base.js").read_text(encoding="utf-8")
-    assert "sleepmate-shell-v5.3.28" in sw
-    assert "sleepmate-api-v5.3.28" in sw
+    assert "sleepmate-shell-v5.3.29" in sw
+    assert "sleepmate-api-v5.3.29" in sw
     for asset in SLEEP_ASSETS:
         assert asset in sw
     assert REFRESH_ASSET in sw

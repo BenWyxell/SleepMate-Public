@@ -1,3 +1,12 @@
+# SleepMate 5.3.29
+
+- A Dashboard trenddiagramok X tengelye mobil/PWA nézetben már nem engedi egymásra csúszni a dátumfeliratokat.
+- A legfrissebb dátum mindig megmarad, a köztes feliratok pedig csak akkor jelennek meg, ha ténylegesen elférnek egymás mellett.
+- A javítás egységesen érvényes az AHI-, használat-, esemény-, légzési, valamint a Dashboard O2Ring SpO₂- és pulzustrendjeire.
+- A diagramok adataihoz, pontjaihoz, skáláihoz és terápiás számításaihoz a módosítás nem nyúl.
+
+---
+
 # SleepMate 5.3.28
 
 A PWA/Web Push CPAP-értesítések mostantól technikai fájlszámok helyett a tényleges feldolgozott terápiáról adnak rövid, használható összefoglalót.

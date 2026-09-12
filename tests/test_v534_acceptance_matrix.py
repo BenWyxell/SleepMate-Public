@@ -17,21 +17,21 @@ def test_acceptance_p0_single_frontend_owner_and_stale_pwa_recovery():
     index = read("web/index.html")
     sw = read("web/service-worker.js")
     base = read("web/service-worker-v508-base.js")
-    assert APP_VERSION == "5.3.28"
+    assert APP_VERSION == "5.3.29"
     assert 'UI_VERSION = "5.3.4"' in shell
     assert "o2ring-v532.js" not in shell
     assert "frontend-v533.js" not in shell
     assert "frontend-v534.js" in index
     assert "o2ring-v534.css" in index
     for worker in (sw, base):
-        assert "sleepmate-shell-v5.3.28" in worker
-        assert "sleepmate-api-v5.3.28" in worker
+        assert "sleepmate-shell-v5.3.29" in worker
+        assert "sleepmate-api-v5.3.29" in worker
         assert "/o2ring.js" in worker
-        assert "/frontend-v534.js?v=5.3.28" in worker
-        assert "/o2ring-v534.css?v=5.3.28" in worker
+        assert "/frontend-v534.js?v=5.3.29" in worker
+        assert "/o2ring-v534.css?v=5.3.29" in worker
         assert "/o2ring-v532.js" not in worker
         assert "/frontend-v533.js" not in worker
-        assert "RELEASE_VERSION='5.3.28'" in worker
+        assert "RELEASE_VERSION='5.3.29'" in worker
         assert "SLEEPMATE_SHELL_READY" in worker
         assert "event.respondWith(navigationFallback(request))" in worker
         assert "event.respondWith(currentCodeAsset(url.pathname))" in worker

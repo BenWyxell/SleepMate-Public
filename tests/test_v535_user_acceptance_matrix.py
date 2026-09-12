@@ -14,7 +14,7 @@ FRONT = read('web/frontend-v534.js')
 HTML = read('web/index.html')
 DOMAIN = read('cpap/oximetry.py')
 BROWSER = read('scripts/v534_browser_acceptance.py')
-RELEASE_NOTES = read('release-notes/v5.3.28.md')
+RELEASE_NOTES = read('release-notes/v5.3.29.md')
 SW = read('web/service-worker.js')
 SW_BASE = read('web/service-worker-v508-base.js')
 
@@ -185,13 +185,13 @@ def test_mobile_oximetry_landscape_is_behaviorally_covered():
 
 
 def test_release_identity_is_v535():
-    assert APP_VERSION == '5.3.28'
-    assert RELEASE_NOTES.startswith('# SleepMate 5.3.28')
+    assert APP_VERSION == '5.3.29'
+    assert RELEASE_NOTES.startswith('# SleepMate 5.3.29')
 
 
 def test_release_cache_generation_is_v535_while_frontend_generation_remains_v534():
     for worker in (SW, SW_BASE):
-        assert "const SHELL_CACHE='sleepmate-shell-v5.3.28';" in worker
-        assert "const API_CACHE='sleepmate-api-v5.3.28';" in worker
+        assert "const SHELL_CACHE='sleepmate-shell-v5.3.29';" in worker
+        assert "const API_CACHE='sleepmate-api-v5.3.29';" in worker
         assert "const UI_VERSION='5.3.4';" in worker
-        assert '/frontend-v534.js?v=5.3.28' in worker
+        assert '/frontend-v534.js?v=5.3.29' in worker
