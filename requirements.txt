@@ -1,6 +1,6 @@
 groq>=1.7.0
 pystray>=0.19.5
-Pillow>=12.3.0
+Pillow>=13.0.0
 
 reportlab>=5.0.1
 qrcode>=8.2
